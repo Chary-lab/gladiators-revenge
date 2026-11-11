@@ -1,0 +1,21 @@
+# Godot
+.godot/
+.import/
+export.cfg
+*.translation
+
+# Capturas de depuración
+captura*
+
+# Builds
+build/
+dist/
+*.pck
+*.zip
+*.wasm
+
+# Editor / SO
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
