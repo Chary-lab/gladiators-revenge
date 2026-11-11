@@ -92,6 +92,7 @@ func alternar() -> void:
 	_reconstruir()
 	move_to_front()
 	get_tree().paused = true
+	Sfx.reproducir(&"click", -12.0)
 
 
 func cerrar_panel() -> void:
@@ -193,6 +194,7 @@ func _nombre_talento(id: StringName) -> String:
 
 func _comprar(talento: TalentData) -> void:
 	if _jugador != null and _jugador.desbloquear_talento(talento):
+		Sfx.reproducir(&"click", -8.0)
 		_reconstruir()
 
 

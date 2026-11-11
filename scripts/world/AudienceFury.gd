@@ -28,6 +28,7 @@ var _ancla := Vector3.ZERO
 var _quieto := 0.0
 var _restante := 0.0
 var _cadencia := 0.0
+var _en_combate := false
 
 
 func _ready() -> void:
@@ -44,8 +45,21 @@ func iniciar(jugador: GladiatorController, centro: Vector3, radio_arena: float) 
 		_ancla = jugador.global_position
 
 
+func establecer_combate(activo: bool) -> void:
+	## Solo se acumula aburrimiento durante una oleada. En preparación el
+	## público espera y el contador se reinicia (comprar no penaliza).
+	_en_combate = activo
+	_quieto = 0.0
+	if _jugador != null:
+		_ancla = _jugador.global_position
+	if not activo and congelando:
+		_terminar_furia()
+
+
 func _process(delta: float) -> void:
 	if _jugador == null or not is_instance_valid(_jugador):
+		return
+	if not _en_combate:
 		return
 
 	if congelando:
@@ -55,10 +69,7 @@ func _process(delta: float) -> void:
 			_cadencia = intervalo_fuego
 			_lanzar_fuego()
 		if _restante <= 0.0:
-			congelando = false
-			_quieto = 0.0
-			_ancla = _jugador.global_position
-			furia_terminada.emit()
+			_terminar_furia()
 		return
 
 	if _jugador.esta_muerto:
@@ -79,6 +90,18 @@ func _activar() -> void:
 	_restante = duracion_furia
 	_cadencia = 0.0
 	furia_iniciada.emit(duracion_furia)
+
+
+func _terminar_furia() -> void:
+	if not congelando:
+		return
+	congelando = false
+	_restante = 0.0
+	_cadencia = 0.0
+	_quieto = 0.0
+	if _jugador != null:
+		_ancla = _jugador.global_position
+	furia_terminada.emit()
 
 
 func _lanzar_fuego() -> void:

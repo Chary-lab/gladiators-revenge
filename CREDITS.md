@@ -7,8 +7,9 @@
 - Código fuente: licencia MIT (`LICENSE`).
 - Diseño de juego, lore (Orcos de las Tierras Baldías contra el Imperio Humano
   de Hierro), nombres de armas, habilidades y talentos: originales.
-- Audio: sintetizado en tiempo de ejecución con `scripts/core/SfxPlayer.gd`;
-  no contiene samples de terceros.
+- Audio: efectos de **Kenney** (CC0) en `assets/audio/`; si un archivo falta,
+  `scripts/core/SfxPlayer.gd` sintetiza el efecto en tiempo de ejecución.
+- No contiene samples de terceros fuera de los packs CC0 acreditados abajo.
 
 ## Arte 3D
 
@@ -27,6 +28,20 @@ Las licencias completas están en:
 - `assets/kaykit/adventurers/LICENSE.txt`
 - `assets/kaykit/skeletons/LICENSE.txt`
 - `assets/kaykit/dungeon/LICENSE.txt`
+
+## Audio
+
+| Pack | Uso | Licencia |
+| --- | --- | --- |
+| [Kenney Impact Sounds](https://kenney.nl/assets/impact-sounds) | Golpes, muertes, campanas | CC0 |
+| [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio) | Monedas, tajos, puertas | CC0 |
+| [Kenney UI Audio](https://kenney.nl/assets/ui-audio) | Clic de interfaz | CC0 |
+
+Las licencias completas están en:
+
+- `assets/audio/LICENSE-impact-sounds.txt`
+- `assets/audio/LICENSE-rpg-audio.txt`
+- `assets/audio/LICENSE-ui-audio.txt`
 
 ## Motor
 

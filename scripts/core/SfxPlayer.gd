@@ -1,11 +1,27 @@
 class_name Sfx
 extends RefCounted
-## Sintetizador de efectos de sonido en tiempo de ejecución (sin assets).
-## Se usa como clase estática: Sfx.reproducir("golpe"). Genera ondas PCM
-## cortas una sola vez y las reproduce en un pool de reproductores.
+## Efectos de sonido del juego. Usa grabaciones CC0 de Kenney cuando están
+## disponibles y sintetiza el resto en tiempo de ejecución. Se usa como clase
+## estática: Sfx.reproducir("golpe"). Los reproductores se reutilizan en pool.
 
 const MAX_REPRODUCTORES := 10
 const FRECUENCIA := 22050
+
+const RUTAS := {
+	&"golpe": "res://assets/audio/golpe.ogg",
+	&"critico": "res://assets/audio/critico.ogg",
+	&"habilidad": "res://assets/audio/habilidad.ogg",
+	&"magia": "res://assets/audio/magia.ogg",
+	&"compra": "res://assets/audio/compra.ogg",
+	&"oleada": "res://assets/audio/oleada.ogg",
+	&"dano": "res://assets/audio/dano.ogg",
+	&"muerte": "res://assets/audio/muerte.ogg",
+	&"enemigo": "res://assets/audio/enemigo.ogg",
+	&"espiritu": "res://assets/audio/espiritu.ogg",
+	&"victoria": "res://assets/audio/victoria.ogg",
+	&"derrota": "res://assets/audio/derrota.ogg",
+	&"click": "res://assets/audio/click.ogg",
+}
 
 static var _streams: Dictionary = {}
 static var _reproductores: Array[AudioStreamPlayer] = []
@@ -37,6 +53,7 @@ static func reproducir(nombre: StringName, volumen_db := 0.0) -> void:
 	_siguiente = (_siguiente + 1) % _reproductores.size()
 	reproductor.stream = stream
 	reproductor.volume_db = volumen_db
+	reproductor.pitch_scale = randf_range(0.96, 1.04)
 	reproductor.play()
 
 
@@ -51,9 +68,27 @@ static func _limpiar() -> void:
 	_conectado = false
 
 
+static func liberar() -> void:
+	## Libera los reproductores ahora mismo (tests y cierre ordenado).
+	for reproductor in _reproductores:
+		if is_instance_valid(reproductor):
+			reproductor.stop()
+			reproductor.stream = null
+			reproductor.free()
+	_reproductores.clear()
+	_streams.clear()
+	_siguiente = 0
+	_conectado = false
+
+
 # --- Generación de ondas --------------------------------------------------
 
-static func _crear_por_nombre(nombre: StringName) -> AudioStreamWAV:
+static func _crear_por_nombre(nombre: StringName) -> AudioStream:
+	var ruta: String = RUTAS.get(nombre, "")
+	if ruta != "" and ResourceLoader.exists(ruta):
+		var recurso := load(ruta)
+		if recurso is AudioStream:
+			return recurso
 	match nombre:
 		&"golpe":
 			return _crear(0.10, Callable(Sfx, "_golpe"))

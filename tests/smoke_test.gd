@@ -28,6 +28,12 @@ func _esperar_fisicas(cantidad: int) -> void:
 
 func _ejecutar() -> void:
 	print("== Smoke test: Gladiators Revenge ==")
+	var sonidos_ok := true
+	for nombre in Sfx.RUTAS:
+		if not ResourceLoader.exists(Sfx.RUTAS[nombre]):
+			sonidos_ok = false
+			printerr("  falta audio: ", Sfx.RUTAS[nombre])
+	_comprobar(sonidos_ok, "los efectos de audio CC0 existen")
 	var escena = load("res://scenes/main.tscn").instantiate()
 	root.add_child(escena)
 	await process_frame
@@ -142,6 +148,7 @@ func _ejecutar() -> void:
 	# --- Anti-camping ------------------------------------------------------
 	publico.tiempo_limite = 0.6
 	publico.duracion_furia = 1.0
+	publico.establecer_combate(true)
 	await _esperar_fisicas(60)  # 1 s parado
 	_comprobar(escena.esta_congelado(), "la Furia del Público castiga el camping")
 	publico.tiempo_limite = 999.0  # evitar que se repita durante la comprobación
@@ -155,4 +162,5 @@ func _ejecutar() -> void:
 	_comprobar(panel != null and not panel.visible, "el panel de talentos se cierra al terminar")
 
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
+	Sfx.liberar()
 	quit(1 if _fallos > 0 else 0)

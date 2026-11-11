@@ -322,9 +322,13 @@ func _conectar() -> void:
 
 func _al_iniciar_oleada(_numero: int, _total: int) -> void:
 	Sfx.reproducir("oleada", -5.0)
+	if _publico != null:
+		_publico.establecer_combate(true)
 
 
 func _al_terminar_oleada(numero: int) -> void:
+	if _publico != null:
+		_publico.establecer_combate(false)
 	if terminado:
 		return
 	oro += 60 + numero * 15

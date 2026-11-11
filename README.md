@@ -80,11 +80,11 @@ fórmulas.
 
 - **KayKit Adventurers / Skeletons**: orco bárbaro con colmillos, esqueletos y
   caballero; armas y props del dungeon. Licencias CC0 en `assets/kaykit/`.
+- **Kenney Impact / RPG / UI Audio**: golpes, monedas, tajos y clics. Licencias
+  CC0 en `assets/audio/`; `Sfx.gd` usa los OGG y sintetiza si falta alguno.
 - `CharacterVisual.gd` monta el modelo, tinte de skin, armas en el hueso
   `handslot_r` y reproduce locomoción, ataque, casteo, daño y muerte.
 - Cuatro skins cosméticas con **K** (Tierra Baldía, Ceniza, Sangre, Hielo).
-- `Sfx.gd` sintetiza golpes, críticos, habilidades, compra, oleada y finales en
-  PCM al arrancar; no hay archivos de audio.
 
 ## Estructura
 
@@ -93,13 +93,14 @@ project.godot
 export_presets.cfg          preset Web (sin threads, 1280x720)
 scenes/main.tscn            raíz Arena
 assets/kaykit/              modelos, texturas y props CC0
+assets/audio/               efectos CC0 de Kenney
 scripts/
   core/
     GladiatorStats.gd       atributos y escalado
     AbilityData.gd          datos de habilidad
     TalentData.gd           ranuras de talento
     ObjectPool.gd           pool genérico (enemigos, proyectiles)
-    SfxPlayer.gd            sintetizador PCM (class_name Sfx)
+    SfxPlayer.gd            carga OGG de Kenney y sintetiza como respaldo
   items/WeaponItem.gd       arma = clase + rol + bonos + 4 habilidades
   player/
     GladiatorController.gd  click-to-move, combate, maná, talentos
@@ -171,14 +172,14 @@ por HTTP; abrir el `index.html` con `file://` no funciona.
 - Ruta del jefe recalculada solo si el objetivo se mueve >0,5 m.
 - Regeneración a 4 Hz; sin asignaciones por frame en los bucles de movimiento.
 - Export sin threads: no necesita cabeceras COOP/COEP.
-- Audio 100 % procedural: cero peso en el `.pck`.
+- Audio: 13 OGG de Kenney (~150 KB); si falta un archivo, se sintetiza.
 
 ## Límites conocidos
 
 - Cooperativo aún no implementado: el diseño lo permite (grupo `gladiadores`,
   objetivo por jugador), pero `Arena` crea un solo gladiador.
 - Sin guardado ni tabla de récords; reiniciar recarga la escena.
-- El audio es sintetizado; no hay música ni voces.
+- El audio usa efectos CC0 de Kenney; no hay música ni voces.
 - Probado en Edge (WebAssembly) con 0 errores de consola: movimiento, compra,
   cambio de arma, talentos, Furia del Público y derrota con reinicio.
 
@@ -187,4 +188,6 @@ por HTTP; abrir el `index.html` con `file://` no funciona.
 - Código y diseño: Chary-Lab, licencia MIT (`LICENSE`).
 - Arte 3D: [KayKit](https://kaykit.itch.io/) — Adventurers, Skeletons y Dungeon
   Remastered, CC0. Detalle y licencias en `CREDITS.md`.
+- Audio: [Kenney](https://kenney.nl/assets) — Impact Sounds, RPG Audio y UI
+  Audio, CC0.
 - Motor: [Godot Engine](https://godotengine.org/) 4.7.2, MIT.
