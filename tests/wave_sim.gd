@@ -16,6 +16,7 @@ func _init() -> void:
 	var oleadas := escena.get("_oleadas") as WaveManager
 	oleadas.espera_inicial = 0.15
 	oleadas.espera_entre_oleadas = 0.2
+	oleadas.duracion_entrada = 0.05
 	oleadas.intervalo_spawn = 0.01
 	oleadas.oleada_iniciada.connect(func(numero: int, _total: int) -> void:
 		oleadas_vistas = numero

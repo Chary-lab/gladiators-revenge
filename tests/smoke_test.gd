@@ -63,8 +63,8 @@ func _ejecutar() -> void:
 	jugador.global_position = pedestal.global_position + Vector3(0.0, 0.0, 1.6)
 	escena._interactuar_cercano()
 	_comprobar(jugador.arma_actual != null and jugador.arma_actual.clase == WeaponItem.Clase.BASTION, "comprar en la armería equipa el Bastión")
-	_comprobar(escena.oro == oro_antes - pedestal.precio(), "la compra descuenta el oro")
-	_comprobar(pedestal.vendida, "el pedestal queda marcado como vendido")
+	_comprobar(escena.oro == oro_antes, "elegir campeón no cuesta oro")
+	_comprobar(pedestal.vendida, "el pedestal queda marcado como elegido")
 	_comprobar(jugador.estadisticas.fuerza_total > fuerza_antes, "el arma aplica bonos de atributo")
 
 	# --- Objetos, inventario y forja --------------------------------------
@@ -92,7 +92,7 @@ func _ejecutar() -> void:
 	var brasa := ItemCatalog.obtener(&"brasa_forja")
 	var placa := ItemCatalog.obtener(&"placa_oxidada")
 	var piel := ItemCatalog.obtener(&"piel_basalto")
-	jugador.global_position = Vector3(10.0, 0, 12.6)
+	jugador.global_position = Vector3(26.0, 0, 8.0)
 	_comprobar(escena.comprar_objeto(brasa), "se compra un componente en la tienda")
 	_comprobar(inventario.tiene(&"brasa_forja"), "el componente entra en la mochila")
 	_comprobar(escena.comprar_objeto(placa), "se compra el segundo componente")
@@ -145,16 +145,21 @@ func _ejecutar() -> void:
 	_comprobar(is_equal_approx(float(efecto.get("_radio")), 7.0), "el talento amplía el radio por rango")
 	efecto.queue_free()
 
+	jugador.estadisticas.nivel = 6
+	jugador._sincronizar_desbloqueos()
 	jugador.mana_actual = jugador.estadisticas.mana_maximo
 	_comprobar(jugador.intentar_habilidad(3), "el cetro lanza la ultimate")
 	_comprobar(not get_nodes_in_group("aliados").is_empty(), "la ultimate invoca un espíritu aliado")
+	_comprobar(get_nodes_in_group("aliados")[0].is_in_group("aliados"), "el espíritu pertenece al equipo aliado")
+	_comprobar(not get_nodes_in_group("aliados")[0].is_in_group("enemigos"), "el espíritu no se registra como enemigo")
 	for aliado in get_nodes_in_group("aliados"):
 		aliado.queue_free()
 
 	# --- Oleada y combate automático --------------------------------------
 	oleadas.espera_inicial = 0.3
+	oleadas.duracion_entrada = 0.3
 	oleadas.set("_temporizador", 0.3)
-	await _esperar_fisicas(360)  # arranque rápido + primer spawn
+	await _esperar_fisicas(360)  # preparación + entrada + primer spawn
 	_comprobar(oleadas.oleada_actual == 1, "la oleada 1 arranca sola")
 	var enemigos := get_nodes_in_group("enemigos")
 	_comprobar(not enemigos.is_empty(), "la oleada genera enemigos")
@@ -209,6 +214,13 @@ func _ejecutar() -> void:
 	publico.tiempo_limite = 999.0  # evitar que se repita durante la comprobación
 	await _esperar_fisicas(90)
 	_comprobar(not escena.esta_congelado(), "el castigo termina y se puede volver a jugar")
+
+	# --- Consola inferior e iconos ----------------------------------------
+	var hud = escena.get("_hud")
+	_comprobar(hud.get("_retrato") != null, "la consola tiene retrato 3D")
+	_comprobar((hud.get("_comando_botones") as Array).size() == 8, "la parrilla tiene 8 comandos y 4 habilidades")
+	_comprobar((hud.get("_inventario_botones") as Array).size() == 6, "el inventario conserva 6 ranuras")
+	_comprobar(IconStudio.obtener(&"atacar", IconStudio.CATEGORIA_COMANDO) != null, "IconStudio entrega iconos en headless")
 
 	# --- Fin de partida ----------------------------------------------------
 	escena._finalizar("DERROTA", "prueba de cierre")

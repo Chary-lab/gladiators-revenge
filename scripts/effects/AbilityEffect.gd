@@ -24,6 +24,9 @@ func configurar(datos: AbilityData, portador: GladiatorController) -> void:
 	_portador = portador
 	_radio = datos.radio
 	_duracion = datos.duracion
+	if portador.has_method("bono_rango"):
+		_radio += portador.bono_rango(datos, "radio")
+		_duracion += portador.bono_rango(datos, "duracion")
 
 	for talento in datos.talentos:
 		if talento == null:
@@ -38,6 +41,9 @@ func configurar(datos: AbilityData, portador: GladiatorController) -> void:
 
 	_dano = portador.estadisticas.escalar_dano(datos.dano_base, datos.tipo_dano)
 	_cura = datos.curacion_base
+	if portador.has_method("bono_rango"):
+		_dano += portador.bono_rango(datos, "dano")
+		_cura += portador.bono_rango(datos, "curacion")
 	_dano += _bono_fuego()
 	for talento in datos.talentos:
 		if talento == null:

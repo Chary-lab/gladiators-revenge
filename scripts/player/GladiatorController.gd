@@ -22,6 +22,10 @@ signal objetivo_cambiado(objetivo: Node3D)
 signal modo_cambiado(modo: StringName)
 signal escudo_cambiado(actual: float, maximo: float)
 signal estadisticas_combate_cambiadas
+signal aspecto_cambiado
+signal progreso_cambiado(nivel: int, experiencia: int, requerida: int)
+signal habilidades_cambiadas
+signal nivel_alcanzado(nivel: int)
 
 const SLOT_Q := 0
 const SLOT_W := 1
@@ -92,7 +96,13 @@ var _buff_ataque := 0.0
 var _buff_robo := 0.0
 var _buff_dano := 0.0
 var _tiempo_buff := 0.0
+var _multiplicador_velocidad := 1.0
+var _tiempo_impulso := 0.0
 var _potenciar_tajo := false
+var _arma_progreso_id: StringName = &""
+var _habilidades_desbloqueadas: Dictionary = {}
+var _rangos_habilidad: Dictionary = {}
+var _orden_desbloqueo: Array[StringName] = []
 var _marcador_movimiento: MeshInstance3D
 var _marcador_objetivo: MeshInstance3D
 var _marcador_ataque: MeshInstance3D
@@ -107,6 +117,10 @@ func _ready() -> void:
 		estadisticas = GladiatorStats.new()
 	if not estadisticas.atributos_cambiados.is_connected(_al_cambiar_atributos):
 		estadisticas.atributos_cambiados.connect(_al_cambiar_atributos)
+	if not estadisticas.nivel_subido.is_connected(_al_subir_nivel):
+		estadisticas.nivel_subido.connect(_al_subir_nivel)
+	if not estadisticas.experiencia_cambiada.is_connected(_al_cambiar_experiencia):
+		estadisticas.experiencia_cambiada.connect(_al_cambiar_experiencia)
 
 	salud_actual = estadisticas.salud_maxima
 	mana_actual = estadisticas.mana_maximo
@@ -405,7 +419,7 @@ func _mover(delta: float) -> void:
 			direccion.y = 0.0
 			if direccion.length_squared() > 0.0004:
 				direccion = direccion.normalized()
-				deseada = direccion * estadisticas.velocidad_movimiento
+				deseada = direccion * estadisticas.velocidad_movimiento * _multiplicador_velocidad
 				_orientar(direccion, delta)
 		elif _tiene_orden_movimiento:
 			_tiene_orden_movimiento = false
@@ -416,7 +430,7 @@ func _mover(delta: float) -> void:
 		direccion.y = 0.0
 		if direccion.length_squared() > 0.0004:
 			direccion = direccion.normalized()
-			deseada = direccion * estadisticas.velocidad_movimiento
+			deseada = direccion * estadisticas.velocidad_movimiento * _multiplicador_velocidad
 			_orientar(direccion, delta)
 
 	velocity = velocity.move_toward(deseada, ACELERACION * delta)
@@ -459,6 +473,11 @@ func _actualizar_estados(delta: float) -> void:
 			_buff_ataque = 0.0
 			_buff_robo = 0.0
 			_buff_dano = 0.0
+
+	if _tiempo_impulso > 0.0:
+		_tiempo_impulso -= delta
+		if _tiempo_impulso <= 0.0:
+			_multiplicador_velocidad = 1.0
 
 
 func _actualizar_objetivo(delta: float) -> void:
@@ -576,6 +595,7 @@ func equipar_arma(nueva_arma: WeaponItem) -> bool:
 	arma_actual = nueva_arma
 	estadisticas.aplicar_bonos_equipo(nueva_arma.bonificaciones_atributos)
 	_cooldowns.fill(0.0)
+	_inicializar_habilidades()
 	if visual != null:
 		visual.usar_arma_pesada(nueva_arma.clase == WeaponItem.Clase.BASTION)
 		visual.equipar_arma(
@@ -585,6 +605,146 @@ func equipar_arma(nueva_arma: WeaponItem) -> bool:
 		)
 	arma_cambiada.emit(arma_actual)
 	return true
+
+
+## Prepara el orden aleatorio de Q/W/E y sincroniza los desbloqueos según el
+## nivel actual. El campeón empieza con una habilidad y desbloquea el resto en
+## los niveles 2 y 3; la definitiva R llega al nivel 6.
+func _inicializar_habilidades() -> void:
+	if arma_actual == null:
+		return
+	if _arma_progreso_id == arma_actual.id and not _orden_desbloqueo.is_empty():
+		_sincronizar_desbloqueos()
+		return
+
+	_arma_progreso_id = arma_actual.id
+	_habilidades_desbloqueadas.clear()
+	_rangos_habilidad.clear()
+	_orden_desbloqueo.clear()
+
+	var indices: Array[int] = [SLOT_Q, SLOT_W, SLOT_E]
+	indices.shuffle()
+	for indice in indices:
+		_orden_desbloqueo.append(arma_actual.obtener_habilidad(indice).id)
+
+	_sincronizar_desbloqueos()
+	habilidades_cambiadas.emit()
+
+
+func _sincronizar_desbloqueos() -> void:
+	if arma_actual == null:
+		return
+	var cantidad_qwe := mini(3, maxi(1, estadisticas.nivel))
+	for i in cantidad_qwe:
+		if i >= _orden_desbloqueo.size():
+			break
+		var id := _orden_desbloqueo[i]
+		if not _habilidades_desbloqueadas.has(id):
+			_habilidades_desbloqueadas[id] = true
+			_rangos_habilidad[id] = maxi(1, int(_rangos_habilidad.get(id, 1)))
+
+	var definitiva := arma_actual.obtener_habilidad(SLOT_R)
+	if definitiva != null and estadisticas.nivel >= 6:
+		if not _habilidades_desbloqueadas.has(definitiva.id):
+			_habilidades_desbloqueadas[definitiva.id] = true
+			_rangos_habilidad[definitiva.id] = maxi(1, int(_rangos_habilidad.get(definitiva.id, 1)))
+
+
+func habilidad_desbloqueada(slot: int) -> bool:
+	if arma_actual == null:
+		return false
+	var habilidad := arma_actual.obtener_habilidad(slot)
+	return habilidad != null and bool(_habilidades_desbloqueadas.get(habilidad.id, false))
+
+
+func nivel_desbloqueo_habilidad(slot: int) -> int:
+	if slot == SLOT_R:
+		return 6
+	if arma_actual == null or slot < 0 or slot >= 3:
+		return 1
+	var habilidad := arma_actual.obtener_habilidad(slot)
+	if habilidad == null:
+		return 1
+	var indice := _orden_desbloqueo.find(habilidad.id)
+	return maxi(1, indice + 1)
+
+
+func rango_habilidad(habilidad_id: StringName) -> int:
+	return maxi(1, int(_rangos_habilidad.get(habilidad_id, 1)))
+
+
+## Sube una habilidad con un punto dorado. La UI de habilidades es la única
+## que debe llamar a este método.
+func subir_habilidad(slot: int) -> bool:
+	if arma_actual == null or not habilidad_desbloqueada(slot):
+		return false
+	var habilidad := arma_actual.obtener_habilidad(slot)
+	if habilidad == null:
+		return false
+	var rango := rango_habilidad(habilidad.id)
+	if rango >= maxi(1, habilidad.rango_maximo):
+		return false
+	if not estadisticas.gastar_punto_habilidad():
+		return false
+	_rangos_habilidad[habilidad.id] = rango + 1
+	habilidades_cambiadas.emit()
+	return true
+
+
+## Suma plana de una clave de mejora hasta el rango actual.
+func bono_rango(habilidad: AbilityData, clave: String) -> float:
+	if habilidad == null:
+		return 0.0
+	var total := 0.0
+	var rango := rango_habilidad(habilidad.id)
+	for r in range(2, rango + 1):
+		var mejora := habilidad.mejora_para_rango(r)
+		total += float(mejora.get(clave, 0.0))
+	return total
+
+
+func bono_talento(habilidad: AbilityData, clave: String) -> float:
+	if habilidad == null:
+		return 0.0
+	var total := 0.0
+	for talento in habilidad.talentos:
+		if talento == null:
+			continue
+		var rango := rango_talento(talento.id)
+		if rango <= 0:
+			continue
+		total += float(talento.modificadores.get(clave, 0.0)) * float(rango)
+	return total
+
+
+func cooldown_habilidad(habilidad: AbilityData) -> float:
+	return maxf(0.5, habilidad.cooldown + bono_rango(habilidad, "cooldown"))
+
+
+func radio_habilidad(habilidad: AbilityData) -> float:
+	return maxf(0.5, habilidad.radio + bono_rango(habilidad, "radio"))
+
+
+func duracion_habilidad(habilidad: AbilityData) -> float:
+	return maxf(0.0, habilidad.duracion + bono_rango(habilidad, "duracion"))
+
+
+func otorgar_experiencia(cantidad: int) -> void:
+	if cantidad > 0:
+		estadisticas.otorgar_experiencia(cantidad)
+
+
+func _al_subir_nivel(nivel: int) -> void:
+	_sincronizar_desbloqueos()
+	curar(estadisticas.salud_maxima * 0.15)
+	restaurar_mana(estadisticas.mana_maximo * 0.15)
+	habilidades_cambiadas.emit()
+	nivel_alcanzado.emit(nivel)
+	progreso_cambiado.emit(nivel, estadisticas.experiencia, estadisticas.experiencia_requerida)
+
+
+func _al_cambiar_experiencia(actual: int, requerida: int, nivel: int) -> void:
+	progreso_cambiado.emit(nivel, actual, requerida)
 
 
 ## Intenta lanzar la habilidad del slot. Devuelve true si se ejecutó.
@@ -597,11 +757,13 @@ func intentar_habilidad(slot: int) -> bool:
 		return false
 
 	var habilidad := arma_actual.obtener_habilidad(slot)
-	if habilidad == null or mana_actual < habilidad.coste_mana:
+	if habilidad == null or not habilidad_desbloqueada(slot):
+		return false
+	if mana_actual < habilidad.coste_mana:
 		return false
 
 	mana_actual -= habilidad.coste_mana
-	_cooldowns[slot] = habilidad.cooldown
+	_cooldowns[slot] = cooldown_habilidad(habilidad)
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
 
 	var punto := global_position
@@ -612,7 +774,7 @@ func intentar_habilidad(slot: int) -> bool:
 
 	if habilidad.reduccion_dano > 0.0:
 		_reduccion_temporal = habilidad.reduccion_dano
-		_tiempo_reduccion = habilidad.duracion
+		_tiempo_reduccion = duracion_habilidad(habilidad)
 	if habilidad.tipo == AbilityData.Tipo.MOVILIDAD:
 		_ejecutar_dash(habilidad, punto)
 		if habilidad.id == &"filo_paso_sombrio":
@@ -687,7 +849,7 @@ func lanzar_habilidad_item(habilidad: AbilityData) -> bool:
 
 	if habilidad.reduccion_dano > 0.0:
 		_reduccion_temporal = habilidad.reduccion_dano
-		_tiempo_reduccion = habilidad.duracion
+		_tiempo_reduccion = duracion_habilidad(habilidad)
 	if habilidad.tipo == AbilityData.Tipo.MOVILIDAD:
 		_ejecutar_dash(habilidad, punto)
 	elif habilidad.tipo == AbilityData.Tipo.INVOCACION:
@@ -704,7 +866,7 @@ func lanzar_habilidad_item(habilidad: AbilityData) -> bool:
 func _ejecutar_dash(habilidad: AbilityData, punto: Vector3) -> void:
 	var direccion := punto - global_position
 	direccion.y = 0.0
-	var distancia := minf(habilidad.radio, direccion.length())
+	var distancia := minf(radio_habilidad(habilidad), direccion.length())
 	if distancia < 0.25:
 		return
 	var destino := global_position + direccion.normalized() * distancia
@@ -758,17 +920,23 @@ func _crear_rastro(inicio: Vector3, fin: Vector3) -> void:
 
 
 func _invocar_espiritu(habilidad: AbilityData, punto: Vector3) -> void:
-	var espiritu := SpiritSummon.crear()
-	var contenedor: Node = get_tree().current_scene
-	if contenedor == null:
-		contenedor = get_parent()
-	contenedor.add_child(espiritu)
-	espiritu.global_position = punto
-	espiritu.configurar(
-		self,
-		maxf(1.0, estadisticas.escalar_invocacion(habilidad.dano_base)),
-		habilidad.duracion
-	)
+	var rango := rango_habilidad(habilidad.id)
+	var duracion := duracion_habilidad(habilidad) + bono_talento(habilidad, "duracion")
+	var dano := maxf(1.0, estadisticas.escalar_invocacion(habilidad.dano_base))
+	dano += bono_rango(habilidad, "dano")
+	dano += bono_talento(habilidad, "dano")
+
+	var cantidad := 2 if rango >= 3 else 1
+	for i in cantidad:
+		var espiritu := SpiritSummon.crear()
+		var contenedor: Node = get_tree().current_scene
+		if contenedor == null:
+			contenedor = get_parent()
+		contenedor.add_child(espiritu)
+		var desfase := Vector3(0.9, 0, 0.9) * float(i)
+		espiritu.global_position = punto + desfase
+		var factor := 1.0 if i == 0 else 0.5
+		espiritu.configurar(self, dano * factor, duracion, factor < 1.0)
 	Sfx.reproducir("espiritu", -8.0)
 
 
@@ -911,12 +1079,14 @@ func aplicar_grito_guerra(duracion: float, bonus_ataque: float, robo: float) -> 
 	for grupo in [&"banderas", &"aliados"]:
 		for nodo in get_tree().get_nodes_in_group(grupo):
 			var aliado := nodo as Node3D
-			if aliado == null or not aliado.has_method("curar"):
+			if aliado == null:
 				continue
-			if aliado.global_position.distance_to(global_position) <= 10.0:
+			if aliado.global_position.distance_to(global_position) > 10.0:
+				continue
+			if aliado.has_method("curar"):
 				aliado.curar(cantidad)
-				if aliado.has_method("aplicar_buff"):
-					aliado.aplicar_buff(duracion, bonus_ataque, robo)
+			if aliado.has_method("aplicar_buff"):
+				aliado.aplicar_buff(duracion, bonus_ataque, robo)
 	estadisticas_combate_cambiadas.emit()
 
 
@@ -1012,10 +1182,16 @@ func gastar_punto_atributo(atributo: StringName) -> bool:
 
 
 ## Cambia la skin cosmética del orco sin alterar atributos.
+func aplicar_impulso_velocidad(multiplicador: float, duracion: float) -> void:
+	_multiplicador_velocidad = maxf(1.0, multiplicador)
+	_tiempo_impulso = maxf(0.1, duracion)
+
+
 func aplicar_skin(tinte: Color) -> void:
 	tinte_skin = tinte
 	if visual != null:
 		visual.aplicar_skin(tinte)
+	aspecto_cambiado.emit()
 
 
 func _al_cambiar_atributos() -> void:

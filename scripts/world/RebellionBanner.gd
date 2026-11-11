@@ -8,6 +8,10 @@ signal destruida
 var salud_maxima := 900.0
 var salud_actual := 0.0
 
+var _portador: GladiatorController
+var _cargada := false
+var _inmune_hasta := 0.0
+
 
 static func crear() -> RebellionBanner:
 	var bandera := RebellionBanner.new()
@@ -70,7 +74,46 @@ func _ready() -> void:
 	salud_actual = salud_maxima
 
 
+func _process(_delta: float) -> void:
+	if _cargada:
+		if _portador == null or not is_instance_valid(_portador) or _portador.esta_muerto:
+			colocar(global_position)
+			return
+		global_position = _portador.global_position + Vector3(0, 0, -0.9)
+
+
+func configurar_inmune(segundos: float) -> void:
+	_inmune_hasta = Time.get_ticks_msec() / 1000.0 + maxf(0.0, segundos)
+
+
+func esta_inmune() -> bool:
+	return Time.get_ticks_msec() / 1000.0 < _inmune_hasta
+
+
+func esta_cargada() -> bool:
+	return _cargada
+
+
+func recoger(portador: GladiatorController) -> bool:
+	if _cargada or portador == null:
+		return false
+	_cargada = true
+	_portador = portador
+	collision_layer = 0
+	return true
+
+
+func colocar(posicion: Vector3) -> void:
+	_cargada = false
+	_portador = null
+	collision_layer = 1
+	global_position = Vector3(posicion.x, 0.0, posicion.z)
+	configurar_inmune(0.8)
+
+
 func recibir_dano(cantidad: float, tipo: StringName = &"fisico", _fuente: Node = null) -> void:
+	if _cargada or esta_inmune():
+		return
 	if salud_actual <= 0.0 or cantidad <= 0.0:
 		return
 	salud_actual = maxf(0.0, salud_actual - cantidad)

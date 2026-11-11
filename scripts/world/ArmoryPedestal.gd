@@ -4,6 +4,7 @@ extends Node3D
 
 var arma: WeaponItem
 var vendida := false
+var es_campeon := false
 
 var _icono: MeshInstance3D
 var _etiqueta: Label3D
@@ -66,7 +67,10 @@ func _process(delta: float) -> void:
 func _actualizar_etiqueta() -> void:
 	if arma == null or _etiqueta == null:
 		return
-	_etiqueta.text = "%s\n%d oro   F: comprar" % [arma.nombre, arma.precio_oro]
+	if es_campeon:
+		_etiqueta.text = "%s\nF: ELEGIR CAMPEON" % arma.nombre
+	else:
+		_etiqueta.text = "%s\n%d oro   F: comprar" % [arma.nombre, arma.precio_oro]
 
 
 func precio() -> int:
@@ -82,7 +86,7 @@ func comprar(jugador: GladiatorController) -> bool:
 
 	vendida = true
 	_icono.visible = false
-	_etiqueta.text = "VENDIDA"
+	_etiqueta.text = "ELEGIDO" if es_campeon else "VENDIDA"
 	_etiqueta.modulate = Color(0.6, 0.6, 0.6)
 	var gris := StandardMaterial3D.new()
 	gris.albedo_color = Color(0.22, 0.22, 0.22)

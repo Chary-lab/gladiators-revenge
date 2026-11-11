@@ -10,13 +10,17 @@ signal oleada_iniciada(numero: int, total: int)
 signal oleada_terminada(numero: int)
 signal oro_ganado(cantidad: int)
 signal mensaje(texto: String, duracion: float)
+signal preparacion_iniciada(duracion: float)
+signal entrada_iniciada(duracion: float)
+signal entrada_terminada
 signal victoria
 
-enum Estado { ESPERA, COMBATE, FIN }
+enum Estado { ESPERA, ENTRADA, COMBATE, FIN }
 
 @export var total_oleadas := 20
-@export var espera_inicial := 8.0
-@export var espera_entre_oleadas := 6.0
+@export var espera_inicial := 30.0
+@export var espera_entre_oleadas := 30.0
+@export var duracion_entrada := 8.0
 @export var intervalo_spawn := 0.45
 @export var oleadas_con_jefe := 5
 
@@ -30,6 +34,9 @@ var _jugador: GladiatorController
 var _bandera: Node3D
 var _contenedor: Node3D
 var _puntos_spawn: Array[Vector3] = []
+var _xp_presupuesto := 0
+var _xp_peso_total := 0.0
+var _xp_jefe := 0
 
 
 func _ready() -> void:
@@ -54,7 +61,8 @@ func iniciar(
 	_estado = Estado.ESPERA
 	_temporizador = espera_inicial
 	set_process(true)
-	mensaje.emit("La arena despierta. Defiende el estandarte.", 4.0)
+	preparacion_iniciada.emit(espera_inicial)
+	mensaje.emit("Preparación: compra, forja y elige talentos. La arena abre en 30 s.", 5.0)
 
 
 func enemigos_restantes() -> int:
@@ -67,8 +75,26 @@ func _process(delta: float) -> void:
 			_temporizador -= delta
 			if _temporizador <= 0.0:
 				_iniciar_oleada()
+		Estado.ENTRADA:
+			_temporizador -= delta
+			if _temporizador <= 0.0:
+				_comenzar_combate()
 		Estado.COMBATE:
 			_procesar_combate(delta)
+
+
+func en_combate() -> bool:
+	return _estado == Estado.COMBATE
+
+
+func en_entrada() -> bool:
+	return _estado == Estado.ENTRADA
+
+
+func tiempo_restante() -> float:
+	if _estado == Estado.ESPERA or _estado == Estado.ENTRADA:
+		return maxf(0.0, _temporizador)
+	return 0.0
 
 
 func _procesar_combate(delta: float) -> void:
@@ -85,10 +111,27 @@ func _procesar_combate(delta: float) -> void:
 
 func _iniciar_oleada() -> void:
 	oleada_actual += 1
+	_estado = Estado.ENTRADA
+	_temporizador = duracion_entrada
+	entrada_iniciada.emit(duracion_entrada)
+	mensaje.emit("¡Portones abiertos! Entra a la arena: %d s" % int(duracion_entrada), 3.0)
+
+
+func _comenzar_combate() -> void:
 	_pendientes = 5 + oleada_actual * 2
 	_estado = Estado.COMBATE
 	_temporizador = 0.0
 
+	_xp_presupuesto = CurvaNivel.xp_oleada(oleada_actual)
+	var jefe := oleada_actual % oleadas_con_jefe == 0
+	var elite_estimados := int(round(float(_pendientes) * _probabilidad_elite()))
+	var normales := _pendientes - elite_estimados
+	_xp_peso_total = float(normales) + float(elite_estimados) * CurvaNivel.PESO_ELITE
+	if jefe:
+		_xp_peso_total += CurvaNivel.PESO_JEFE
+	_xp_jefe = CurvaNivel.xp_enemigo(_xp_presupuesto, CurvaNivel.PESO_JEFE, _xp_peso_total) if jefe else 0
+
+	entrada_terminada.emit()
 	oleada_iniciada.emit(oleada_actual, total_oleadas)
 	mensaje.emit("Oleada %d / %d" % [oleada_actual, total_oleadas], 2.5)
 
@@ -106,7 +149,8 @@ func _terminar_oleada() -> void:
 
 	_estado = Estado.ESPERA
 	_temporizador = espera_entre_oleadas
-	mensaje.emit("Oleada superada. Reagrupa y gasta puntos.", 3.0)
+	preparacion_iniciada.emit(espera_entre_oleadas)
+	mensaje.emit("Oleada superada. 30 s para comprar, forjar y subir habilidades.", 4.0)
 
 
 func _invocar_enemigo() -> void:
@@ -120,13 +164,17 @@ func _invocar_enemigo() -> void:
 	var punto := _puntos_spawn[randi() % _puntos_spawn.size()]
 	punto += Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
 	enemigo.global_position = punto
+	var elite := randf() < _probabilidad_elite()
+	var peso := CurvaNivel.PESO_ELITE if elite else CurvaNivel.PESO_NORMAL
+	var xp := CurvaNivel.xp_enemigo(_xp_presupuesto, peso, _xp_peso_total)
 	enemigo.preparar(
 		oleada_actual,
-		randf() < _probabilidad_elite(),
+		elite,
 		_jugador,
 		_bandera,
 		self,
-		_pool
+		_pool,
+		xp
 	)
 
 
@@ -153,10 +201,28 @@ func _probabilidad_elite() -> float:
 	return clampf((oleada_actual - 3) * 0.04, 0.0, 0.22)
 
 
-func al_morir_enemigo(oro: int) -> void:
+func al_morir_enemigo(oro: int, xp: int = 0) -> void:
 	oro_ganado.emit(oro)
+	_otorgar_xp(xp)
 
 
 func _al_morir_jefe() -> void:
 	oro_ganado.emit(120 + oleada_actual * 20)
+	_otorgar_xp(_xp_jefe)
 	mensaje.emit("¡Campeón del Imperio derrotado!", 3.0)
+
+
+func _otorgar_xp(cantidad: int) -> void:
+	if _jugador == null or not is_instance_valid(_jugador) or cantidad <= 0:
+		return
+	_jugador.otorgar_experiencia(cantidad)
+	var excedente := _jugador.estadisticas.reclamar_excedente()
+	if excedente > 0:
+		oro_ganado.emit(maxi(1, excedente / 4))
+		mensaje.emit("Nivel máximo: %d XP convertida en oro." % excedente, 2.0)
+
+
+func tiempo_preparacion() -> float:
+	if _estado != Estado.ESPERA:
+		return 0.0
+	return maxf(0.0, _temporizador)

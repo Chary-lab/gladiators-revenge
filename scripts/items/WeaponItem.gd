@@ -113,6 +113,7 @@ static func crear_prisionero() -> WeaponItem:
 	arma.alcance_ataque = 2.4
 	arma.habilidades = _kit_prisionero()
 	_aplicar_iconos(arma)
+	_configurar_rangos(arma)
 	return arma
 
 
@@ -124,6 +125,7 @@ static func crear_catalogo_base() -> Array[WeaponItem]:
 	catalogo.append(_crear_cetro())
 	for arma in catalogo:
 		_aplicar_iconos(arma)
+		_configurar_rangos(arma)
 	return catalogo
 
 
@@ -482,6 +484,114 @@ static func _kit_cetro() -> Array[AbilityData]:
 	kit.append(ancestral)
 
 	return kit
+
+
+## Define los rangos de habilidad. Q/W/E llegan a 4; R a 3. Los valores son
+## mejoras planas que el controlador y AbilityEffect suman al rango actual.
+static func _configurar_rangos(arma: WeaponItem) -> void:
+	var definitivas := [
+		"prisionero_grito", "bastion_inquebrantable",
+		"filo_ejecucion", "cetro_espiritu_ancestral",
+	]
+	for habilidad in arma.habilidades:
+		if habilidad == null:
+			continue
+		habilidad.rango_maximo = 3 if String(habilidad.id) in definitivas else 4
+		match String(habilidad.id):
+			"prisionero_punetazo":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+4 de daño", "dano": 4.0},
+					{"descripcion": "+0.4 m de radio", "radio": 0.4},
+					{"descripcion": "+6 de daño", "dano": 6.0},
+				]
+			"prisionero_patada":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+5 de daño", "dano": 5.0},
+					{"descripcion": "+0.5 m de radio", "radio": 0.5},
+					{"descripcion": "+7 de daño", "dano": 7.0},
+				]
+			"prisionero_rodar":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+1 m de impulso", "radio": 1.0},
+					{"descripcion": "+0.5 s de duración", "duracion": 0.5},
+					{"descripcion": "+1 m de impulso", "radio": 1.0},
+				]
+			"prisionero_grito":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+2 s de duración", "duracion": 2.0},
+					{"descripcion": "+1 m de radio", "radio": 1.0},
+				]
+			"bastion_muro_escudos":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+1 s de duración", "duracion": 1.0},
+					{"descripcion": "+0.8 m de radio", "radio": 0.8},
+					{"descripcion": "+8 de daño", "dano": 8.0},
+				]
+			"bastion_golpe_sismico":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+10 de daño", "dano": 10.0},
+					{"descripcion": "+0.8 m de radio", "radio": 0.8},
+					{"descripcion": "+1 s de aturdimiento", "duracion": 1.0},
+				]
+			"bastion_provocacion":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+0.8 m de radio", "radio": 0.8},
+					{"descripcion": "+1 s de provocación", "duracion": 1.0},
+					{"descripcion": "+1 m de radio", "radio": 1.0},
+				]
+			"bastion_inquebrantable":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+1.5 s de Égida", "duracion": 1.5},
+					{"descripcion": "+20 de escudo", "dano": 20.0},
+				]
+			"filo_tajo_gemelo":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+8 de daño", "dano": 8.0},
+					{"descripcion": "+0.6 m de radio", "radio": 0.6},
+					{"descripcion": "+12 de daño", "dano": 12.0},
+				]
+			"filo_paso_sombrio":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+1 m de parpadeo", "radio": 1.0},
+					{"descripcion": "+8 de daño", "dano": 8.0},
+					{"descripcion": "+1.5 m de parpadeo", "radio": 1.5},
+				]
+			"filo_marca_verdugo":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+1 s de marca", "duracion": 1.0},
+					{"descripcion": "+1 m de radio", "radio": 1.0},
+					{"descripcion": "+0.5 s de marca", "duracion": 0.5},
+				]
+			"filo_ejecucion":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+25 de daño", "dano": 25.0},
+					{"descripcion": "+30 de daño y -5 s de recarga", "dano": 30.0, "cooldown": -5.0},
+				]
+			"cetro_espina_vital":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+7 de daño", "dano": 7.0},
+					{"descripcion": "+0.8 m de radio", "radio": 0.8},
+					{"descripcion": "+10 de daño", "dano": 10.0},
+				]
+			"cetro_estandarte_rebelion":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+1 s de duración", "duracion": 1.0},
+					{"descripcion": "+1 m de radio", "radio": 1.0},
+					{"descripcion": "+12 de curación", "curacion": 12.0},
+				]
+			"cetro_lazo_raices":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+0.8 m de radio", "radio": 0.8},
+					{"descripcion": "+1 s de raíces", "duracion": 1.0},
+					{"descripcion": "+8 de daño", "dano": 8.0},
+				]
+			"cetro_espiritu_ancestral":
+				habilidad.mejoras_rango = [
+					{"descripcion": "+4 s de invocación", "duracion": 4.0},
+					{"descripcion": "+12 de daño y un segundo espíritu al 50 %", "dano": 12.0, "efecto_especial": &"espiritu_doble"},
+				]
+			_:
+				pass
 
 
 ## Constructor abreviado de talentos para mantener legibles los kits.

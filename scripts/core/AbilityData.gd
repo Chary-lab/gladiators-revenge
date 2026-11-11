@@ -59,6 +59,29 @@ enum Objetivo {
 ## Número de enemigos adicionales que alcanza un rayo/rebote.
 @export var rebotes := 0
 
+@export_group("Rangos de habilidad")
+## Niveles de la habilidad: Q/W/E llegan a 4; la definitiva R a 3.
+@export_range(1, 4, 1) var rango_maximo: int = 4
+## Mejoras por rango. El índice 0 describe el salto a rango 2.
+## Claves: descripcion, dano, curacion, radio, duracion, cooldown, efecto_especial.
+@export var mejoras_rango: Array[Dictionary] = []
+
 @export_group("Talentos de combate")
 ## Ranuras de mejora que se desbloquean con puntos rojos.
 @export var talentos: Array[TalentData] = []
+
+
+## Devuelve la mejora que lleva al rango indicado (rango 2 = índice 0).
+func mejora_para_rango(rango: int) -> Dictionary:
+	if mejoras_rango.is_empty():
+		return {}
+	var indice := clampi(rango - 2, 0, mejoras_rango.size() - 1)
+	if indice < 0 or indice >= mejoras_rango.size():
+		return {}
+	return mejoras_rango[indice]
+
+
+## Texto corto de la siguiente mejora para tooltips.
+func descripcion_siguiente_rango(rango_actual: int) -> String:
+	var mejora := mejora_para_rango(rango_actual + 1)
+	return str(mejora.get("descripcion", ""))

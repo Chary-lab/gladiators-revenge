@@ -4,14 +4,15 @@ Arena de supervivencia con perspectiva isométrica 2.5D en **Godot 4.7**, pensad
 para publicarse en **Web (HTML5 / WebAssembly)**. IP original: gladiadores orcos
 de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 
-## Estado (v1.1 jugable)
+## Estado (v1.2 jugable)
 
-Partida completa de principio a fin: 20 oleadas, tres clases de arma, armería,
-jefes con dos fases de furia, anti-camping, talentos con rangos, skins, HUD
-unificado, inventario de 6 ranuras con forja automática, objetos legendarios,
+Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
+segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
+anti-camping, talentos con rangos, skins, HUD con retrato 3D y miniaturas
+renderizadas, inventario de 6 ranuras con forja automática, objetos legendarios,
 arte 3D animado y audio CC0. Sin cooperativo ni guardado todavía.
 
-- 55 comprobaciones de humo + simulación acelerada de las 20 oleadas.
+- 61 comprobaciones de humo + simulación acelerada de las 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Todo el arte es **CC0** (KayKit, Kenney); el código es **MIT**.
 
@@ -46,14 +47,29 @@ Godot 4.7 se instaló con `winget install GodotEngine.GodotEngine`.
 
 Las teclas usan `physical_keycode`: funcionan igual en teclados no QWERTY.
 
+## Consola inferior
+
+La consola de 175 px se divide en cuatro bloques: retrato 3D en vivo con barras
+de vida/maná, ficha del gladiador con nivel, XP, oleada, atributo principal y
+estado, inventario 2x3 y parrilla de comandos 4x3. Los botones son **solo
+iconos**; el nombre y el escalado real viven en el tooltip. `IconStudio.gd`
+renderiza miniaturas 3D de 64x64 con luz cálida, rim light y fondo degradado
+(fuego para Fuerza, esmeralda para Agilidad, azul/violeta para INT, dorado para
+legendarios), las cachea y usa un icono procedural si corre en `--headless`.
+`ItemModelFactory.gd` construye armas, escudos, pociones, pergaminos, orbes,
+flechas, botas y demás piezas con primitivas propias.
+
 ## Bucle de juego
 
-1. **Ronda 0**: el gladiador empieza como *Prisionero* (sin rol) con 200 de oro.
-2. La armería tiene tres armas a 200 de oro: comprar una define la clase y
-   reemplaza el kit Q/W/E/R. Solo se puede comprar una por partida.
-3. Cada oleada exige defender el **Estandarte de Rebelión** (900 PV) en el centro.
-4. Al superar una oleada: `60 + 15·oleada` de oro, +2 puntos de atributo, +1 punto
-   rojo de talento y 25 % de curación.
+1. **Zona segura**: el gladiador elige un campeón gratuito en uno de los tres
+   pedestales. La clase queda fijada para la partida; la fuente cura fuera de
+   combate y el mercader/forja/obelisco solo se usan en la base.
+2. La oleada avisa con 30 s de preparación; al abrirse los portones hay 8 s de
+   entrada con +35 % de velocidad y luego se cierran.
+3. Cada oleada exige defender el **Estandarte de Rebelión** (900 PV); puede
+   recogerse con **G** y colocarse en otro punto del arena.
+4. Al superar una oleada: oro, puntos de atributo, punto rojo de talento y 25 %
+   de curación; los niveles dan puntos de habilidad y desbloquean Q/W/E y R.
 5. Cada 5 oleadas aparece un **jefe**; la oleada 20 cierra la partida.
 6. Si el jugador permanece 14 s en un radio de 5 m, el público activa la
    **Furia del Público**: congela la ganancia de oro y lanza bolas de fuego
@@ -157,13 +173,16 @@ scripts/
     ArenaCamera.gd          cámara ortográfica isométrica con límites
     WaveManager.gd          20 oleadas, jefes y recompensas
   ui/
-    ArenaHUD.gd             consola inferior, minimapa, stats, mochila y QWER
+    ArenaHUD.gd             consola 175 px, retrato, ficha, 2x3 y parrilla 4x3
     ArenaMinimap.gd         radar 2D del patio
     DamageNumbers.gd        números de daño/curación con pool
     TalentPanel.gd          panel de talentos con rangos y requisitos
     ShopPanel.gd            tienda, recetario, forja y tooltips
+    IconStudio.gd           miniaturas 3D 64x64 con SubViewport y caché
+    ItemModelFactory.gd     modelos de objetos y comandos con primitivas
+    GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
-  smoke_test.gd             prueba de humo headless (55 comprobaciones)
+  smoke_test.gd             prueba de humo headless (61 comprobaciones)
   wave_sim.gd               simulación acelerada de las 20 oleadas
 ```
 

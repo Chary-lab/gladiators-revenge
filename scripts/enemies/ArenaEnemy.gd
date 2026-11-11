@@ -27,6 +27,7 @@ var velocidad := 2.5
 var rango := 2.2
 var cadencia := 1.5
 var recompensa := 8
+var xp_recompensa := 0
 var visual: CharacterVisual
 
 var _jugador: GladiatorController
@@ -90,9 +91,11 @@ func preparar(
 	jugador: GladiatorController,
 	bandera: Node3D,
 	gestor: Node,
-	pool: ObjectPool
+	pool: ObjectPool,
+	xp: int = 0
 ) -> void:
 	es_elite = elite
+	xp_recompensa = xp
 	activo = true
 	_jugador = jugador
 	_bandera = bandera
@@ -259,4 +262,4 @@ func _morir() -> void:
 	_tiempo_muerte = 1.1
 	murio.emit(recompensa)
 	if _gestor != null and is_instance_valid(_gestor) and _gestor.has_method("al_morir_enemigo"):
-		_gestor.al_morir_enemigo(recompensa)
+		_gestor.al_morir_enemigo(recompensa, xp_recompensa)

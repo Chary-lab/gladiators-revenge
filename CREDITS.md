@@ -9,6 +9,9 @@
   de Hierro), nombres de armas, habilidades y talentos: originales.
 - Audio: efectos de **Kenney** (CC0) en `assets/audio/`; si un archivo falta,
   `scripts/core/SfxPlayer.gd` sintetiza el efecto en tiempo de ejecución.
+- Iconos de la consola: miniaturas 3D originales generadas en tiempo de ejecución
+  por `scripts/ui/IconStudio.gd` y `ItemModelFactory.gd` con primitivas de Godot;
+  no usan arte de terceros.
 - No contiene samples de terceros fuera de los packs CC0 acreditados abajo.
 
 ## Arte 3D

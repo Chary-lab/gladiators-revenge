@@ -6,11 +6,13 @@ extends Node3D
 ## La escena se genera por código para poder iterar sin editor. Los sistemas
 ## (oleadas, público, HUD, armería) son nodos independientes y sustituibles.
 
-const ANCHO := 44.0
-const LARGO := 32.0
+const ANCHO := 60.0
+const LARGO := 40.0
 const ALTO_MURO := 1.4
-const RADIO_PUBLICO := 25.0
+const RADIO_PUBLICO := 32.0
 const RADIO_INTERACCION := 3.5
+const BORDE_ARENA := 10.0
+const CENTRO_ARENA := Vector3(-8.0, 0, 0)
 
 ## Paletas de skin del gladiador: se multiplican sobre la textura base.
 const SKIN_TIERRA_BALDIA := Color(0.72, 0.95, 0.55)
@@ -36,9 +38,15 @@ var _oleadas: WaveManager
 var _publico: AudienceFury
 var _hud: ArenaHUD
 var _tienda: ShopPedestal
+var _puerta: PuertaArena
 var _texto_pista := ""
 var _pedestales: Array[ArmoryPedestal] = []
 var _puntos_spawn: Array[Vector3] = []
+var _en_combate := false
+var _fuente := Vector3(26.0, 0, 0)
+var _obelisco := Vector3(22.0, 0, -9.0)
+var _campeon_elegido := false
+var _tiempo_entrada := 0.0
 
 
 func _ready() -> void:
@@ -47,6 +55,8 @@ func _ready() -> void:
 	_crear_suelo()
 	_crear_muros()
 	_crear_decoracion()
+	_crear_zona_segura()
+	_crear_puerta()
 	_crear_bandera()
 	_crear_jugador()
 	_crear_camara()
@@ -62,8 +72,25 @@ func _ready() -> void:
 		_capturar()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_actualizar_pista()
+	_curar_en_zona_segura(delta)
+	_tiempo_entrada = maxf(0.0, _tiempo_entrada - delta)
+
+
+func _en_base() -> bool:
+	return _jugador != null and _jugador.global_position.x > BORDE_ARENA + 1.0
+
+
+func _curar_en_zona_segura(delta: float) -> void:
+	if _jugador == null or terminado or _en_combate:
+		return
+	if not _en_base():
+		return
+	if _jugador.global_position.distance_to(_fuente) > 5.5:
+		return
+	_jugador.curar(_jugador.estadisticas.salud_maxima * 0.035 * delta)
+	_jugador.restaurar_mana(_jugador.estadisticas.mana_maximo * 0.05 * delta)
 
 
 func _unhandled_input(evento: InputEvent) -> void:
@@ -85,6 +112,8 @@ func _unhandled_input(evento: InputEvent) -> void:
 			_hud.alternar_talentos()
 		KEY_K:
 			_ciclar_skin()
+		KEY_G:
+			_alternar_bandera()
 		KEY_ESCAPE:
 			_hud.cerrar_talentos()
 			_hud.cerrar_tienda()
@@ -175,21 +204,29 @@ func _crear_suelo() -> void:
 	cilindro.bottom_radius = 5.0
 	cilindro.height = 0.04
 	anillo.mesh = cilindro
-	anillo.position.y = 0.02
+	anillo.position = CENTRO_ARENA + Vector3(0, 0.02, 0)
 	anillo.material_override = _material(Color(0.45, 0.32, 0.20))
 	add_child(anillo)
 
-	# Gradas: cuatro volúmenes fuera de los muros (origen de los proyectiles).
+	# Losa de la zona segura: más clara para separar base y arena.
+	var base := MeshInstance3D.new()
+	var plano_base := PlaneMesh.new()
+	plano_base.size = Vector2(20.0, LARGO)
+	base.mesh = plano_base
+	base.position = Vector3(20.0, 0.015, 0)
+	base.material_override = _material(Color(0.43, 0.35, 0.27))
+	add_child(base)
+
+	# Gradas de la arena: tres graderíos, la base queda abierta al este.
 	_crear_prop(Vector3(0, 1.5, -LARGO * 0.5 - 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.16, 0.14, 0.18))
 	_crear_prop(Vector3(0, 1.5, LARGO * 0.5 + 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.16, 0.14, 0.18))
 	_crear_prop(Vector3(-ANCHO * 0.5 - 4.0, 1.5, 0), Vector3(6.0, 3.0, LARGO), Color(0.13, 0.12, 0.16))
-	_crear_prop(Vector3(ANCHO * 0.5 + 4.0, 1.5, 0), Vector3(6.0, 3.0, LARGO), Color(0.13, 0.12, 0.16))
 
 	_puntos_spawn = [
 		Vector3(-ANCHO * 0.5 + 4.0, 0, -LARGO * 0.5 + 3.0),
-		Vector3(ANCHO * 0.5 - 4.0, 0, -LARGO * 0.5 + 3.0),
 		Vector3(-ANCHO * 0.5 + 4.0, 0, LARGO * 0.5 - 3.0),
-		Vector3(ANCHO * 0.5 - 4.0, 0, LARGO * 0.5 - 3.0),
+		Vector3(-10.0, 0, -LARGO * 0.5 + 3.0),
+		Vector3(-10.0, 0, LARGO * 0.5 - 3.0),
 	]
 
 
@@ -199,37 +236,52 @@ func _crear_muros() -> void:
 	_crear_caja_estatica(Vector3(0, ALTO_MURO * 0.5, LARGO * 0.5), Vector3(ANCHO, ALTO_MURO, 1.0), piedra)
 	_crear_caja_estatica(Vector3(-ANCHO * 0.5, ALTO_MURO * 0.5, 0), Vector3(1.0, ALTO_MURO, LARGO), piedra)
 	_crear_caja_estatica(Vector3(ANCHO * 0.5, ALTO_MURO * 0.5, 0), Vector3(1.0, ALTO_MURO, LARGO), piedra)
+	# Muro divisorio entre arena y base, con un portón central de 10 m.
+	_crear_caja_estatica(Vector3(BORDE_ARENA, 1.8, -12.5), Vector3(1.0, 3.6, 15.0), piedra)
+	_crear_caja_estatica(Vector3(BORDE_ARENA, 1.8, 12.5), Vector3(1.0, 3.6, 15.0), piedra)
 
 
-## Props modulares de KayKit: columnas, antorchas y estandartes del Imperio.
+## Props modulares de KayKit: columnas, antorchas, estandartes y cobertura.
 func _crear_decoracion() -> void:
 	var columna := load("res://assets/kaykit/dungeon/column.gltf.glb") as PackedScene
 	var antorcha := load("res://assets/kaykit/dungeon/torch_lit.gltf.glb") as PackedScene
 	var banderin := load("res://assets/kaykit/dungeon/banner_red.gltf.glb") as PackedScene
+	var muro_roto := load("res://assets/kaykit/dungeon/wall_broken.gltf.glb") as PackedScene
+	var escombro := load("res://assets/kaykit/dungeon/rubble_large.gltf.glb") as PackedScene
 
+	# Cuatro columnas en las esquinas de la arena, con antorchas cálidas.
 	var esquinas := [
-		Vector3(-ANCHO * 0.5 + 2.0, 0, -LARGO * 0.5 + 2.0),
-		Vector3(ANCHO * 0.5 - 2.0, 0, -LARGO * 0.5 + 2.0),
-		Vector3(-ANCHO * 0.5 + 2.0, 0, LARGO * 0.5 - 2.0),
-		Vector3(ANCHO * 0.5 - 2.0, 0, LARGO * 0.5 - 2.0),
+		Vector3(-ANCHO * 0.5 + 3.0, 0, -LARGO * 0.5 + 3.0),
+		Vector3(-ANCHO * 0.5 + 3.0, 0, LARGO * 0.5 - 3.0),
+		Vector3(BORDE_ARENA - 3.0, 0, -LARGO * 0.5 + 3.0),
+		Vector3(BORDE_ARENA - 3.0, 0, LARGO * 0.5 - 3.0),
 	]
 	for punto in esquinas:
-		_instanciar_prop(columna, punto, 1.6)
-		_instanciar_prop(antorcha, punto + Vector3(0, 2.7, 0), 1.4)
+		_instanciar_prop(columna, punto, 1.7)
+		_instanciar_prop(antorcha, punto + Vector3(0, 2.8, 0), 1.4)
 		var luz := OmniLight3D.new()
-		luz.position = punto + Vector3(0, 3.0, 0)
-		luz.omni_range = 9.0
-		luz.light_energy = 1.2
+		luz.position = punto + Vector3(0, 3.1, 0)
+		luz.omni_range = 10.0
+		luz.light_energy = 1.25
 		luz.light_color = Color(1.0, 0.58, 0.26)
 		add_child(luz)
 
-	# Columnas intermedias: ritmo visual sin coste de mallas animadas.
-	for x in [-11.0, 0.0, 11.0]:
+	# Ritmo visual en los muros norte y sur de la arena.
+	for x in [-22.0, -8.0, 4.0]:
 		_instanciar_prop(columna, Vector3(x, 0, -LARGO * 0.5 + 1.6), 1.5)
 		_instanciar_prop(columna, Vector3(x, 0, LARGO * 0.5 - 1.6), 1.5)
 
-	for x in [-8.0, 8.0]:
-		_instanciar_prop(banderin, Vector3(x, 2.2, -LARGO * 0.5 + 1.1), 1.3)
+	for x in [-18.0, 0.0]:
+		_instanciar_prop(banderin, Vector3(x, 2.2, -LARGO * 0.5 + 1.1), 1.35)
+
+	# Cobertura: muros derruidos y escombros, siempre fuera del carril central.
+	_instanciar_prop(muro_roto, Vector3(-19.0, 0, -6.0), 1.2)
+	_instanciar_prop(muro_roto, Vector3(-19.0, 0, 6.0), 1.2)
+	_instanciar_prop(escombro, Vector3(-13.0, 0, 10.0), 1.0)
+	_instanciar_prop(escombro, Vector3(-4.0, 0, -10.0), 0.9)
+	_instanciar_prop(escombro, Vector3(-25.0, 0, 0.0), 1.1)
+	_crear_caja_estatica(Vector3(-19.0, 1.0, -6.0), Vector3(2.6, 2.0, 2.0), Color(0.28, 0.25, 0.22))
+	_crear_caja_estatica(Vector3(-19.0, 1.0, 6.0), Vector3(2.6, 2.0, 2.0), Color(0.28, 0.25, 0.22))
 
 
 func _instanciar_prop(escena: PackedScene, pos: Vector3, escala: float) -> void:
@@ -243,10 +295,102 @@ func _instanciar_prop(escena: PackedScene, pos: Vector3, escala: float) -> void:
 	add_child(nodo)
 
 
+func _crear_zona_segura() -> void:
+	# Fuente: cura durante preparación y descanso.
+	var base := MeshInstance3D.new()
+	var cilindro := CylinderMesh.new()
+	cilindro.top_radius = 3.2
+	cilindro.bottom_radius = 3.4
+	cilindro.height = 0.5
+	base.mesh = cilindro
+	base.position = _fuente + Vector3(0, 0.25, 0)
+	base.material_override = _material(Color(0.34, 0.29, 0.23))
+	add_child(base)
+
+	var agua := MeshInstance3D.new()
+	var disco := CylinderMesh.new()
+	disco.top_radius = 2.7
+	disco.bottom_radius = 2.7
+	disco.height = 0.08
+	agua.mesh = disco
+	agua.position = _fuente + Vector3(0, 0.53, 0)
+	var material_agua := _material(Color(0.18, 0.62, 0.68))
+	material_agua.emission_enabled = true
+	material_agua.emission = Color(0.15, 0.75, 0.80)
+	material_agua.emission_energy_multiplier = 0.8
+	agua.material_override = material_agua
+	add_child(agua)
+
+	var pilar := MeshInstance3D.new()
+	var caja := BoxMesh.new()
+	caja.size = Vector3(0.5, 2.2, 0.5)
+	pilar.mesh = caja
+	pilar.position = _fuente + Vector3(0, 1.4, 0)
+	pilar.material_override = _material(Color(0.45, 0.38, 0.28))
+	add_child(pilar)
+	_etiqueta_mundo("FUENTE", _fuente + Vector3(0, 2.9, 0), Color(0.55, 0.95, 0.95))
+	var luz_agua := OmniLight3D.new()
+	luz_agua.position = _fuente + Vector3(0, 2.0, 0)
+	luz_agua.omni_range = 7.0
+	luz_agua.light_energy = 0.8
+	luz_agua.light_color = Color(0.35, 0.85, 0.95)
+	add_child(luz_agua)
+
+	# Obelisco de talentos.
+	var obelisco := MeshInstance3D.new()
+	var prisma := PrismMesh.new()
+	prisma.size = Vector3(1.1, 3.2, 1.1)
+	obelisco.mesh = prisma
+	obelisco.position = _obelisco + Vector3(0, 1.6, 0)
+	var material_obelisco := _material(Color(0.38, 0.22, 0.55))
+	material_obelisco.emission_enabled = true
+	material_obelisco.emission = Color(0.65, 0.30, 0.95)
+	material_obelisco.emission_energy_multiplier = 1.2
+	obelisco.material_override = material_obelisco
+	add_child(obelisco)
+	_etiqueta_mundo("TALENTOS", _obelisco + Vector3(0, 3.7, 0), Color(0.82, 0.62, 1.0))
+	var luz_obelisco := OmniLight3D.new()
+	luz_obelisco.position = _obelisco + Vector3(0, 2.0, 0)
+	luz_obelisco.omni_range = 7.0
+	luz_obelisco.light_energy = 0.9
+	luz_obelisco.light_color = Color(0.65, 0.36, 1.0)
+	add_child(luz_obelisco)
+
+	# Círculo de campeones.
+	var circulo := MeshInstance3D.new()
+	var toro := TorusMesh.new()
+	toro.inner_radius = 5.7
+	toro.outer_radius = 6.0
+	circulo.mesh = toro
+	circulo.position = Vector3(18.0, 0.04, 0)
+	circulo.material_override = _material(Color(0.64, 0.48, 0.22))
+	add_child(circulo)
+	_etiqueta_mundo("CAMPEONES", Vector3(18.0, 2.6, 0), Color(1.0, 0.84, 0.45))
+
+
+func _etiqueta_mundo(texto: String, pos: Vector3, color: Color) -> void:
+	var etiqueta := Label3D.new()
+	etiqueta.text = texto
+	etiqueta.font_size = 56
+	etiqueta.pixel_size = 0.006
+	etiqueta.outline_size = 10
+	etiqueta.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	etiqueta.modulate = color
+	etiqueta.position = pos
+	add_child(etiqueta)
+
+
+func _crear_puerta() -> void:
+	_puerta = PuertaArena.new()
+	add_child(_puerta)
+	_puerta.global_position = Vector3(BORDE_ARENA, 0, 0)
+	_puerta.abrir()
+
+
 func _crear_bandera() -> void:
 	_bandera = RebellionBanner.crear()
 	add_child(_bandera)
-	_bandera.global_position = Vector3.ZERO
+	_bandera.global_position = CENTRO_ARENA
 
 
 func _crear_jugador() -> void:
@@ -272,7 +416,7 @@ func _crear_jugador() -> void:
 	_jugador.arma_inicial = WeaponItem.crear_prisionero()
 
 	add_child(_jugador)
-	_jugador.global_position = Vector3(0, 0, 6)
+	_jugador.global_position = Vector3(24.0, 0, 0)
 
 	var inventario := InventoryComponent.new()
 	inventario.name = "Inventario"
@@ -285,24 +429,28 @@ func _crear_jugador() -> void:
 func _crear_tienda() -> void:
 	_tienda = ShopPedestal.new()
 	add_child(_tienda)
-	_tienda.global_position = Vector3(13.0, 0, 6.5)
+	_tienda.global_position = Vector3(27.0, 0, 8.0)
 
 
 func _crear_camara() -> void:
 	_camara = ArenaCamera.new()
 	add_child(_camara)
 	_camara.objetivo = _jugador
+	_camara.limites = Vector2(ANCHO * 0.5 - 9.0, LARGO * 0.5 - 7.0)
+	_camara.size = 26.0
 	_camara.global_position = _jugador.global_position + _camara.desplazamiento
 	_camara.current = true
 
 
 func _crear_armeria() -> void:
 	var armas := WeaponItem.crear_catalogo_base()
+	var posiciones := [Vector3(18.0, 0, 7.0), Vector3(18.0, 0, 0.0), Vector3(18.0, 0, -7.0)]
 	for i in armas.size():
 		var pedestal := ArmoryPedestal.new()
 		add_child(pedestal)
-		pedestal.global_position = Vector3(-6.0 + i * 6.0, 0, 11.0)
+		pedestal.global_position = posiciones[i]
 		pedestal.configurar(armas[i])
+		pedestal.es_campeon = true
 		_pedestales.append(pedestal)
 
 
@@ -315,7 +463,7 @@ func _crear_oleadas() -> void:
 func _crear_publico() -> void:
 	_publico = AudienceFury.new()
 	add_child(_publico)
-	_publico.iniciar(_jugador, Vector3.ZERO, RADIO_PUBLICO)
+	_publico.iniciar(_jugador, CENTRO_ARENA, RADIO_PUBLICO)
 
 
 func _crear_hud() -> void:
@@ -325,6 +473,7 @@ func _crear_hud() -> void:
 
 
 func _conectar() -> void:
+	_oleadas.entrada_iniciada.connect(_al_entrada_iniciada)
 	_oleadas.oleada_iniciada.connect(_al_iniciar_oleada)
 	_oleadas.oleada_terminada.connect(_al_terminar_oleada)
 	_oleadas.oro_ganado.connect(_al_ganar_oro)
@@ -337,13 +486,36 @@ func _conectar() -> void:
 
 # --- Economía y armería ---------------------------------------------------
 
+func _al_entrada_iniciada(duracion: float) -> void:
+	_en_combate = false
+	_tiempo_entrada = duracion
+	if _puerta != null:
+		_puerta.abrir()
+	if _jugador != null:
+		_jugador.aplicar_impulso_velocidad(1.35, duracion)
+	if _hud != null:
+		_hud.mostrar_mensaje("¡Corre a la arena! +35 % velocidad", 2.6)
+
+
 func _al_iniciar_oleada(_numero: int, _total: int) -> void:
+	_en_combate = true
+	if _puerta != null:
+		_puerta.cerrar()
+	if _jugador != null and _jugador.global_position.x > BORDE_ARENA:
+		_jugador.global_position = Vector3(BORDE_ARENA - 4.0, 0, 0)
+		if _hud != null:
+			_hud.mostrar_mensaje("El portón se cerró: dentro de la arena", 2.2)
+	if _bandera != null:
+		_bandera.configurar_inmune(5.0)
 	Sfx.reproducir("oleada", -5.0)
 	if _publico != null:
 		_publico.establecer_combate(true)
 
 
 func _al_terminar_oleada(numero: int) -> void:
+	_en_combate = false
+	if _puerta != null:
+		_puerta.abrir()
 	if _publico != null:
 		_publico.establecer_combate(false)
 	if terminado:
@@ -381,21 +553,46 @@ func _ciclar_skin() -> void:
 	_hud.mostrar_mensaje("Skin: %s" % skin["nombre"], 2.0)
 
 
+func _alternar_bandera() -> void:
+	if terminado or _bandera == null or _jugador == null:
+		return
+	if _bandera.esta_cargada():
+		if _jugador.global_position.x > BORDE_ARENA - 1.0:
+			_hud.mostrar_mensaje("El estandarte solo se coloca dentro de la arena.", 2.4)
+			return
+		_bandera.colocar(_jugador.global_position)
+		_hud.mostrar_mensaje("Estandarte colocado. Defiéndelo.", 2.4)
+		Sfx.reproducir("compra", -5.0)
+		return
+	if _jugador.global_position.distance_to(_bandera.global_position) > 4.0:
+		_hud.mostrar_mensaje("Acércate al estandarte para cargarlo (G).", 2.0)
+		return
+	if _bandera.recoger(_jugador):
+		_hud.mostrar_mensaje("Estandarte en mano: G para colocarlo.", 2.5)
+		Sfx.reproducir("click", -8.0)
+
+
 func _interactuar_cercano() -> void:
 	if terminado:
 		return
 	var pedestal := _pedestal_cercano()
 	if pedestal != null:
-		if oro < pedestal.precio():
-			_hud.mostrar_mensaje("Necesitas %d de oro" % pedestal.precio(), 2.0)
+		if _campeon_elegido:
+			_hud.mostrar_mensaje("Tu campeón ya está elegido. La clase es permanente.", 2.5)
 			return
 		if pedestal.comprar(_jugador):
-			oro -= pedestal.precio()
-			_hud.mostrar_mensaje("Has tomado %s" % pedestal.arma.nombre, 2.5)
+			_campeon_elegido = true
+			_hud.mostrar_mensaje("Campeón: %s" % pedestal.arma.nombre, 2.8)
 			Sfx.reproducir("compra", -3.0)
 		return
 	if _tienda_cercana():
 		_hud.alternar_tienda()
+		return
+	if _jugador.global_position.distance_to(_obelisco) <= 4.5:
+		_hud.alternar_talentos()
+		return
+	if _jugador.global_position.distance_to(_fuente) <= 5.5:
+		_hud.mostrar_mensaje("La fuente restaura vida y maná fuera de combate.", 2.5)
 
 
 func _tienda_cercana() -> bool:
@@ -419,6 +616,8 @@ func _pedestal_cercano() -> ArmoryPedestal:
 
 func puede_comprar_objeto(item: ItemData) -> bool:
 	if item == null or terminado or _jugador == null or _jugador.inventario == null:
+		return false
+	if not _en_base():
 		return false
 	var inventario := _jugador.inventario
 	var receta := inventario.receta_completada_por(item)
@@ -479,12 +678,18 @@ func _actualizar_pista() -> void:
 		return
 	var pedestal := _pedestal_cercano()
 	if pedestal != null:
-		var alcanza := " " if oro >= pedestal.precio() else "  ·  falta oro"
-		_texto_pista = "F — %s (%d oro)%s" % [pedestal.arma.nombre, pedestal.precio(), alcanza]
+		if _campeon_elegido:
+			_texto_pista = "Campeón elegido  ·  la clase es permanente"
+		else:
+			_texto_pista = "F — Elegir campeón: %s (gratis)" % pedestal.arma.nombre
 		_hud.establecer_pista(_texto_pista)
 		return
 	if _tienda_cercana():
 		_texto_pista = "F — Mercader de la Rebelión: objetos y forja"
+	elif _jugador.global_position.distance_to(_obelisco) <= 4.5:
+		_texto_pista = "F — Obelisco de talentos (T)"
+	elif _jugador.global_position.distance_to(_fuente) <= 5.5:
+		_texto_pista = "Fuente: restaura vida y maná fuera de combate"
 	else:
 		_texto_pista = ""
 	_hud.establecer_pista(_texto_pista)

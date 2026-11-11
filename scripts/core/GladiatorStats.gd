@@ -14,6 +14,9 @@ extends Resource
 ## porque los puntos y los bonos de equipo son estado propio de cada personaje.
 
 signal atributos_cambiados
+signal experiencia_cambiada(actual: int, requerida: int, nivel: int)
+signal nivel_subido(nivel: int)
+signal puntos_habilidad_cambiados(cantidad: int)
 
 const TIPO_FISICO := &"fisico"
 const TIPO_MAGICO := &"magico"
@@ -63,7 +66,11 @@ const HERENCIA_INVOCACION_MAXIMA := 0.85
 
 @export_group("Progresión")
 @export_range(0, 999, 1) var puntos_libres: int = 0
-@export_range(1, 100, 1) var nivel: int = 1
+@export_range(1, 20, 1) var nivel: int = 1
+@export_range(0, 999999, 1) var experiencia: int = 0
+@export_range(0, 99, 1) var puntos_habilidad: int = 0
+## XP sobrante al alcanzar el nivel máximo; Arena la convierte en oro.
+var experiencia_excedente: int = 0
 
 ## Bonos temporales aportados por el arma equipada (no se serializan: el arma
 ## los vuelve a aplicar al equiparse).
@@ -228,6 +235,65 @@ func otorgar_puntos(cantidad: int) -> void:
 		return
 	puntos_libres += cantidad
 	atributos_cambiados.emit()
+
+
+# --- Experiencia y niveles ------------------------------------------------
+
+var experiencia_requerida: int:
+	get:
+		return CurvaNivel.xp_requerida(nivel)
+
+var experiencia_faltante: int:
+	get:
+		if nivel >= CurvaNivel.NIVEL_MAXIMO:
+			return 0
+		return maxi(0, experiencia_requerida - experiencia)
+
+
+## Añade XP y devuelve cuántos niveles se ganaron. El controlador se encarga
+## de desbloquear habilidades y de avisar a la UI mediante `nivel_subido`.
+func otorgar_experiencia(cantidad: int) -> int:
+	if cantidad <= 0:
+		return 0
+	if nivel >= CurvaNivel.NIVEL_MAXIMO:
+		experiencia_excedente += cantidad
+		experiencia_cambiada.emit(0, 0, nivel)
+		return 0
+
+	var subidas := 0
+	experiencia += cantidad
+	while nivel < CurvaNivel.NIVEL_MAXIMO and experiencia >= experiencia_requerida:
+		experiencia -= experiencia_requerida
+		nivel += 1
+		subidas += 1
+		puntos_libres += 1
+		if nivel >= 4 and nivel <= 14:
+			puntos_habilidad += 1
+			puntos_habilidad_cambiados.emit(puntos_habilidad)
+		nivel_subido.emit(nivel)
+
+	# Al llegar al máximo, lo que sobre pasa al fondo de oro.
+	if nivel >= CurvaNivel.NIVEL_MAXIMO and experiencia > 0:
+		experiencia_excedente += experiencia
+		experiencia = 0
+
+	atributos_cambiados.emit()
+	experiencia_cambiada.emit(experiencia, experiencia_requerida, nivel)
+	return subidas
+
+
+func reclamar_excedente() -> int:
+	var cantidad := experiencia_excedente
+	experiencia_excedente = 0
+	return cantidad
+
+
+func gastar_punto_habilidad() -> bool:
+	if puntos_habilidad <= 0:
+		return false
+	puntos_habilidad -= 1
+	puntos_habilidad_cambiados.emit(puntos_habilidad)
+	return true
 
 
 ## Sustituye los bonos del arma equipada. Se llama al equipar y al desequipar.
