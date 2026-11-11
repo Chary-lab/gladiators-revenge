@@ -19,6 +19,7 @@ const RUTA_ESPECTRO := "res://assets/kaykit/skeletons/Skeleton_Rogue.glb"
 const RUTA_CABALLERO := "res://assets/kaykit/adventurers/Knight.glb"
 
 var es_elite := false
+var es_ligero := false
 var activo := false
 var salud_maxima := 30.0
 var salud_actual := 0.0
@@ -104,6 +105,7 @@ func preparar(
 
 	var factor_elite := 2.4 if elite else 1.0
 	var ligero := not elite and randf() < 0.35
+	es_ligero = ligero
 	salud_maxima = (26.0 + ronda * 10.0) * factor_elite
 	dano = (4.0 + ronda * 1.5) * (1.5 if elite else 1.0)
 	velocidad = 2.3 + minf(ronda * 0.04, 0.9)
@@ -136,6 +138,24 @@ func al_devolver() -> void:
 	activo = false
 	velocity = Vector3.ZERO
 	remove_from_group(GRUPO)
+
+
+## Enemigo de solo lectura para clientes: sin IA, sin daño, sin pool.
+func configurar_remoto(elite: bool, ligero := false) -> void:
+	es_elite = elite
+	es_ligero = ligero
+	activo = true
+	_configurar_visual(elite, ligero)
+	add_to_group(GRUPO)
+	set_physics_process(false)
+
+
+func aplicar_remoto(posicion: Vector3, rotacion: float, vida: float, vida_max: float) -> void:
+	global_position = posicion
+	rotation.y = rotacion
+	salud_maxima = maxf(1.0, vida_max)
+	salud_actual = maxf(0.0, vida)
+	activo = salud_actual > 0.0
 
 
 func _physics_process(delta: float) -> void:
@@ -193,13 +213,24 @@ func _elegir_objetivo() -> Node3D:
 	if _provocado > 0.0 and is_instance_valid(_fuente_provocacion):
 		return _fuente_provocacion
 
-	if _jugador != null and is_instance_valid(_jugador) and not _jugador.esta_muerto:
-		if global_position.distance_to(_jugador.global_position) < 5.5:
-			return _jugador
+	var mejor: Node3D = null
+	var mejor_distancia := INF
+	for nodo in get_tree().get_nodes_in_group(GladiatorController.GRUPO_GLADIADORES):
+		var cuerpo := nodo as Node3D
+		if cuerpo == null or not is_instance_valid(cuerpo):
+			continue
+		var muerto = cuerpo.get("esta_muerto")
+		if muerto is bool and muerto:
+			continue
+		var distancia := global_position.distance_squared_to(cuerpo.global_position)
+		if distancia < mejor_distancia:
+			mejor_distancia = distancia
+			mejor = cuerpo
 
+	if mejor != null:
+		return mejor
 	if _bandera != null and is_instance_valid(_bandera):
 		return _bandera
-
 	if _jugador != null and is_instance_valid(_jugador) and not _jugador.esta_muerto:
 		return _jugador
 	return null

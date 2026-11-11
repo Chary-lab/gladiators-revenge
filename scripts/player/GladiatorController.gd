@@ -26,6 +26,7 @@ signal aspecto_cambiado
 signal progreso_cambiado(nivel: int, experiencia: int, requerida: int)
 signal habilidades_cambiadas
 signal nivel_alcanzado(nivel: int)
+signal habilidad_mejorada(slot: int, habilidad: AbilityData, rango: int)
 
 const SLOT_Q := 0
 const SLOT_W := 1
@@ -63,6 +64,15 @@ const INTERVALO_REGENERACION := 0.25
 @export_group("Progresión de combate")
 ## Puntos rojos: se auto-invierten en los talentos del arma equipada.
 @export var puntos_rojos := 0
+
+## Modo red: null en partida local, NetCoop en servidor/cliente.
+var red: NetCoop
+var es_espejo := false
+var es_local_red := false
+## Punto de lanzamiento enviado por un cliente (el servidor no tiene ratón).
+var punto_red := Vector3.ZERO
+var tiene_punto_red := false
+var _pos_objetivo_red := Vector3.ZERO
 
 var salud_actual := 0.0
 var mana_actual := 0.0
@@ -193,6 +203,8 @@ func _ocultar_marcadores() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if es_espejo:
+		return
 	_actualizar_cooldowns(delta)
 	_actualizar_estados(delta)
 	if inventario != null:
@@ -216,10 +228,82 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 
 
+## Los espejos de red interpolan la posición autoritativa del servidor.
+func _process(delta: float) -> void:
+	if not es_espejo:
+		return
+	var antes := global_position
+	global_position = global_position.lerp(_pos_objetivo_red, clampf(12.0 * delta, 0.0, 1.0))
+	if visual != null:
+		visual.mover(antes.distance_to(global_position) / maxf(0.001, delta))
+
+
 # --- Entrada --------------------------------------------------------------
+
+func _procesar_input_red(evento: InputEvent) -> bool:
+	if red == null or not es_local_red or red.estado != NetCoop.Estado.CONECTADO:
+		return false
+	if evento is InputEventMouseButton:
+		var clic := evento as InputEventMouseButton
+		if not clic.pressed:
+			return true
+		if clic.button_index == MOUSE_BUTTON_RIGHT:
+			var punto = _punto_bajo_raton(clic.position)
+			if punto != null:
+				red.enviar_accion(&"mover", {"punto": punto})
+				_animar_destino(punto, _marcador_movimiento, 1.1)
+			return true
+		if clic.button_index == MOUSE_BUTTON_LEFT:
+			var punto_izq = _punto_bajo_raton(clic.position)
+			if punto_izq != null:
+				red.enviar_accion(&"atacar_mover", {"punto": punto_izq})
+				_animar_destino(punto_izq, _marcador_ataque, 1.5)
+			return true
+		return true
+	if evento is InputEventKey:
+		var tecla := evento as InputEventKey
+		if not tecla.pressed or tecla.echo:
+			return true
+		var codigo := tecla.physical_keycode if tecla.physical_keycode != 0 else tecla.keycode
+		var slot: int = TECLAS_HABILIDAD.get(codigo, -1)
+		if slot >= 0:
+			var punto_habilidad = _punto_bajo_raton(get_viewport().get_mouse_position())
+			red.enviar_accion(&"habilidad", {"slot": slot, "punto": punto_habilidad})
+			return true
+		match codigo:
+			KEY_S:
+				red.enviar_accion(&"detener", {})
+			KEY_H:
+				red.enviar_accion(&"mantener", {})
+			KEY_A:
+				red.enviar_accion(&"atacar", {})
+			KEY_Z:
+				red.enviar_accion(&"objeto", {"indice": 0, "punto": _punto_bajo_raton(get_viewport().get_mouse_position())})
+			KEY_X:
+				red.enviar_accion(&"objeto", {"indice": 1, "punto": _punto_bajo_raton(get_viewport().get_mouse_position())})
+			KEY_C:
+				red.enviar_accion(&"objeto", {"indice": 2, "punto": _punto_bajo_raton(get_viewport().get_mouse_position())})
+			KEY_V:
+				red.enviar_accion(&"objeto", {"indice": 3, "punto": _punto_bajo_raton(get_viewport().get_mouse_position())})
+			KEY_B:
+				red.enviar_accion(&"objeto", {"indice": 4, "punto": _punto_bajo_raton(get_viewport().get_mouse_position())})
+			KEY_N:
+				red.enviar_accion(&"objeto", {"indice": 5, "punto": _punto_bajo_raton(get_viewport().get_mouse_position())})
+			_:
+				return false
+		return true
+	return false
 
 func _unhandled_input(evento: InputEvent) -> void:
 	if esta_muerto:
+		return
+	if es_espejo and not es_local_red:
+		return
+	if red != null and red.es_servidor:
+		return
+	if red != null and es_local_red and red.estado == NetCoop.Estado.CONECTADO:
+		if _procesar_input_red(evento):
+			get_viewport().set_input_as_handled()
 		return
 
 	if evento is InputEventMouseButton:
@@ -295,6 +379,20 @@ func _punto_bajo_raton(posicion_pantalla: Vector2) -> Variant:
 	return Plane(Vector3.UP, 0.0).intersects_ray(origen, direccion)
 
 
+func _resolver_punto(habilidad: AbilityData, punto_objetivo = null) -> Vector3:
+	var punto := global_position
+	if habilidad == null or habilidad.objetivo == AbilityData.Objetivo.PROPIO:
+		return punto
+	var apuntado = punto_objetivo
+	if apuntado == null and tiene_punto_red:
+		apuntado = punto_red
+	if apuntado == null:
+		apuntado = _punto_bajo_raton(get_viewport().get_mouse_position())
+	if apuntado != null:
+		punto = apuntado
+	return punto
+
+
 func _enemigo_bajo_raton(posicion_pantalla: Vector2) -> Node3D:
 	var camara := get_viewport().get_camera_3d()
 	if camara == null:
@@ -313,11 +411,18 @@ func _enemigo_bajo_raton(posicion_pantalla: Vector2) -> Node3D:
 	return null
 
 
+func _es_cliente_red() -> bool:
+	return red != null and es_local_red and not red.es_servidor and red.estado == NetCoop.Estado.CONECTADO
+
+
 # --- Movimiento -----------------------------------------------------------
 
 ## Ordena un desplazamiento al punto indicado, ajustado a la malla de navegación.
 func ordenar_movimiento(punto: Vector3) -> void:
 	if esta_muerto:
+		return
+	if _es_cliente_red():
+		red.enviar_accion(&"mover", {"punto": punto})
 		return
 	var destino := NavigationServer3D.map_get_closest_point(
 		get_world_3d().navigation_map, punto
@@ -340,6 +445,9 @@ func ordenar_movimiento(punto: Vector3) -> void:
 func ordenar_ataque_movimiento(punto: Vector3) -> void:
 	if esta_muerto:
 		return
+	if _es_cliente_red():
+		red.enviar_accion(&"atacar_mover", {"punto": punto})
+		return
 	var destino := NavigationServer3D.map_get_closest_point(
 		get_world_3d().navigation_map, punto
 	)
@@ -360,6 +468,9 @@ func ordenar_ataque_movimiento(punto: Vector3) -> void:
 
 
 func detener() -> void:
+	if _es_cliente_red():
+		red.enviar_accion(&"detener", {})
+		return
 	_tiene_orden_movimiento = false
 	modo_ataque_movimiento = false
 	mantener_posicion = false
@@ -375,6 +486,9 @@ func detener() -> void:
 
 
 func alternar_mantener_posicion() -> void:
+	if _es_cliente_red():
+		red.enviar_accion(&"mantener", {})
+		return
 	if mantener_posicion:
 		mantener_posicion = false
 		_autoataque_activo = true
@@ -393,6 +507,9 @@ func alternar_mantener_posicion() -> void:
 
 
 func alternar_modo_ataque() -> void:
+	if _es_cliente_red():
+		red.enviar_accion(&"atacar", {})
+		return
 	_modo_ataque_armado = not _modo_ataque_armado
 	modo_cambiado.emit(&"armar_ataque" if _modo_ataque_armado else &"cancelar")
 
@@ -593,6 +710,7 @@ func equipar_arma(nueva_arma: WeaponItem) -> bool:
 		return false
 
 	arma_actual = nueva_arma
+	estadisticas.configurar_clase(nueva_arma.id_clase())
 	estadisticas.aplicar_bonos_equipo(nueva_arma.bonificaciones_atributos)
 	_cooldowns.fill(0.0)
 	_inicializar_habilidades()
@@ -673,22 +791,25 @@ func rango_habilidad(habilidad_id: StringName) -> int:
 	return maxi(1, int(_rangos_habilidad.get(habilidad_id, 1)))
 
 
-## Sube una habilidad con un punto dorado. La UI de habilidades es la única
-## que debe llamar a este método.
-func subir_habilidad(slot: int) -> bool:
-	if arma_actual == null or not habilidad_desbloqueada(slot):
-		return false
-	var habilidad := arma_actual.obtener_habilidad(slot)
-	if habilidad == null:
-		return false
-	var rango := rango_habilidad(habilidad.id)
-	if rango >= maxi(1, habilidad.rango_maximo):
-		return false
-	if not estadisticas.gastar_punto_habilidad():
-		return false
-	_rangos_habilidad[habilidad.id] = rango + 1
-	habilidades_cambiadas.emit()
-	return true
+## Sube al azar una habilidad desbloqueada que no esté en su rango máximo.
+## Se invoca automáticamente en cada subida de nivel; el jugador no elige.
+func _subir_habilidad_aleatoria() -> AbilityData:
+	if arma_actual == null:
+		return null
+	var candidatos: Array[int] = []
+	for slot in 4:
+		var habilidad := arma_actual.obtener_habilidad(slot)
+		if habilidad == null or not habilidad_desbloqueada(slot):
+			continue
+		if rango_habilidad(habilidad.id) < maxi(1, habilidad.rango_maximo):
+			candidatos.append(slot)
+	if candidatos.is_empty():
+		return null
+
+	var elegido: int = candidatos[randi() % candidatos.size()]
+	var habilidad := arma_actual.obtener_habilidad(elegido)
+	_rangos_habilidad[habilidad.id] = rango_habilidad(habilidad.id) + 1
+	return habilidad
 
 
 ## Suma plana de una clave de mejora hasta el rango actual.
@@ -736,10 +857,17 @@ func otorgar_experiencia(cantidad: int) -> void:
 
 func _al_subir_nivel(nivel: int) -> void:
 	_sincronizar_desbloqueos()
+	var mejorada := _subir_habilidad_aleatoria()
 	curar(estadisticas.salud_maxima * 0.15)
 	restaurar_mana(estadisticas.mana_maximo * 0.15)
 	habilidades_cambiadas.emit()
 	nivel_alcanzado.emit(nivel)
+	if mejorada != null:
+		habilidad_mejorada.emit(
+			arma_actual.habilidades.find(mejorada),
+			mejorada,
+			rango_habilidad(mejorada.id)
+		)
 	progreso_cambiado.emit(nivel, estadisticas.experiencia, estadisticas.experiencia_requerida)
 
 
@@ -748,7 +876,13 @@ func _al_cambiar_experiencia(actual: int, requerida: int, nivel: int) -> void:
 
 
 ## Intenta lanzar la habilidad del slot. Devuelve true si se ejecutó.
-func intentar_habilidad(slot: int) -> bool:
+func intentar_habilidad(slot: int, punto_objetivo = null) -> bool:
+	if red != null and es_local_red and not red.es_servidor and red.estado == NetCoop.Estado.CONECTADO:
+		var punto_envio = punto_objetivo
+		if punto_envio == null:
+			punto_envio = _punto_bajo_raton(get_viewport().get_mouse_position())
+		red.enviar_accion(&"habilidad", {"slot": slot, "punto": punto_envio})
+		return true
 	if esta_muerto or arma_actual == null:
 		return false
 	if slot < 0 or slot >= _cooldowns.size():
@@ -766,11 +900,7 @@ func intentar_habilidad(slot: int) -> bool:
 	_cooldowns[slot] = cooldown_habilidad(habilidad)
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
 
-	var punto := global_position
-	if habilidad.objetivo != AbilityData.Objetivo.PROPIO:
-		var apuntado = _punto_bajo_raton(get_viewport().get_mouse_position())
-		if apuntado != null:
-			punto = apuntado
+	var punto := _resolver_punto(habilidad, punto_objetivo)
 
 	if habilidad.reduccion_dano > 0.0:
 		_reduccion_temporal = habilidad.reduccion_dano
@@ -812,6 +942,12 @@ func reducir_cooldown(slot: int, fraccion: float) -> void:
 
 
 func usar_objeto(indice: int) -> bool:
+	if _es_cliente_red():
+		red.enviar_accion(&"objeto", {
+			"indice": indice,
+			"punto": _punto_bajo_raton(get_viewport().get_mouse_position()),
+		})
+		return true
 	if inventario == null or esta_muerto:
 		return false
 	return inventario.usar(indice, self)
@@ -834,18 +970,14 @@ func aplicar_furia_temporal(duracion: float, bonus_ataque: float, robo: float) -
 
 ## Lanza habilidades de objetos (pergaminos, legendarios) con el mismo pipeline
 ## de efectos que las habilidades de arma, pero sin tocar el cooldown del arma.
-func lanzar_habilidad_item(habilidad: AbilityData) -> bool:
+func lanzar_habilidad_item(habilidad: AbilityData, punto_objetivo = null) -> bool:
 	if esta_muerto or habilidad == null:
 		return false
 	if mana_actual < habilidad.coste_mana:
 		return false
 	mana_actual -= habilidad.coste_mana
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
-	var punto := global_position
-	if habilidad.objetivo != AbilityData.Objetivo.PROPIO:
-		var apuntado = _punto_bajo_raton(get_viewport().get_mouse_position())
-		if apuntado != null:
-			punto = apuntado
+	var punto := _resolver_punto(habilidad, punto_objetivo)
 
 	if habilidad.reduccion_dano > 0.0:
 		_reduccion_temporal = habilidad.reduccion_dano
@@ -992,7 +1124,9 @@ func _atacar_basico() -> void:
 		return
 
 	_temporizador_ataque = 1.0 / maxf(0.2, estadisticas.velocidad_ataque * (1.0 + _buff_ataque))
-	var dano := estadisticas.escalar_dano(arma_actual.dano_ataque_base, &"fisico")
+	var dano := estadisticas.escalar_ataque_principal(
+		arma_actual.dano_ataque_base, arma_actual.atributo_principal
+	)
 	dano *= 1.0 + _buff_dano
 	var critico := _critico_asegurado > 0.0 or randf() < estadisticas.probabilidad_critico
 	if critico:
@@ -1038,6 +1172,10 @@ func otorgar_puntos_rojos(cantidad: int) -> void:
 
 ## Compra un rango de talento. La UI de talentos es la única que debe llamar.
 func desbloquear_talento(talento: TalentData) -> bool:
+	if _es_cliente_red():
+		if talento != null:
+			red.enviar_accion(&"talento", {"id": talento.id})
+		return false
 	if talento == null or arma_actual == null:
 		return false
 	var rango := rango_talento(talento.id)
@@ -1178,6 +1316,9 @@ func _morir() -> void:
 ## Gasta un punto de atributo. GladiatorStats emite y el controlador ajusta
 ## salud/maná a los nuevos máximos.
 func gastar_punto_atributo(atributo: StringName) -> bool:
+	if _es_cliente_red():
+		red.enviar_accion(&"punto", {"atributo": atributo})
+		return true
 	return estadisticas.gastar_punto(atributo)
 
 
@@ -1192,6 +1333,82 @@ func aplicar_skin(tinte: Color) -> void:
 	if visual != null:
 		visual.aplicar_skin(tinte)
 	aspecto_cambiado.emit()
+
+
+## Aplica el estado autoritativo que llega del servidor a un espejo local.
+func aplicar_estado_red(datos: Dictionary) -> void:
+	_pos_objetivo_red = datos.get("pos", global_position)
+	rotation.y = float(datos.get("rot", rotation.y))
+
+	var e := estadisticas
+	var base: Dictionary = datos.get("base", {})
+	e.fuerza = int(base.get("fuerza", e.fuerza))
+	e.agilidad = int(base.get("agilidad", e.agilidad))
+	e.inteligencia = int(base.get("inteligencia", e.inteligencia))
+	e.nivel = int(datos.get("nivel", e.nivel))
+	e.experiencia = int(datos.get("xp", e.experiencia))
+	e.puntos_libres = int(datos.get("puntos_libres", e.puntos_libres))
+	puntos_rojos = int(datos.get("puntos_rojos", puntos_rojos))
+
+	var totales: Dictionary = datos.get("totales", {})
+	e._bonos_equipo = {
+		"fuerza": float(totales.get("fuerza", e.fuerza)) - float(e.fuerza),
+		"agilidad": float(totales.get("agilidad", e.agilidad)) - float(e.agilidad),
+		"inteligencia": float(totales.get("inteligencia", e.inteligencia)) - float(e.inteligencia),
+	}
+	var salud_max := float(datos.get("salud_max", e.salud_maxima))
+	var mana_max := float(datos.get("mana_max", e.mana_maximo))
+	e._bonos_equipo["vida"] = salud_max - (GladiatorStats.VIDA_BASE + e.fuerza_total * GladiatorStats.VIDA_POR_FUERZA)
+	e._bonos_equipo["mana"] = mana_max - (GladiatorStats.MANA_BASE + e.inteligencia_total * GladiatorStats.MANA_POR_INT)
+	e.atributos_cambiados.emit()
+
+	salud_actual = float(datos.get("salud", salud_actual))
+	mana_actual = float(datos.get("mana", mana_actual))
+	escudo_actual = float(datos.get("escudo", 0.0))
+	dano_infligido = float(datos.get("dano", dano_infligido))
+	dano_recibido = float(datos.get("recibido", dano_recibido))
+
+	var cds: Array = datos.get("cooldowns", [])
+	for i in mini(4, cds.size()):
+		_cooldowns[i] = float(cds[i])
+
+	var rangos_antes := _rangos_habilidad.duplicate()
+	_rangos_habilidad.clear()
+	var rangos: Dictionary = datos.get("rangos", {})
+	for id in rangos:
+		_rangos_habilidad[StringName(id)] = int(rangos[id])
+
+	var desbloqueadas_antes := _habilidades_desbloqueadas.duplicate()
+	_habilidades_desbloqueadas.clear()
+	var desbloqueadas: Dictionary = datos.get("desbloqueadas", {})
+	for id in desbloqueadas:
+		_habilidades_desbloqueadas[StringName(id)] = bool(desbloqueadas[id])
+
+	var talentos_antes := _talentos_activos.duplicate()
+	_talentos_activos.clear()
+	var talentos: Dictionary = datos.get("talentos", {})
+	for id in talentos:
+		_talentos_activos[StringName(id)] = int(talentos[id])
+
+	if rangos_antes != _rangos_habilidad or desbloqueadas_antes != _habilidades_desbloqueadas:
+		habilidades_cambiadas.emit()
+	if talentos_antes != _talentos_activos:
+		talentos_cambiados.emit()
+
+	_aplicar_muerte_espejo(bool(datos.get("muerto", false)))
+
+
+func _aplicar_muerte_espejo(muerto: bool) -> void:
+	if muerto == esta_muerto:
+		return
+	esta_muerto = muerto
+	if muerto:
+		velocity = Vector3.ZERO
+		_ocultar_marcadores()
+		if visual != null:
+			visual.morir()
+	elif visual != null:
+		visual.revivir()
 
 
 func _al_cambiar_atributos() -> void:

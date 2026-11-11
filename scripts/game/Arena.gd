@@ -48,9 +48,31 @@ var _obelisco := Vector3(22.0, 0, -9.0)
 var _campeon_elegido := false
 var _tiempo_entrada := 0.0
 
+## Modo red cooperativo.
+var es_servidor := false
+var es_cliente := false
+var url_servidor := ""
+var puerto_red := NetCoop.PUERTO_POR_DEFECTO
+var red: NetCoop
+var jugadores: Array[GladiatorController] = []
+var jugadores_red: Dictionary = {}
+var _jugadores_remotos: Dictionary = {}
+var _enemigos_remotos: Dictionary = {}
+var _jefes_remotos: Dictionary = {}
+var _tiempo_snapshot := 0.0
+var _terminado_red := false
+var _resultado_red := ""
+var _log_snapshot := false
+var _eventos_red: Array = []
+var _supabase: Supabase
+var _servidor_publico_url := ""
+var _hora_inicio_partida := 0.0
+
 
 func _ready() -> void:
 	get_tree().paused = false
+	_leer_modo_red()
+
 	_crear_entorno()
 	_crear_suelo()
 	_crear_muros()
@@ -58,7 +80,72 @@ func _ready() -> void:
 	_crear_zona_segura()
 	_crear_puerta()
 	_crear_bandera()
-	_crear_jugador()
+
+	if es_servidor:
+		_iniciar_servidor()
+	elif es_cliente:
+		_iniciar_cliente()
+	elif _necesita_menu():
+		_mostrar_menu()
+	else:
+		_iniciar_local()
+
+	var args := OS.get_cmdline_user_args()
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args:
+		_capturar()
+
+
+func _leer_modo_red() -> void:
+	var args := OS.get_cmdline_user_args()
+	for arg in args:
+		if arg == "--servidor":
+			es_servidor = true
+		elif arg.begins_with("--cliente="):
+			es_cliente = true
+			url_servidor = arg.substr("--cliente=".length())
+		elif arg.begins_with("--puerto="):
+			puerto_red = int(arg.substr("--puerto=".length()))
+		elif arg.begins_with("--publico="):
+			_servidor_publico_url = arg.substr("--publico=".length())
+	if OS.has_feature("web") and not es_servidor:
+		var consulta = JavaScriptBridge.eval(
+			"(new URLSearchParams(window.location.search)).get('servidor') || ''"
+		)
+		if consulta is String and not consulta.is_empty():
+			es_cliente = true
+			url_servidor = consulta
+	if not es_servidor and url_servidor.is_empty():
+		url_servidor = str(ProjectSettings.get_setting("red/servidor_url", ""))
+	if es_servidor and _servidor_publico_url.is_empty():
+		_servidor_publico_url = OS.get_environment("SERVER_PUBLIC_URL").strip_edges()
+		if _servidor_publico_url.is_empty():
+			_servidor_publico_url = str(ProjectSettings.get_setting("red/servidor_publico_url", ""))
+
+
+func _necesita_menu() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return false
+	if "--menu-red" in OS.get_cmdline_user_args():
+		return true
+	return OS.has_feature("web") or OS.has_feature("mobile")
+
+
+func _mostrar_menu() -> void:
+	var menu := MenuRed.new()
+	add_child(menu)
+	menu.configurar(url_servidor)
+	menu.jugar_solo.connect(_iniciar_local)
+	menu.unirse.connect(_iniciar_cliente_con_url)
+
+
+func _iniciar_cliente_con_url(direccion: String) -> void:
+	es_cliente = true
+	url_servidor = direccion
+	_iniciar_cliente()
+
+
+func _iniciar_local() -> void:
+	_crear_jugador_local()
 	_crear_camara()
 	_crear_armeria()
 	_crear_tienda()
@@ -67,15 +154,562 @@ func _ready() -> void:
 	_crear_hud()
 	_conectar()
 
-	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args:
-		_capturar()
-
 
 func _process(delta: float) -> void:
 	_actualizar_pista()
-	_curar_en_zona_segura(delta)
+	if es_servidor:
+		_tiempo_snapshot += delta
+		if _tiempo_snapshot >= 0.1:
+			_tiempo_snapshot = 0.0
+			_enviar_snapshot()
+		_curar_en_zona_segura(delta)
+	elif es_cliente:
+		pass
+	else:
+		_curar_en_zona_segura(delta)
 	_tiempo_entrada = maxf(0.0, _tiempo_entrada - delta)
+
+
+# --- Red cooperativa ------------------------------------------------------
+
+func _iniciar_servidor() -> void:
+	red = NetCoop.new()
+	red.name = "Red"
+	add_child(red)
+	red.configurar(self)
+	red.iniciar_servidor(puerto_red)
+	_hora_inicio_partida = Time.get_unix_time_from_system()
+	_supabase = Supabase.new()
+	add_child(_supabase)
+	_supabase.iniciar_latido("Gladiators Revenge", _servidor_publico_url, 3)
+
+
+func _iniciar_cliente() -> void:
+	red = NetCoop.new()
+	red.name = "Red"
+	add_child(red)
+	red.configurar(self)
+	red.bienvenida.connect(_al_recibir_bienvenida)
+	red.snapshot_recibido.connect(_aplicar_snapshot)
+	red.lobby_actualizada.connect(_al_actualizar_lobby)
+	red.clase_rechazada.connect(_al_rechazar_clase)
+	red.partida_terminada.connect(_al_fin_red)
+	red.conexion_cambiada.connect(_al_cambiar_conexion)
+
+	_crear_jugador_mirror()
+	_crear_camara()
+	_crear_armeria()
+	_crear_tienda()
+
+	_oleadas = WaveManager.new()
+	_oleadas.name = "OleadasRed"
+	add_child(_oleadas)
+	_oleadas.set_process(false)
+
+	_publico = AudienceFury.new()
+	_publico.name = "PublicoRed"
+	add_child(_publico)
+	_publico.set_process(false)
+
+	_crear_hud()
+	if _hud != null:
+		_hud.mostrar_mensaje("Conectando al servidor cooperativo…", 6.0)
+	if url_servidor.is_empty():
+		url_servidor = "ws://127.0.0.1:%d" % puerto_red
+	red.unirse(url_servidor)
+
+
+func _crear_jugador_local() -> void:
+	_jugador = _instanciar_gladiador(Vector3(24.0, 0, 0), 0)
+	jugadores.append(_jugador)
+	_jugador.murio.connect(_al_morir_jugador)
+
+
+func _instanciar_gladiador(posicion: Vector3, indice: int) -> GladiatorController:
+	var cuerpo := GladiatorController.new()
+	cuerpo.name = "Gladiador%d" % indice
+	cuerpo.collision_layer = 1
+	cuerpo.collision_mask = 1
+
+	var forma := CollisionShape3D.new()
+	var capsula := CapsuleShape3D.new()
+	capsula.radius = 0.45
+	capsula.height = 1.8
+	forma.shape = capsula
+	forma.position.y = 0.9
+	cuerpo.add_child(forma)
+
+	var agente := NavigationAgent3D.new()
+	agente.name = "NavigationAgent3D"
+	cuerpo.add_child(agente)
+
+	cuerpo.tinte_skin = SKIN_TIERRA_BALDIA
+	cuerpo.estadisticas = GladiatorStats.new()
+	cuerpo.arma_inicial = WeaponItem.crear_prisionero()
+	if red != null:
+		cuerpo.red = red
+
+	add_child(cuerpo)
+	cuerpo.global_position = posicion
+
+	var inventario := InventoryComponent.new()
+	inventario.name = "Inventario"
+	cuerpo.add_child(inventario)
+	cuerpo.inventario = inventario
+	inventario.configurar(cuerpo)
+	inventario.agregar(ItemCatalog.obtener(&"pocion_vida"))
+	return cuerpo
+
+
+func _crear_jugador_mirror() -> void:
+	_jugador = _instanciar_gladiador(Vector3(24.0, 0, 0), 0)
+	_jugador.es_espejo = true
+	_jugador.es_local_red = true
+	_jugador.red = red
+	jugadores.append(_jugador)
+
+
+func agregar_jugador_red(peer: int) -> void:
+	if not es_servidor or jugadores_red.has(peer):
+		return
+	var indice := jugadores_red.size()
+	var posiciones := [Vector3(24.0, 0, 0), Vector3(24.0, 0, 4.0), Vector3(24.0, 0, -4.0)]
+	var cuerpo := _instanciar_gladiador(posiciones[indice % posiciones.size()], indice)
+	cuerpo.red = red
+	jugadores_red[peer] = cuerpo
+	jugadores.append(cuerpo)
+	cuerpo.murio.connect(_al_morir_jugador)
+	cuerpo.ataque_basico.connect(_al_ataque_red.bind(peer))
+	if _oleadas != null:
+		_oleadas.agregar_jugador(cuerpo)
+	if _supabase != null:
+		_supabase.actualizar_jugadores(jugadores_red.size())
+
+	if jugadores.size() == 1:
+		_jugador = cuerpo
+		_crear_oleadas()
+		_crear_publico()
+		_conectar()
+
+
+func quitar_jugador_red(peer: int) -> void:
+	var cuerpo: GladiatorController = jugadores_red.get(peer)
+	if cuerpo == null:
+		return
+	jugadores_red.erase(peer)
+	jugadores.erase(cuerpo)
+	if _oleadas != null:
+		_oleadas.quitar_jugador(cuerpo)
+	cuerpo.queue_free()
+	if _supabase != null:
+		_supabase.actualizar_jugadores(jugadores_red.size())
+	if jugadores.is_empty():
+		_finalizar("DERROTA", "Todos los gladiadores han caído.")
+
+
+func equipar_clase_red(peer: int, clase: StringName) -> void:
+	var cuerpo: GladiatorController = jugadores_red.get(peer)
+	if cuerpo == null:
+		return
+	var arma := _arma_por_clase(clase)
+	if arma != null:
+		cuerpo.equipar_arma(arma)
+
+
+func aplicar_accion_red(peer: int, accion: StringName, datos: Dictionary) -> void:
+	var cuerpo: GladiatorController = jugadores_red.get(peer)
+	if cuerpo == null or cuerpo.esta_muerto:
+		return
+	match accion:
+		&"mover":
+			cuerpo.ordenar_movimiento(datos.get("punto", cuerpo.global_position))
+		&"atacar_mover":
+			cuerpo.ordenar_ataque_movimiento(datos.get("punto", cuerpo.global_position))
+		&"detener":
+			cuerpo.detener()
+		&"mantener":
+			cuerpo.alternar_mantener_posicion()
+		&"atacar":
+			cuerpo.alternar_modo_ataque()
+		&"habilidad":
+			var slot := int(datos.get("slot", 0))
+			_preparar_punto_red(cuerpo, datos.get("punto"))
+			if cuerpo.intentar_habilidad(slot, datos.get("punto")):
+				_eventos_red.append({
+					"tipo": "habilidad", "peer": peer, "slot": slot,
+					"punto": datos.get("punto"),
+				})
+			cuerpo.tiene_punto_red = false
+		&"objeto":
+			var indice := int(datos.get("indice", 0))
+			var item_usado: ItemData = null
+			if cuerpo.inventario != null and indice >= 0 and indice < InventoryComponent.RANURAS:
+				item_usado = cuerpo.inventario.ranuras[indice].get("item")
+			_preparar_punto_red(cuerpo, datos.get("punto"))
+			if cuerpo.usar_objeto(indice) and item_usado != null:
+				_eventos_red.append({
+					"tipo": "objeto", "peer": peer, "item": item_usado.id,
+					"punto": datos.get("punto"),
+				})
+			cuerpo.tiene_punto_red = false
+		&"punto":
+			cuerpo.gastar_punto_atributo(StringName(datos.get("atributo", "fuerza")))
+		&"talento":
+			var talento := _talento_por_id(cuerpo, StringName(datos.get("id", "")))
+			if talento != null:
+				cuerpo.desbloquear_talento(talento)
+		&"comprar":
+			var item := ItemCatalog.obtener(StringName(datos.get("id", "")))
+			if item != null:
+				comprar_para(cuerpo, item)
+		&"skin":
+			_ciclar_skin()
+		&"bandera":
+			_interactuar_bandera(cuerpo)
+		_:
+			pass
+
+
+func _preparar_punto_red(cuerpo: GladiatorController, punto) -> void:
+	if punto is Vector3:
+		cuerpo.punto_red = punto
+		cuerpo.tiene_punto_red = true
+	else:
+		cuerpo.tiene_punto_red = false
+
+
+func _al_ataque_red(_objetivo, _dano, critico: bool, peer: int) -> void:
+	_eventos_red.append({"tipo": "ataque", "peer": peer, "critico": critico})
+
+
+func _arma_por_clase(clase: StringName) -> WeaponItem:
+	for arma in WeaponItem.crear_catalogo_base():
+		if arma.id_clase() == clase:
+			return arma
+	return null
+
+
+func _talento_por_id(cuerpo: GladiatorController, id: StringName) -> TalentData:
+	if cuerpo.arma_actual == null:
+		return null
+	for habilidad in cuerpo.arma_actual.habilidades:
+		if habilidad == null:
+			continue
+		for talento in habilidad.talentos:
+			if talento != null and talento.id == id:
+				return talento
+	return null
+
+
+func _enviar_snapshot() -> void:
+	if red == null or not es_servidor:
+		return
+	var datos := {
+		"jugadores": [],
+		"enemigos": [],
+		"jefes": [],
+		"bandera": {
+			"hp": _bandera.salud_actual if _bandera != null else 0.0,
+			"max": _bandera.salud_maxima if _bandera != null else 0.0,
+		},
+		"oleada": _oleadas.oleada_actual if _oleadas != null else 0,
+		"pendientes": _oleadas.get("_pendientes") if _oleadas != null else 0,
+		"estado_oleada": int(_oleadas.get("_estado")) if _oleadas != null else 0,
+		"tiempo_oleada": _oleadas.tiempo_restante() if _oleadas != null else 0.0,
+		"oro": oro,
+		"puntos": puntos_atributo,
+		"congelando": _publico != null and _publico.congelando,
+		"skin": _skin_actual,
+		"terminado": terminado,
+		"resultado": _resultado_red,
+		"eventos": _eventos_red.duplicate(),
+	}
+	_eventos_red.clear()
+	for peer in jugadores_red.keys():
+		datos["jugadores"].append(_datos_jugador(peer, jugadores_red[peer]))
+
+	for nodo in get_tree().get_nodes_in_group("enemigos"):
+		if nodo is ArenaBossAI:
+			var jefe := nodo as ArenaBossAI
+			datos["jefes"].append({
+				"id": jefe.get_instance_id(),
+				"pos": jefe.global_position,
+				"rot": jefe.rotation.y,
+				"hp": jefe.salud_actual,
+				"max": jefe.salud_maxima,
+				"ruta": jefe.ruta_modelo,
+				"tinte": jefe.tinte_visual,
+				"escala": jefe.escala_visual,
+				"perfil": jefe.perfil_visual,
+			})
+		elif nodo is ArenaEnemy:
+			var enemigo := nodo as ArenaEnemy
+			datos["enemigos"].append({
+				"id": enemigo.get_instance_id(),
+				"pos": enemigo.global_position,
+				"rot": enemigo.rotation.y,
+				"hp": enemigo.salud_actual,
+				"max": enemigo.salud_maxima,
+				"elite": enemigo.es_elite,
+				"ligero": enemigo.es_ligero,
+			})
+	red.difundir_snapshot(datos)
+
+
+func _datos_jugador(peer: int, cuerpo: GladiatorController) -> Dictionary:
+	var inventario: Array = []
+	if cuerpo.inventario != null:
+		for i in InventoryComponent.RANURAS:
+			var ranura: Dictionary = cuerpo.inventario.ranuras[i]
+			var item: ItemData = ranura.get("item")
+			inventario.append({
+				"id": item.id if item != null else &"",
+				"cantidad": int(ranura.get("cantidad", 0)),
+				"cd": cuerpo.inventario.energia_restante(i),
+			})
+	var clase := &"prisionero"
+	if cuerpo.arma_actual != null:
+		clase = cuerpo.arma_actual.id_clase()
+	return {
+		"id": peer,
+		"pos": cuerpo.global_position,
+		"rot": cuerpo.rotation.y,
+		"clase": clase,
+		"base": {
+			"fuerza": cuerpo.estadisticas.fuerza,
+			"agilidad": cuerpo.estadisticas.agilidad,
+			"inteligencia": cuerpo.estadisticas.inteligencia,
+		},
+		"totales": {
+			"fuerza": cuerpo.estadisticas.fuerza_total,
+			"agilidad": cuerpo.estadisticas.agilidad_total,
+			"inteligencia": cuerpo.estadisticas.inteligencia_total,
+		},
+		"salud": cuerpo.salud_actual,
+		"salud_max": cuerpo.estadisticas.salud_maxima,
+		"mana": cuerpo.mana_actual,
+		"mana_max": cuerpo.estadisticas.mana_maximo,
+		"escudo": cuerpo.escudo_actual,
+		"nivel": cuerpo.estadisticas.nivel,
+		"xp": cuerpo.estadisticas.experiencia,
+		"puntos_libres": cuerpo.estadisticas.puntos_libres,
+		"puntos_rojos": cuerpo.puntos_rojos,
+		"cooldowns": [
+			cuerpo._cooldowns[0], cuerpo._cooldowns[1],
+			cuerpo._cooldowns[2], cuerpo._cooldowns[3],
+		],
+		"rangos": cuerpo._rangos_habilidad.duplicate(),
+		"desbloqueadas": cuerpo._habilidades_desbloqueadas.duplicate(),
+		"talentos": cuerpo._talentos_activos.duplicate(),
+		"inv": inventario,
+		"dano": cuerpo.dano_infligido,
+		"recibido": cuerpo.dano_recibido,
+		"muerto": cuerpo.esta_muerto,
+	}
+
+
+func _al_recibir_bienvenida(peer: int) -> void:
+	_jugadores_remotos[peer] = _jugador
+	_jugador.es_local_red = true
+	print("[NET] jugador local listo: ", peer)
+	if _hud != null:
+		_hud.mostrar_mensaje("Conectado. Elige tu campeón en la armería.", 3.0)
+
+
+func _al_actualizar_lobby(ocupadas: Dictionary) -> void:
+	if _jugador == null:
+		return
+	var mi_clase := &""
+	for clase in ocupadas.keys():
+		if int(ocupadas[clase]) == red.peer_local:
+			mi_clase = StringName(clase)
+	if mi_clase != &"":
+		_campeon_elegido = true
+	for pedestal in _pedestales:
+		if int(ocupadas.get(pedestal.arma.id_clase(), 0)) > 0:
+			pedestal.desactivar()
+		elif _campeon_elegido:
+			pedestal.desactivar()
+
+
+func _al_rechazar_clase(clase: StringName) -> void:
+	if _hud != null:
+		_hud.mostrar_mensaje("La clase %s ya está ocupada." % String(clase).to_upper(), 2.4)
+
+
+func _al_cambiar_conexion(estado_red: String, detalle: String) -> void:
+	if _hud != null and _jugador != null and not red.es_servidor:
+		_hud.mostrar_mensaje(detalle, 2.4)
+
+
+func _al_fin_red(titulo: String, detalle: String) -> void:
+	if _terminado_red:
+		return
+	_terminado_red = true
+	_finalizar(titulo, detalle)
+
+
+func _aplicar_snapshot(datos: Dictionary) -> void:
+	if _jugador == null:
+		return
+	if not _log_snapshot:
+		_log_snapshot = true
+		print("[NET] primer snapshot: jugadores=", datos.get("jugadores", []).size(), " enemigos=", datos.get("enemigos", []).size())
+	oro = int(datos.get("oro", oro))
+	puntos_atributo = int(datos.get("puntos", puntos_atributo))
+	_skin_actual = int(datos.get("skin", _skin_actual))
+	_resultado_red = str(datos.get("resultado", ""))
+	if _publico != null:
+		_publico.congelando = bool(datos.get("congelando", false))
+	if _oleadas != null:
+		_oleadas.aplicar_estado_red(
+			int(datos.get("oleada", 0)),
+			int(datos.get("pendientes", 0)),
+			int(datos.get("estado_oleada", 0)),
+			float(datos.get("tiempo_oleada", 0.0))
+		)
+	if _bandera != null and datos.has("bandera"):
+		var banda: Dictionary = datos["bandera"]
+		_bandera.salud_actual = float(banda.get("hp", _bandera.salud_actual))
+		_bandera.salud_maxima = maxf(1.0, float(banda.get("max", _bandera.salud_maxima)))
+
+	var vistos := {}
+	var nivel_antes := _jugador.estadisticas.nivel
+	for fila in datos.get("jugadores", []):
+		var id := int(fila.get("id", 0))
+		vistos[id] = true
+		var cuerpo: GladiatorController = _jugadores_remotos.get(id)
+		if cuerpo == null and id == red.peer_local:
+			cuerpo = _jugador
+			_jugadores_remotos[id] = _jugador
+		if cuerpo == null:
+			cuerpo = _instanciar_gladiador(fila.get("pos", Vector3.ZERO), _jugadores_remotos.size())
+			cuerpo.es_espejo = true
+			cuerpo.es_local_red = false
+			cuerpo.red = red
+			_jugadores_remotos[id] = cuerpo
+			jugadores.append(cuerpo)
+		_aplicar_clase_mirror(cuerpo, StringName(fila.get("clase", &"prisionero")))
+		cuerpo.aplicar_estado_red(fila)
+		if cuerpo.inventario != null:
+			cuerpo.inventario.aplicar_estado_red(fila.get("inv", []))
+	for id in _jugadores_remotos.keys():
+		if not vistos.has(id):
+			if id == red.peer_local:
+				continue
+			var cuerpo: GladiatorController = _jugadores_remotos[id]
+			_jugadores_remotos.erase(id)
+			jugadores.erase(cuerpo)
+			cuerpo.queue_free()
+
+	_sincronizar_enemigos(datos.get("enemigos", []))
+	_sincronizar_jefes(datos.get("jefes", []))
+	for evento in datos.get("eventos", []):
+		_aplicar_evento_red(evento)
+
+	if _jugador.estadisticas.nivel > nivel_antes and _hud != null:
+		_hud.mostrar_mensaje("¡NIVEL %d!" % _jugador.estadisticas.nivel, 1.6)
+
+
+func _aplicar_clase_mirror(cuerpo: GladiatorController, clase: StringName) -> void:
+	if cuerpo.arma_actual != null and cuerpo.arma_actual.id_clase() == clase:
+		return
+	var arma := _arma_por_clase(clase)
+	if arma == null:
+		return
+	cuerpo.arma_actual = arma
+	cuerpo._arma_progreso_id = arma.id
+	if arma.habilidades.size() >= 3:
+		cuerpo._orden_desbloqueo = [
+			arma.habilidades[0].id, arma.habilidades[1].id, arma.habilidades[2].id
+		]
+	if cuerpo.visual != null:
+		cuerpo.visual.usar_arma_pesada(arma.clase == WeaponItem.Clase.BASTION)
+		cuerpo.visual.equipar_arma(arma.escena_visual, arma.rotacion_visual, arma.escala_visual)
+	cuerpo.arma_cambiada.emit(arma)
+
+
+func _sincronizar_enemigos(lista: Array) -> void:
+	var vistos := {}
+	for fila in lista:
+		var id := int(fila.get("id", 0))
+		vistos[id] = true
+		var enemigo: ArenaEnemy = _enemigos_remotos.get(id)
+		if enemigo == null:
+			enemigo = ArenaEnemy.crear()
+			add_child(enemigo)
+			enemigo.configurar_remoto(bool(fila.get("elite", false)), bool(fila.get("ligero", false)))
+			_enemigos_remotos[id] = enemigo
+		enemigo.aplicar_remoto(
+			fila.get("pos", Vector3.ZERO),
+			float(fila.get("rot", 0.0)),
+			float(fila.get("hp", 1.0)),
+			float(fila.get("max", 1.0))
+		)
+	for id in _enemigos_remotos.keys():
+		if not vistos.has(id):
+			var enemigo: ArenaEnemy = _enemigos_remotos[id]
+			_enemigos_remotos.erase(id)
+			enemigo.queue_free()
+
+
+func _sincronizar_jefes(lista: Array) -> void:
+	var vistos := {}
+	for fila in lista:
+		var id := int(fila.get("id", 0))
+		vistos[id] = true
+		var jefe: ArenaBossAI = _jefes_remotos.get(id)
+		if jefe == null:
+			jefe = ArenaBossAI.crear(
+				str(fila.get("ruta", "")),
+				fila.get("tinte", Color.TRANSPARENT),
+				float(fila.get("escala", 0.0)),
+				str(fila.get("perfil", "caballero"))
+			)
+			add_child(jefe)
+			jefe.set_physics_process(false)
+			_jefes_remotos[id] = jefe
+		jefe.global_position = fila.get("pos", Vector3.ZERO)
+		jefe.rotation.y = float(fila.get("rot", 0.0))
+		jefe.salud_maxima = maxf(1.0, float(fila.get("max", 1.0)))
+		jefe.salud_actual = maxf(0.0, float(fila.get("hp", 1.0)))
+	for id in _jefes_remotos.keys():
+		if not vistos.has(id):
+			var jefe: ArenaBossAI = _jefes_remotos[id]
+			_jefes_remotos.erase(id)
+			jefe.queue_free()
+
+
+func _aplicar_evento_red(evento: Dictionary) -> void:
+	var peer := int(evento.get("peer", 0))
+	var cuerpo: GladiatorController = _jugadores_remotos.get(peer)
+	if cuerpo == null:
+		return
+	var tipo := str(evento.get("tipo", ""))
+	if tipo == "ataque":
+		if cuerpo.visual != null:
+			cuerpo.visual.atacar()
+		Sfx.reproducir("critico" if bool(evento.get("critico", false)) else "golpe", -9.0)
+		return
+	var habilidad: AbilityData = null
+	if tipo == "habilidad" and cuerpo.arma_actual != null:
+		habilidad = cuerpo.arma_actual.obtener_habilidad(int(evento.get("slot", 0)))
+	elif tipo == "objeto":
+		var item := ItemCatalog.obtener(StringName(evento.get("item", &"")))
+		if item != null:
+			habilidad = item.habilidad
+	if habilidad == null:
+		return
+	var contenedor: Node = get_tree().current_scene
+	if contenedor == null:
+		contenedor = self
+	var efecto: Node = AbilityEffect.new()
+	efecto.solo_visual = true
+	contenedor.add_child(efecto)
+	var punto = evento.get("punto")
+	(efecto as Node3D).global_position = punto if punto is Vector3 else cuerpo.global_position
+	efecto.configurar(habilidad, cuerpo)
+	Sfx.reproducir("magia" if habilidad.tipo_dano == GladiatorStats.TIPO_MAGICO else "habilidad", -8.0)
 
 
 func _en_base() -> bool:
@@ -83,14 +717,17 @@ func _en_base() -> bool:
 
 
 func _curar_en_zona_segura(delta: float) -> void:
-	if _jugador == null or terminado or _en_combate:
+	if es_cliente or terminado or _en_combate:
 		return
-	if not _en_base():
-		return
-	if _jugador.global_position.distance_to(_fuente) > 5.5:
-		return
-	_jugador.curar(_jugador.estadisticas.salud_maxima * 0.035 * delta)
-	_jugador.restaurar_mana(_jugador.estadisticas.mana_maximo * 0.05 * delta)
+	for jugador in jugadores:
+		if jugador == null or not is_instance_valid(jugador) or jugador.esta_muerto:
+			continue
+		if jugador.global_position.x <= BORDE_ARENA + 1.0:
+			continue
+		if jugador.global_position.distance_to(_fuente) > 5.5:
+			continue
+		jugador.curar(jugador.estadisticas.salud_maxima * 0.035 * delta)
+		jugador.restaurar_mana(jugador.estadisticas.mana_maximo * 0.05 * delta)
 
 
 func _unhandled_input(evento: InputEvent) -> void:
@@ -394,36 +1031,7 @@ func _crear_bandera() -> void:
 
 
 func _crear_jugador() -> void:
-	_jugador = GladiatorController.new()
-	_jugador.name = "Gladiador"
-	_jugador.collision_layer = 1
-	_jugador.collision_mask = 1
-
-	var forma := CollisionShape3D.new()
-	var capsula := CapsuleShape3D.new()
-	capsula.radius = 0.45
-	capsula.height = 1.8
-	forma.shape = capsula
-	forma.position.y = 0.9
-	_jugador.add_child(forma)
-
-	var agente := NavigationAgent3D.new()
-	agente.name = "NavigationAgent3D"
-	_jugador.add_child(agente)
-
-	_jugador.tinte_skin = SKIN_TIERRA_BALDIA
-	_jugador.estadisticas = GladiatorStats.new()
-	_jugador.arma_inicial = WeaponItem.crear_prisionero()
-
-	add_child(_jugador)
-	_jugador.global_position = Vector3(24.0, 0, 0)
-
-	var inventario := InventoryComponent.new()
-	inventario.name = "Inventario"
-	_jugador.add_child(inventario)
-	_jugador.inventario = inventario
-	inventario.configurar(_jugador)
-	inventario.agregar(ItemCatalog.obtener(&"pocion_vida"))
+	_crear_jugador_local()
 
 
 func _crear_tienda() -> void:
@@ -456,8 +1064,13 @@ func _crear_armeria() -> void:
 
 func _crear_oleadas() -> void:
 	_oleadas = WaveManager.new()
+	if "--red-rapida" in OS.get_cmdline_user_args():
+		_oleadas.espera_inicial = 0.5
+		_oleadas.espera_entre_oleadas = 1.0
+		_oleadas.duracion_entrada = 0.5
+		_oleadas.intervalo_spawn = 0.1
 	add_child(_oleadas)
-	_oleadas.iniciar(_jugador, _bandera, _puntos_spawn, self)
+	_oleadas.iniciar(jugadores, _bandera, _puntos_spawn, self)
 
 
 func _crear_publico() -> void:
@@ -479,8 +1092,10 @@ func _conectar() -> void:
 	_oleadas.oro_ganado.connect(_al_ganar_oro)
 	_oleadas.victoria.connect(_al_victoria)
 	_bandera.destruida.connect(_al_destruir_bandera)
-	_jugador.murio.connect(_al_morir_jugador)
-	_jugador.arma_cambiada.connect(_al_cambiar_arma)
+	if not _jugador.murio.is_connected(_al_morir_jugador):
+		_jugador.murio.connect(_al_morir_jugador)
+	if not _jugador.arma_cambiada.is_connected(_al_cambiar_arma):
+		_jugador.arma_cambiada.connect(_al_cambiar_arma)
 	_publico.furia_iniciada.connect(_al_furia_iniciada)
 
 
@@ -491,8 +1106,9 @@ func _al_entrada_iniciada(duracion: float) -> void:
 	_tiempo_entrada = duracion
 	if _puerta != null:
 		_puerta.abrir()
-	if _jugador != null:
-		_jugador.aplicar_impulso_velocidad(1.35, duracion)
+	for jugador in jugadores:
+		if jugador != null and is_instance_valid(jugador):
+			jugador.aplicar_impulso_velocidad(1.35, duracion)
 	if _hud != null:
 		_hud.mostrar_mensaje("¡Corre a la arena! +35 % velocidad", 2.6)
 
@@ -501,10 +1117,13 @@ func _al_iniciar_oleada(_numero: int, _total: int) -> void:
 	_en_combate = true
 	if _puerta != null:
 		_puerta.cerrar()
-	if _jugador != null and _jugador.global_position.x > BORDE_ARENA:
-		_jugador.global_position = Vector3(BORDE_ARENA - 4.0, 0, 0)
-		if _hud != null:
-			_hud.mostrar_mensaje("El portón se cerró: dentro de la arena", 2.2)
+	var dentro := false
+	for jugador in jugadores:
+		if jugador != null and is_instance_valid(jugador) and jugador.global_position.x > BORDE_ARENA:
+			jugador.global_position = Vector3(BORDE_ARENA - 4.0, 0, 0)
+			dentro = true
+	if dentro and _hud != null:
+		_hud.mostrar_mensaje("El portón se cerró: dentro de la arena", 2.2)
 	if _bandera != null:
 		_bandera.configurar_inmune(5.0)
 	Sfx.reproducir("oleada", -5.0)
@@ -522,10 +1141,14 @@ func _al_terminar_oleada(numero: int) -> void:
 		return
 	oro += 60 + numero * 15
 	puntos_atributo += 2
-	_jugador.estadisticas.otorgar_puntos(2)
-	_jugador.otorgar_puntos_rojos(1)
-	_jugador.curar(_jugador.estadisticas.salud_maxima * 0.25)
-	_hud.mostrar_mensaje("Oleada %d superada  ·  +2 puntos" % numero, 2.5)
+	for jugador in jugadores:
+		if jugador == null or not is_instance_valid(jugador):
+			continue
+		jugador.estadisticas.otorgar_puntos(2)
+		jugador.otorgar_puntos_rojos(1)
+		jugador.curar(jugador.estadisticas.salud_maxima * 0.25)
+	if _hud != null:
+		_hud.mostrar_mensaje("Oleada %d superada  ·  +2 puntos" % numero, 2.5)
 
 
 func _al_ganar_oro(cantidad: int) -> void:
@@ -537,7 +1160,13 @@ func _al_ganar_oro(cantidad: int) -> void:
 
 
 func _gastar_punto(atributo: StringName) -> void:
-	if terminado or puntos_atributo <= 0:
+	if terminado:
+		return
+	if es_cliente:
+		if _jugador != null:
+			_jugador.gastar_punto_atributo(atributo)
+		return
+	if puntos_atributo <= 0:
 		return
 	if _jugador.gastar_punto_atributo(atributo):
 		puntos_atributo -= 1
@@ -545,31 +1174,47 @@ func _gastar_punto(atributo: StringName) -> void:
 
 ## Rota entre las skins cosméticas del orco (K).
 func _ciclar_skin() -> void:
-	if _jugador == null:
+	if es_cliente:
+		red.enviar_accion(&"skin", {})
 		return
 	_skin_actual = (_skin_actual + 1) % SKINS.size()
 	var skin: Dictionary = SKINS[_skin_actual]
-	_jugador.aplicar_skin(skin["tinte"])
-	_hud.mostrar_mensaje("Skin: %s" % skin["nombre"], 2.0)
+	for jugador in jugadores:
+		if jugador != null and is_instance_valid(jugador):
+			jugador.aplicar_skin(skin["tinte"])
+	if _hud != null:
+		_hud.mostrar_mensaje("Skin: %s" % skin["nombre"], 2.0)
 
 
 func _alternar_bandera() -> void:
-	if terminado or _bandera == null or _jugador == null:
+	if es_cliente:
+		red.enviar_accion(&"bandera", {})
+		return
+	_interactuar_bandera(_jugador)
+
+
+func _interactuar_bandera(jugador: GladiatorController) -> void:
+	if terminado or _bandera == null or jugador == null:
 		return
 	if _bandera.esta_cargada():
-		if _jugador.global_position.x > BORDE_ARENA - 1.0:
-			_hud.mostrar_mensaje("El estandarte solo se coloca dentro de la arena.", 2.4)
+		if jugador.global_position.x > BORDE_ARENA - 1.0:
+			_avisar("El estandarte solo se coloca dentro de la arena.", 2.4)
 			return
-		_bandera.colocar(_jugador.global_position)
-		_hud.mostrar_mensaje("Estandarte colocado. Defiéndelo.", 2.4)
+		_bandera.colocar(jugador.global_position)
+		_avisar("Estandarte colocado. Defiéndelo.", 2.4)
 		Sfx.reproducir("compra", -5.0)
 		return
-	if _jugador.global_position.distance_to(_bandera.global_position) > 4.0:
-		_hud.mostrar_mensaje("Acércate al estandarte para cargarlo (G).", 2.0)
+	if jugador.global_position.distance_to(_bandera.global_position) > 4.0:
+		_avisar("Acércate al estandarte para cargarlo (G).", 2.0)
 		return
-	if _bandera.recoger(_jugador):
-		_hud.mostrar_mensaje("Estandarte en mano: G para colocarlo.", 2.5)
+	if _bandera.recoger(jugador):
+		_avisar("Estandarte en mano: G para colocarlo.", 2.5)
 		Sfx.reproducir("click", -8.0)
+
+
+func _avisar(texto: String, duracion := 2.0) -> void:
+	if _hud != null:
+		_hud.mostrar_mensaje(texto, duracion)
 
 
 func _interactuar_cercano() -> void:
@@ -578,21 +1223,30 @@ func _interactuar_cercano() -> void:
 	var pedestal := _pedestal_cercano()
 	if pedestal != null:
 		if _campeon_elegido:
-			_hud.mostrar_mensaje("Tu campeón ya está elegido. La clase es permanente.", 2.5)
+			_avisar("Tu campeón ya está elegido. La clase es permanente.", 2.5)
+			return
+		if es_cliente:
+			red.enviar_clase(pedestal.arma.id_clase())
+			_avisar("Solicitando clase %s…" % pedestal.arma.nombre, 2.0)
 			return
 		if pedestal.comprar(_jugador):
 			_campeon_elegido = true
-			_hud.mostrar_mensaje("Campeón: %s" % pedestal.arma.nombre, 2.8)
+			for otro in _pedestales:
+				if otro != pedestal:
+					otro.desactivar()
+			_avisar("Campeón: %s" % pedestal.arma.nombre, 2.8)
 			Sfx.reproducir("compra", -3.0)
 		return
 	if _tienda_cercana():
-		_hud.alternar_tienda()
+		if _hud != null:
+			_hud.alternar_tienda()
 		return
 	if _jugador.global_position.distance_to(_obelisco) <= 4.5:
-		_hud.alternar_talentos()
+		if _hud != null:
+			_hud.alternar_talentos()
 		return
 	if _jugador.global_position.distance_to(_fuente) <= 5.5:
-		_hud.mostrar_mensaje("La fuente restaura vida y maná fuera de combate.", 2.5)
+		_avisar("La fuente restaura vida y maná fuera de combate.", 2.5)
 
 
 func _tienda_cercana() -> bool:
@@ -615,11 +1269,15 @@ func _pedestal_cercano() -> ArmoryPedestal:
 
 
 func puede_comprar_objeto(item: ItemData) -> bool:
-	if item == null or terminado or _jugador == null or _jugador.inventario == null:
+	return puede_comprar_para(_jugador, item)
+
+
+func puede_comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
+	if item == null or terminado or jugador == null or jugador.inventario == null:
 		return false
-	if not _en_base():
+	if jugador.global_position.x <= BORDE_ARENA + 1.0:
 		return false
-	var inventario := _jugador.inventario
+	var inventario := jugador.inventario
 	var receta := inventario.receta_completada_por(item)
 	var coste := item.precio + (receta.precio_forja if receta != null else 0)
 	if oro < coste:
@@ -631,13 +1289,24 @@ func puede_comprar_objeto(item: ItemData) -> bool:
 
 ## Compra un objeto y ejecuta la forja automática en cadena.
 func comprar_objeto(item: ItemData) -> bool:
-	if not puede_comprar_objeto(item):
-		if oro < item.precio:
-			_hud.mostrar_mensaje("Necesitas %d de oro" % item.precio, 2.0)
+	if es_cliente:
+		if not puede_comprar_objeto(item):
+			_avisar("No puedes comprar ese objeto ahora.", 2.0)
+			return false
+		red.enviar_accion(&"comprar", {"id": item.id})
+		_avisar("Compra solicitada: %s" % item.nombre, 2.0)
+		return true
+	return comprar_para(_jugador, item)
+
+
+func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
+	if not puede_comprar_para(jugador, item):
+		if jugador != null and oro < item.precio:
+			_avisar("Necesitas %d de oro" % item.precio, 2.0)
 		else:
-			_hud.mostrar_mensaje("La mochila está llena y no completa ninguna receta", 2.5)
+			_avisar("La mochila está llena y no completa ninguna receta", 2.5)
 		return false
-	var inventario := _jugador.inventario
+	var inventario := jugador.inventario
 	var receta := inventario.receta_completada_por(item)
 	var forjados: PackedStringArray = []
 
@@ -646,7 +1315,7 @@ func comprar_objeto(item: ItemData) -> bool:
 		var creado := inventario.forjar_con(item, receta)
 		if creado == null:
 			oro += item.precio + receta.precio_forja
-			_hud.mostrar_mensaje("No se pudo completar la forja", 2.0)
+			_avisar("No se pudo completar la forja", 2.0)
 			return false
 		forjados.append(creado.nombre)
 		var actual := creado
@@ -661,15 +1330,16 @@ func comprar_objeto(item: ItemData) -> bool:
 				break
 			forjados.append(encadenado.nombre)
 			actual = encadenado
-		_hud.mostrar_mensaje("Forjado: %s" % " > ".join(forjados), 3.0)
+		_avisar("Forjado: %s" % " > ".join(forjados), 3.0)
 	else:
 		if not inventario.agregar(item):
-			_hud.mostrar_mensaje("La mochila está llena", 2.0)
+			_avisar("La mochila está llena", 2.0)
 			return false
 		oro -= item.precio
-		_hud.mostrar_mensaje("Comprado: %s" % item.nombre, 2.0)
+		_avisar("Comprado: %s" % item.nombre, 2.0)
 
-	Sfx.reproducir("compra", -3.0)
+	if not es_servidor:
+		Sfx.reproducir("compra", -3.0)
 	return true
 
 
@@ -713,11 +1383,16 @@ func _al_cambiar_arma(arma: WeaponItem) -> void:
 
 
 func _al_furia_iniciada(duracion: float) -> void:
-	_hud.mostrar_mensaje("¡El público se aburre! Muévete. (%.0f s)" % duracion, 2.0)
+	_avisar("¡El público se aburre! Muévete. (%.0f s)" % duracion, 2.0)
 
 
 func _al_morir_jugador() -> void:
-	_finalizar("DERROTA", "El gladiador ha caído.")
+	var vivos := 0
+	for jugador in jugadores:
+		if jugador != null and is_instance_valid(jugador) and not jugador.esta_muerto:
+			vivos += 1
+	if vivos == 0:
+		_finalizar("DERROTA", "Todos los gladiadores han caído.")
 
 
 func _al_destruir_bandera() -> void:
@@ -732,13 +1407,47 @@ func _finalizar(titulo: String, detalle: String) -> void:
 	if terminado:
 		return
 	terminado = true
-	_jugador.puede_moverse = false
-	_oleadas.set_process(false)
-	_publico.set_process(false)
-	_hud.cerrar_talentos()
-	_hud.cerrar_tienda()
-	Sfx.reproducir("victoria" if titulo == "VICTORIA" else "derrota")
-	_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle])
+	_resultado_red = "%s\n%s" % [titulo, detalle]
+	for jugador in jugadores:
+		if jugador != null and is_instance_valid(jugador):
+			jugador.puede_moverse = false
+	if _oleadas != null:
+		_oleadas.set_process(false)
+	if _publico != null:
+		_publico.set_process(false)
+	if _hud != null:
+		_hud.cerrar_talentos()
+		_hud.cerrar_tienda()
+		_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle])
+	if es_servidor:
+		if red != null:
+			red.difundir_fin(titulo, detalle)
+		if _supabase != null:
+			var lista: Array = []
+			for peer in jugadores_red.keys():
+				var cuerpo: GladiatorController = jugadores_red[peer]
+				if cuerpo == null:
+					continue
+				lista.append({
+					"clase": String(cuerpo.arma_actual.id_clase()) if cuerpo.arma_actual != null else "prisionero",
+					"nivel": cuerpo.estadisticas.nivel,
+				})
+			_supabase.detener_latido()
+			_supabase.registrar_partida(
+				titulo,
+				_oleadas.oleada_actual if _oleadas != null else 0,
+				int(Time.get_unix_time_from_system() - _hora_inicio_partida),
+				lista
+			)
+			_supabase.marcar_inactivo()
+	else:
+		Sfx.reproducir("victoria" if titulo == "VICTORIA" else "derrota")
+
+
+func _exit_tree() -> void:
+	if es_servidor and _supabase != null:
+		_supabase.detener_latido()
+		_supabase.marcar_inactivo()
 
 
 func esta_congelado() -> bool:

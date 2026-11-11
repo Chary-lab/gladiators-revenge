@@ -13,9 +13,18 @@ dist/
 *.pck
 *.zip
 *.wasm
+*.apk
+*.aab
+debug.keystore
+
+# Secretos / entorno
+.env
+supabase/.env
+*.secret
 
 # Editor / SO
 .vscode/
 .idea/
+.playwright-cli/
 Thumbs.db
 desktop.ini

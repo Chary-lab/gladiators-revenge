@@ -37,18 +37,19 @@ var _vida_texto: Label
 var _mana_texto: Label
 var _escudo_texto: Label
 var _clase: Label
-var _skin: Label
 var _nivel_texto: Label
 var _barra_xp: ProgressBar
 var _stats: RichTextLabel
-var _atributos: Label
-var _economia: Label
+var _atributos_nombres: Array[Label] = []
+var _atributos_valores: Array[Label] = []
+var _oro_ficha: Label
+var _buff_iconos: Array[TextureRect] = []
 var _icono_dano: TextureRect
 var _icono_armadura: TextureRect
-var _habilidad_etiquetas: Array[Label] = []
 var _habilidad_botones: Array[Button] = []
 var _habilidad_velos: Array[ColorRect] = []
 var _habilidad_cd: Array[Label] = []
+var _habilidad_pips: Array = []
 var _inventario_botones: Array[Button] = []
 var _inventario_velos: Array[ColorRect] = []
 var _inventario_cantidad: Array[Label] = []
@@ -56,8 +57,6 @@ var _comando_botones: Array[Button] = []
 var _contador_atributos: Label
 var _contador_talentos: Label
 var _retrato: GladiatorPortrait
-var _emblema: Label
-var _emblema_icono: TextureRect
 var _estado: Label
 var _minimapa: ArenaMinimap
 var _overlay: Panel
@@ -97,14 +96,25 @@ func configurar(
 		_oleadas.mensaje.connect(mostrar_mensaje)
 	if _jugador != null and not _jugador.nivel_alcanzado.is_connected(_al_subir_nivel):
 		_jugador.nivel_alcanzado.connect(_al_subir_nivel)
+	if _jugador != null and not _jugador.habilidad_mejorada.is_connected(_al_mejorar_habilidad):
+		_jugador.habilidad_mejorada.connect(_al_mejorar_habilidad)
 
 
 func _al_subir_nivel(nivel: int) -> void:
-	var extra := "+1 atributo"
-	if nivel >= 4 and nivel <= 14:
-		extra += "  ·  +1 punto de habilidad"
-	mostrar_mensaje("¡NIVEL %d!\n%s" % [nivel, extra], 2.2)
+	mostrar_mensaje("¡NIVEL %d!\nAtributos de clase aumentan" % nivel, 2.2)
 	Sfx.reproducir(&"victoria", -10.0)
+
+
+func _al_mejorar_habilidad(_slot: int, habilidad: AbilityData, rango: int) -> void:
+	if habilidad == null:
+		return
+	mostrar_mensaje(
+		"¡NIVEL %d!\n¡%s subió a Nivel %d!" % [
+			_jugador.estadisticas.nivel, habilidad.nombre, rango
+		],
+		2.4
+	)
+	Sfx.reproducir(&"habilidad", -7.0)
 
 
 # --- Construcción ---------------------------------------------------------
@@ -125,7 +135,6 @@ func construir() -> void:
 
 	_crear_retrato()
 	_crear_ficha()
-	_crear_stats()
 	_crear_inventario()
 	_crear_habilidades()
 	_crear_minimapa()
@@ -136,15 +145,15 @@ func construir() -> void:
 
 func _crear_minimapa() -> void:
 	_minimapa = ArenaMinimap.new()
-	_minimapa.position = Vector2(12, 10)
-	_minimapa.size = Vector2(146, 112)
+	_minimapa.position = Vector2(8, 543)
+	_minimapa.size = Vector2(165, 165)
 	_minimapa.set_jugador(_jugador)
 	_minimapa.set_bandera(_bandera)
-	_hud_arriba.add_child(_minimapa)
+	_raiz.add_child(_minimapa)
 
 
 func _crear_retrato() -> void:
-	var fondo := _panel(Vector2(8, 543), Vector2(160, 167), HIERRO, Color(0.40, 0.33, 0.23))
+	var fondo := _panel(Vector2(180, 543), Vector2(160, 167), HIERRO, Color(0.40, 0.33, 0.23))
 	_raiz.add_child(fondo)
 	_retrato = GladiatorPortrait.new()
 	_retrato.position = Vector2(5, 4)
@@ -161,73 +170,84 @@ func _crear_retrato() -> void:
 
 
 func _crear_ficha() -> void:
-	var fondo := _panel(Vector2(176, 545), Vector2(300, 164), HIERRO, Color(0.36, 0.30, 0.22))
+	var fondo := _panel(Vector2(347, 543), Vector2(545, 167), HIERRO, Color(0.36, 0.30, 0.22))
 	_raiz.add_child(fondo)
 
-	_clase = _texto(fondo, "GLADIADOR ORCO", Vector2(10, 3), Vector2(280, 20), 16, ORO)
+	_clase = _texto(fondo, "GLADIADOR ORCO", Vector2(10, 4), Vector2(525, 20), 16, ORO)
 	_clase.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_skin = _texto(fondo, "Tierra Baldía", Vector2(10, 21), Vector2(280, 14), 10, Color(0.78, 0.74, 0.66))
-	_skin.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_nivel_texto = _texto(fondo, "Nv 1   XP 0 / 126", Vector2(10, 35), Vector2(280, 14), 10, Color(0.82, 0.70, 1.0))
+	_barra_xp = _barra(fondo, Vector2(10, 24), Vector2(525, 6), Color(0.62, 0.35, 0.92))
+	_nivel_texto = _texto(fondo, "", Vector2(10, 33), Vector2(525, 14), 10, Color(0.82, 0.70, 1.0))
 	_nivel_texto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_barra_xp = _barra(fondo, Vector2(10, 51), Vector2(280, 5), Color(0.62, 0.35, 0.92))
 
-	_emblema_icono = _icono_estatico(
-		fondo, _id_emblema(), Vector2(12, 56), Vector2(50, 50), IconStudio.CATEGORIA_HABILIDAD
-	)
-	_emblema = _texto(fondo, "", Vector2(68, 62), Vector2(224, 44), 28, ORO)
-	_emblema.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_emblema.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_estado = _texto(fondo, "", Vector2(8, 107), Vector2(284, 17), 10, TEXTO)
-	_estado.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_escudo_texto = _texto(fondo, "", Vector2(8, 123), Vector2(284, 12), 9, Color(0.55, 0.78, 1.0))
-	_escudo_texto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_economia = _texto(fondo, "", Vector2(8, 136), Vector2(284, 26), 9, TEXTO)
-	_economia.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_economia.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-
-func _crear_stats() -> void:
-	var fondo := _panel(Vector2(482, 545), Vector2(260, 164), HIERRO, Color(0.36, 0.30, 0.22))
-	_raiz.add_child(fondo)
-	var titulo := _texto(fondo, "ATRIBUTOS", Vector2(10, 5), Vector2(240, 18), 13, ORO)
-	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_icono_dano = _icono_estatico(fondo, &"atacar", Vector2(6, 26), Vector2(30, 30))
-	_icono_armadura = _icono_estatico(fondo, &"mantener", Vector2(6, 41), Vector2(28, 28))
+	_icono_dano = _icono_estatico(fondo, &"atacar", Vector2(16, 54), Vector2(26, 26))
+	_icono_armadura = _icono_estatico(fondo, &"mantener", Vector2(16, 82), Vector2(26, 26))
 	_stats = RichTextLabel.new()
-	_stats.position = Vector2(40, 24)
-	_stats.size = Vector2(212, 68)
+	_stats.position = Vector2(48, 50)
+	_stats.size = Vector2(220, 84)
 	_stats.bbcode_enabled = true
 	_stats.scroll_active = false
 	_stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stats.add_theme_font_size_override("normal_font_size", 11)
+	_stats.add_theme_font_size_override("normal_font_size", 12)
 	_stats.add_theme_color_override("default_color", TEXTO)
 	fondo.add_child(_stats)
-	_atributos = _texto(fondo, "", Vector2(10, 94), Vector2(240, 64), 11, TEXTO)
+
+	var separador := ColorRect.new()
+	separador.color = Color(0.42, 0.34, 0.22, 0.8)
+	separador.position = Vector2(282, 50)
+	separador.size = Vector2(1, 84)
+	separador.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fondo.add_child(separador)
+
+	var titulo := _texto(fondo, "ATRIBUTOS", Vector2(300, 50), Vector2(230, 15), 11, ORO)
+	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.position = Vector2(300, 68)
+	grid.size = Vector2(230, 66)
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 2)
+	fondo.add_child(grid)
+	for nombre in ["FUERZA", "AGILIDAD", "INTELIGENCIA"]:
+		var etiqueta := _texto(grid, nombre, Vector2.ZERO, Vector2(120, 18), 12, TEXTO)
+		etiqueta.custom_minimum_size = Vector2(120, 18)
+		var valor := _texto(grid, "", Vector2.ZERO, Vector2(80, 18), 12, TEXTO)
+		valor.custom_minimum_size = Vector2(80, 18)
+		valor.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_atributos_nombres.append(etiqueta)
+		_atributos_valores.append(valor)
+
+	_escudo_texto = _texto(fondo, "", Vector2(12, 121), Vector2(525, 14), 10, Color(0.55, 0.78, 1.0))
+	_estado = _texto(fondo, "", Vector2(12, 137), Vector2(300, 18), 11, TEXTO)
+	_oro_ficha = _texto(fondo, "", Vector2(390, 137), Vector2(143, 18), 12, ORO)
+	_oro_ficha.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	for i in 4:
+		var icono := _icono_estatico(fondo, &"atacar", Vector2(318 + i * 20, 136), Vector2(18, 18))
+		icono.visible = false
+		_buff_iconos.append(icono)
 
 
 func _crear_inventario() -> void:
-	var titulo := _texto(_raiz, "INVENTARIO", Vector2(750, 543), Vector2(188, 15), 11, ORO)
+	var titulo := _texto(_raiz, "INVENTARIO", Vector2(900, 537), Vector2(114, 14), 11, ORO)
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for i in InventoryComponent.RANURAS:
 		var columna := i % 2
 		var fila := i / 2
-		var pos := Vector2(750 + columna * 96, 560 + fila * 48)
-		var boton := _boton(pos, Vector2(92, 44), "")
+		var pos := Vector2(900 + columna * 60, 552 + fila * 57)
+		var boton := _boton(pos, Vector2(54, 54), "")
 		boton.pressed.connect(_usar_ranura.bind(i))
 		_raiz.add_child(boton)
 		_inventario_botones.append(boton)
-		_inventario_velos.append(_velo(boton, Vector2(92, 44)))
-		var tecla := _texto(boton, ["Z", "X", "C", "V", "B", "N"][i], Vector2(3, 0), Vector2(20, 14), 9, ORO)
+		_inventario_velos.append(_velo(boton, Vector2(54, 54)))
+		var tecla := _texto(boton, ["Z", "X", "C", "V", "B", "N"][i], Vector2(3, 1), Vector2(16, 14), 9, ORO)
 		tecla.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var cantidad := _texto(boton, "", Vector2(56, 27), Vector2(24, 15), 10, TEXTO)
+		var cantidad := _texto(boton, "", Vector2(28, 37), Vector2(22, 14), 10, TEXTO)
 		cantidad.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		cantidad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_inventario_cantidad.append(cantidad)
 
 
 func _crear_habilidades() -> void:
-	var titulo := _texto(_raiz, "COMANDOS", Vector2(966, 543), Vector2(296, 15), 11, ORO)
+	var titulo := _texto(_raiz, "COMANDOS", Vector2(1024, 537), Vector2(240, 14), 11, ORO)
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var comandos := [
 		["atacar", "A", "Atacar-mover: clic izquierdo sobre el suelo.", _comando_atacar],
@@ -243,39 +263,57 @@ func _crear_habilidades() -> void:
 		var columna := i % 4
 		var fila := i / 4
 		var datos: Array = comandos[i]
-		var boton := _boton(Vector2(966 + columna * 76, 558 + fila * 54), Vector2(68, 50), "")
+		var boton := _boton(Vector2(1024 + columna * 62, 552 + fila * 57), Vector2(54, 54), "")
 		boton.tooltip_text = datos[2]
 		boton.pressed.connect(datos[3])
 		_boton_icono(boton, datos[0], IconStudio.CATEGORIA_COMANDO)
 		_raiz.add_child(boton)
 		_comando_botones.append(boton)
-		var tecla := _texto(boton, datos[1], Vector2(3, 32), Vector2(63, 14), 9, ORO)
-		tecla.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		var tecla := _texto(boton, datos[1], Vector2(3, 1), Vector2(44, 14), 9, ORO)
 		tecla.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if datos[0] == "atributos":
-			_contador_atributos = _texto(boton, "", Vector2(43, 2), Vector2(22, 13), 9, Color(0.55, 1.0, 0.55))
+			_contador_atributos = _texto(boton, "", Vector2(34, 2), Vector2(17, 13), 9, Color(0.55, 1.0, 0.55))
 			_contador_atributos.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		elif datos[0] == "talentos":
-			_contador_talentos = _texto(boton, "", Vector2(43, 2), Vector2(22, 13), 9, Color(1.0, 0.45, 0.35))
+			_contador_talentos = _texto(boton, "", Vector2(34, 2), Vector2(17, 13), 9, Color(1.0, 0.45, 0.35))
 			_contador_talentos.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 	for i in 4:
-		var boton := _boton(Vector2(966 + i * 76, 666), Vector2(68, 50), "")
+		var boton := _boton(Vector2(1024 + i * 62, 666), Vector2(54, 54), "")
 		boton.pressed.connect(_lanzar_habilidad.bind(i))
 		boton.add_theme_font_size_override("font_size", 10)
 		_raiz.add_child(boton)
 		_habilidad_botones.append(boton)
-		_habilidad_velos.append(_velo(boton, Vector2(68, 50)))
-		var tecla := _texto(boton, ["Q", "W", "E", "R"][i], Vector2(3, 1), Vector2(18, 14), 10, ORO)
+		_habilidad_velos.append(_velo(boton, Vector2(54, 54)))
+		var tecla := _texto(boton, ["Q", "W", "E", "R"][i], Vector2(3, 1), Vector2(16, 14), 10, ORO)
 		tecla.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var cd := _texto(boton, "", Vector2(0, 18), Vector2(68, 14), 10, Color(1.0, 0.86, 0.55))
+		var cd := _texto(boton, "", Vector2(0, 20), Vector2(54, 14), 10, Color(1.0, 0.86, 0.55))
 		cd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cd.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_habilidad_cd.append(cd)
+		_habilidad_pips.append(_crear_pips(boton))
 		if _jugador != null and _jugador.arma_actual != null:
 			var hab := _jugador.arma_actual.obtener_habilidad(i)
 			if hab != null:
 				_boton_icono(boton, hab.id, IconStudio.CATEGORIA_HABILIDAD)
+
+
+## Puntos luminosos del rango actual de una habilidad (máximo 4).
+func _crear_pips(boton: Button) -> Array:
+	var pips: Array = []
+	var ancho := 5.0
+	var separacion := 2.0
+	var total := 4.0 * ancho + 3.0 * separacion
+	var x := (boton.size.x - total) * 0.5
+	for i in 4:
+		var pip := ColorRect.new()
+		pip.color = Color(0.28, 0.24, 0.18)
+		pip.position = Vector2(x + i * (ancho + separacion), boton.size.y - 9.0)
+		pip.size = Vector2(ancho, 4.0)
+		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		boton.add_child(pip)
+		pips.append(pip)
+	return pips
 
 
 func _crear_barra_superior() -> void:
@@ -362,21 +400,12 @@ func _actualizar_ficha() -> void:
 		_escudo_texto.text = ""
 
 	var arma := _jugador.arma_actual
+	var nombre_clase := "GLADIADOR"
 	if arma != null:
-		_clase.text = "%s  ·  %s" % [
-			NOMBRES_CLASE[arma.clase] if arma.clase < NOMBRES_CLASE.size() else "GLADIADOR",
-			NOMBRES_ROL[arma.rol] if arma.rol < NOMBRES_ROL.size() else "—"
-		]
-	_skin.text = "Piel: %s" % _nombre_skin()
-	var atributo := _atributo_principal()
-	var nombres := {&"fuerza": "FUE", &"agilidad": "AGI", &"inteligencia": "INT"}
-	var valores := {
-		&"fuerza": _jugador.estadisticas.fuerza_total,
-		&"agilidad": _jugador.estadisticas.agilidad_total,
-		&"inteligencia": _jugador.estadisticas.inteligencia_total,
-	}
-	_emblema.text = "%s  %d" % [nombres.get(atributo, "FUE"), int(valores.get(atributo, 0))]
-	_emblema.add_theme_color_override("font_color", IconStudio.color_para(IconStudio.CATEGORIA_HABILIDAD, String(atributo)))
+		nombre_clase = NOMBRES_CLASE[arma.clase] if arma.clase < NOMBRES_CLASE.size() else "GLADIADOR"
+	var nivel := _jugador.estadisticas.nivel
+	_clase.text = "%s  ·  Nv %d  ·  Piel: %s" % [nombre_clase, nivel, _nombre_skin()]
+
 	var estados: Array[String] = []
 	if _jugador.escudo_actual > 0.0:
 		estados.append("Escudo")
@@ -387,22 +416,29 @@ func _actualizar_ficha() -> void:
 	if float(_jugador.get("_buff_ataque")) > 0.0:
 		estados.append("Furia")
 	_estado.text = "Estado: " + (" · ".join(estados) if not estados.is_empty() else "Normal")
+	var buffs := [
+		_jugador.escudo_actual > 0.0,
+		bool(_jugador.get("mantener_posicion")),
+		bool(_jugador.get("modo_ataque_movimiento")),
+		float(_jugador.get("_buff_ataque")) > 0.0,
+	]
+	for i in _buff_iconos.size():
+		_buff_iconos[i].visible = bool(buffs[i])
+
 	var requerida := _jugador.estadisticas.experiencia_requerida
-	var nivel := _jugador.estadisticas.nivel
 	var ola := _oleadas.oleada_actual if _oleadas != null else 0
 	if requerida <= 0:
-		_nivel_texto.text = "Nv %d  MÁX  ·  O%d/20" % [nivel, ola]
+		_nivel_texto.text = "XP MÁX  ·  Oleada %d" % ola
 		_barra_xp.max_value = 1.0
 		_barra_xp.value = 1.0
 	else:
-		_nivel_texto.text = "Nv %d  XP %d/%d  ·  O%d" % [
-			nivel, _jugador.estadisticas.experiencia, requerida, ola
+		_nivel_texto.text = "XP %d / %d   ·   Oleada %d" % [
+			_jugador.estadisticas.experiencia, requerida, ola
 		]
 		_barra_xp.max_value = float(requerida)
 		_barra_xp.value = float(_jugador.estadisticas.experiencia)
-	_economia.text = "Oro %d  ·  Atrib %d  ·  Hab %d\nRojos %d  ·  T talentos  ·  K piel" % [
-		_oro_arena(), _puntos_atributo(), _jugador.estadisticas.puntos_habilidad, _jugador.puntos_rojos
-	]
+
+	_oro_ficha.text = "ORO %d" % _oro_arena()
 	if _contador_atributos != null:
 		_contador_atributos.text = str(_puntos_atributo()) if _puntos_atributo() > 0 else ""
 	if _contador_talentos != null:
@@ -414,12 +450,14 @@ func _actualizar_habilidades() -> void:
 	for i in 4:
 		var boton := _habilidad_botones[i]
 		var cd := _habilidad_cd[i]
+		var pips: Array = _habilidad_pips[i]
 		boton.text = ""
 		if arma == null:
 			boton.icon = null
 			boton.tooltip_text = "Sin arma"
 			cd.text = ""
 			_actualizar_velo(_habilidad_velos[i], 0.0)
+			_actualizar_pips(pips, 0, 0, false)
 			continue
 		var habilidad := arma.obtener_habilidad(i)
 		if habilidad == null:
@@ -427,6 +465,7 @@ func _actualizar_habilidades() -> void:
 			boton.tooltip_text = "Ranura vacía"
 			cd.text = ""
 			_actualizar_velo(_habilidad_velos[i], 0.0)
+			_actualizar_pips(pips, 0, 0, false)
 			continue
 		if not _jugador.habilidad_desbloqueada(i):
 			var nivel_libre := _jugador.nivel_desbloqueo_habilidad(i)
@@ -436,17 +475,27 @@ func _actualizar_habilidades() -> void:
 			boton.disabled = true
 			cd.text = "Nv %d" % nivel_libre
 			_actualizar_velo(_habilidad_velos[i], 0.55)
+			_actualizar_pips(pips, 0, 0, false)
 			continue
 		boton.modulate = Color.WHITE
 		_boton_icono(boton, habilidad.id, IconStudio.CATEGORIA_HABILIDAD)
 		var restante := _jugador.cooldown_restante(i)
 		var rango := _jugador.rango_habilidad(habilidad.id)
-		cd.text = ("%ds" % int(ceil(restante))) if restante > 0.0 else ("%d/%d" % [rango, habilidad.rango_maximo])
+		cd.text = ("%ds" % int(ceil(restante))) if restante > 0.0 else ""
 		_actualizar_velo(_habilidad_velos[i], restante / maxf(0.01, _jugador.cooldown_habilidad(habilidad)))
+		_actualizar_pips(pips, rango, maxi(1, habilidad.rango_maximo), true)
 		boton.disabled = restante > 0.0 or _jugador.mana_actual < habilidad.coste_mana
 		boton.tooltip_text = "%s · Rango %d/%d\n%s" % [
 			habilidad.nombre, rango, habilidad.rango_maximo, _tooltip_habilidad(habilidad, i)
 		]
+
+
+func _actualizar_pips(pips: Array, rango: int, maximo: int, visible: bool) -> void:
+	for j in pips.size():
+		var pip := pips[j] as ColorRect
+		pip.visible = visible and j < maximo
+		if pip.visible:
+			pip.color = ORO if j < rango else Color(0.28, 0.24, 0.18)
 
 
 func _actualizar_inventario() -> void:
@@ -519,18 +568,27 @@ func _actualizar_estadisticas() -> void:
 	var arma := _jugador.arma_actual
 	var dano := 0.0
 	if arma != null:
-		dano = e.escalar_dano(arma.dano_ataque_base, &"fisico")
-	var dano_base := arma.dano_ataque_base if arma != null else 0.0
-	var bono_dano := maxf(0.0, dano - dano_base)
-	_stats.text = "Daño      %d [color=#7dff9a]+%d[/color]\nArmadura  0 [color=#7dff9a]+%d[/color]\nVel.      %.2f/s\nCrítico   %d %%" % [
-		int(round(dano_base)), int(round(bono_dano)),
-		int(round(e.armadura_total)), e.velocidad_ataque, int(round(e.probabilidad_critico * 100.0))
+		dano = e.escalar_ataque_principal(arma.dano_ataque_base, arma.atributo_principal)
+	_stats.text = "Daño        %d\nArmadura    %d\nVel. ataque %.2f/s\nCrítico     %d %%" % [
+		int(round(dano)), int(round(e.armadura_total)),
+		e.velocidad_ataque, int(round(e.probabilidad_critico * 100.0))
 	]
-	_atributos.text = "FUE  %d  (+%d)\nAGI  %d  (+%d)\nINT  %d  (+%d)" % [
-		int(e.fuerza), int(e.fuerza_total - e.fuerza),
-		int(e.agilidad), int(e.agilidad_total - e.agilidad),
-		int(e.inteligencia), int(e.inteligencia_total - e.inteligencia),
-	]
+
+	var principal := _atributo_principal()
+	var claves := [&"fuerza", &"agilidad", &"inteligencia"]
+	var nombres := ["FUE", "AGI", "INT"]
+	var totales := [e.fuerza_total, e.agilidad_total, e.inteligencia_total]
+	var bases := [e.fuerza, e.agilidad, e.inteligencia]
+	for i in 3:
+		var es_principal: bool = claves[i] == principal
+		var color := ORO if es_principal else TEXTO
+		_atributos_nombres[i].text = ("◆ " + nombres[i]) if es_principal else nombres[i]
+		_atributos_nombres[i].add_theme_color_override("font_color", color)
+		var bono := int(totales[i]) - int(bases[i])
+		_atributos_valores[i].text = "%d%s" % [
+			int(totales[i]), (" (+%d)" % bono) if bono > 0 else ""
+		]
+		_atributos_valores[i].add_theme_color_override("font_color", color)
 
 
 func _actualizar_pista() -> void:
@@ -803,31 +861,6 @@ func _atributo_principal() -> StringName:
 			return &"fuerza"
 
 
-func _id_emblema() -> StringName:
-	if _jugador == null or _jugador.arma_actual == null:
-		return &"prisionero_grito"
-	match _jugador.arma_actual.clase:
-		WeaponItem.Clase.BASTION:
-			return &"bastion_inquebrantable"
-		WeaponItem.Clase.FILO:
-			return &"filo_ejecucion"
-		WeaponItem.Clase.CETRO:
-			return &"cetro_espiritu_ancestral"
-		_:
-			return &"prisionero_grito"
-
-
-func _actualizar_emblema() -> void:
-	if _emblema_icono == null:
-		return
-	var id := _id_emblema()
-	if _emblema_icono.get_meta("icono_id", &"") == id:
-		return
-	_emblema_icono.set_meta("icono_id", id)
-	_emblema_icono.texture = IconStudio.obtener(id, IconStudio.CATEGORIA_HABILIDAD)
-	IconStudio.escuchar(id, Callable(self, "_icono_listo").bind(id))
-
-
 func _boton_icono(boton: Button, id: StringName, categoria: StringName) -> void:
 	if boton == null or id == &"":
 		return
@@ -847,7 +880,7 @@ func _icono_listo(textura: Texture2D, id: StringName) -> void:
 		for boton in lista:
 			if is_instance_valid(boton) and boton.get_meta("icono_id", &"") == id:
 				boton.icon = textura
-	for rect in [_icono_dano, _icono_armadura, _emblema_icono]:
+	for rect in [_icono_dano, _icono_armadura]:
 		if is_instance_valid(rect) and rect.get_meta("icono_id", &"") == id:
 			rect.texture = textura
 
@@ -885,7 +918,6 @@ func _actualizar_iconos_habilidades() -> void:
 
 func _al_cambiar_arma_hud(_arma: WeaponItem = null) -> void:
 	_actualizar_iconos_habilidades()
-	_actualizar_emblema()
 
 
 func _comando_atacar() -> void:

@@ -130,18 +130,16 @@ func _reconstruir() -> void:
 		_lista.add_child(_texto("Equipa un arma en la armería para desbloquear talentos.", 15))
 		return
 
-	_puntos.text = "Rojos: %d   ·   Habilidad: %d" % [
-		_jugador.puntos_rojos, _jugador.estadisticas.puntos_habilidad
-	]
+	_puntos.text = "Rojos: %d" % _jugador.puntos_rojos
 	var arma := _jugador.arma_actual
 
-	var titulo_habilidades := _texto("RANGOS DE HABILIDAD  (1 punto dorado por rango)", 15)
+	var titulo_habilidades := _texto("RANGOS DE HABILIDAD  ·  suben al azar al subir de nivel", 15)
 	titulo_habilidades.add_theme_color_override("font_color", Color(0.96, 0.82, 0.45))
 	_lista.add_child(titulo_habilidades)
 	for indice in arma.habilidades.size():
 		var habilidad := arma.habilidades[indice]
 		if habilidad != null:
-			_lista.add_child(_fila_habilidad(habilidad, indice))
+			_lista.add_child(_fila_rango(habilidad, indice))
 	_lista.add_child(HSeparator.new())
 
 	var mostrados := 0
@@ -168,46 +166,29 @@ func _reconstruir() -> void:
 		_lista.add_child(_texto("Esta arma no tiene talentos. Compra una en la armería y gana puntos rojos al terminar cada oleada.", 15))
 
 
-func _fila_habilidad(habilidad: AbilityData, indice: int) -> Control:
+func _fila_rango(habilidad: AbilityData, indice: int) -> Control:
 	var tecla: String = ["Q", "W", "E", "R"][indice]
 	var rango := _jugador.rango_habilidad(habilidad.id)
 	var maximo := maxi(1, habilidad.rango_maximo)
 	var desbloqueada := _jugador.habilidad_desbloqueada(indice)
 
-	var boton := Button.new()
-	boton.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	boton.custom_minimum_size = Vector2(0, 38)
-	boton.add_theme_font_size_override("font_size", 14)
+	var etiqueta := _texto("", 14)
+	etiqueta.custom_minimum_size = Vector2(0, 28)
 	if not desbloqueada:
-		boton.text = "  %s   %s   —   BLOQUEADA (Nv %d)" % [
+		etiqueta.text = "  %s   %s   —   BLOQUEADA (Nv %d)" % [
 			tecla, habilidad.nombre, _jugador.nivel_desbloqueo_habilidad(indice)
 		]
-		boton.disabled = true
-		boton.add_theme_color_override("font_color", Color(0.58, 0.58, 0.60))
-		return boton
-
-	var siguiente := habilidad.descripcion_siguiente_rango(rango)
-	if rango >= maximo:
-		boton.text = "  %s   %s   [%d/%d]   MÁXIMO" % [tecla, habilidad.nombre, rango, maximo]
-		boton.disabled = true
-		boton.add_theme_color_override("font_color", Color(0.55, 0.90, 0.55))
-		return boton
-
-	boton.text = "  %s   %s   [%d/%d]   +1 rango   ·   1 punto" % [
-		tecla, habilidad.nombre, rango, maximo
-	]
-	boton.tooltip_text = siguiente if not siguiente.is_empty() else "Mejora el rango de la habilidad."
-	boton.disabled = _jugador.estadisticas.puntos_habilidad <= 0
-	if boton.disabled:
-		boton.add_theme_color_override("font_color", Color(0.62, 0.62, 0.62))
-	boton.pressed.connect(_subir_habilidad.bind(indice))
-	return boton
-
-
-func _subir_habilidad(indice: int) -> void:
-	if _jugador != null and _jugador.subir_habilidad(indice):
-		Sfx.reproducir(&"click", -8.0)
-		_reconstruir()
+		etiqueta.add_theme_color_override("font_color", Color(0.58, 0.58, 0.60))
+	elif rango >= maximo:
+		etiqueta.text = "  %s   %s   [%d/%d]   MÁXIMO" % [tecla, habilidad.nombre, rango, maximo]
+		etiqueta.add_theme_color_override("font_color", Color(0.55, 0.90, 0.55))
+	else:
+		var siguiente := habilidad.descripcion_siguiente_rango(rango)
+		etiqueta.text = "  %s   %s   [%d/%d]%s" % [
+			tecla, habilidad.nombre, rango, maximo,
+			("   ·   " + siguiente) if not siguiente.is_empty() else ""
+		]
+	return etiqueta
 
 
 func _fila_talento(talento: TalentData) -> Control:

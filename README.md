@@ -10,10 +10,12 @@ Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
 anti-camping, talentos con rangos, skins, HUD con retrato 3D y miniaturas
 renderizadas, inventario de 6 ranuras con forja automática, objetos legendarios,
-arte 3D animado y audio CC0. Sin cooperativo ni guardado todavía.
+arte 3D animado y audio CC0. **Cooperativo online autoritativo** para hasta 3
+gladiadores; sin guardado todavía.
 
-- 61 comprobaciones de humo + simulación acelerada de las 20 oleadas.
+- 68 comprobaciones de humo + 18 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
+- Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Todo el arte es **CC0** (KayKit, Kenney); el código es **MIT**.
 
 ## Ejecutar
@@ -24,9 +26,45 @@ godot --path .
 
 # Partida directa
 godot --path . scenes/main.tscn
+
+# Servidor cooperativo
+godot --headless -- --servidor --puerto=9080
+
+# Cliente cooperativo de escritorio
+godot -- --cliente=ws://127.0.0.1:9080
 ```
 
 Godot 4.7 se instaló con `winget install GodotEngine.GodotEngine`.
+
+## Cooperativo online
+
+En Web y APK aparece un menú con **Jugar solo** y **Unirse a partida**. El
+servidor (`Dockerfile`, `fly.toml`, `render.yaml`) es la autoridad de oleadas,
+enemigos, daño, oro, compras, talentos e inventario. Los clientes envían sus
+acciones y reciben snapshots a 10 Hz.
+
+- Hasta 3 jugadores, una clase distinta por persona y partida.
+- El servidor rechaza repetir clase o cambiarla después de elegir.
+- Los pedestales de clases ocupadas se apagan en todos los clientes; al elegir,
+  el jugador deja de ver cualquier opción de campeón.
+- Los efectos de habilidad se dibujan en los clientes sin aplicar daño local.
+- Guía de despliegue y pruebas: [`docs/ONLINE.md`](docs/ONLINE.md).
+
+## Supabase
+
+El proyecto usa Supabase (`ntmxmaxaprmqmvhsxtmd`) para **descubrimiento de
+servidores** e **historial de partidas**:
+
+- `servidores`: el servidor Godot registra su URL `wss://`, región y jugadores
+  cada 20 s; el menú muestra los activos (últimos 2 minutos).
+- `partidas`: al terminar, el servidor guarda resultado, oleada, duración y
+  clases/niveles de los jugadores.
+- El cliente usa solo la `anon key` + RLS. La `service_role` va exclusivamente
+  como variable de entorno del servidor (`SUPABASE_SERVICE_KEY`).
+- La connection string de Postgres solo se usa para aplicar la migración; nunca
+  en el cliente.
+
+Pasos completos y seguridad en [`supabase/README.md`](supabase/README.md).
 
 ## Controles
 
@@ -49,10 +87,12 @@ Las teclas usan `physical_keycode`: funcionan igual en teclados no QWERTY.
 
 ## Consola inferior
 
-La consola de 175 px se divide en cuatro bloques: retrato 3D en vivo con barras
-de vida/maná, ficha del gladiador con nivel, XP, oleada, atributo principal y
-estado, inventario 2x3 y parrilla de comandos 4x3. Los botones son **solo
-iconos**; el nombre y el escalado real viven en el tooltip. `IconStudio.gd`
+La consola de 185 px se divide en cuatro bloques: minimapa cuadrado, retrato 3D
+en vivo con barras de vida/maná, ficha del gladiador con nivel, XP, oleada,
+atributo principal y estado, inventario 2x3 y parrilla de comandos/habilidades
+4x3. Los botones son **solo iconos**; el nombre y el escalado real viven en el
+tooltip. La tecla de cada botón va en la esquina superior izquierda y las
+habilidades muestran puntos dorados con su rango actual. `IconStudio.gd`
 renderiza miniaturas 3D de 64x64 con luz cálida, rim light y fondo degradado
 (fuego para Fuerza, esmeralda para Agilidad, azul/violeta para INT, dorado para
 legendarios), las cachea y usa un icono procedural si corre en `--headless`.
@@ -61,19 +101,25 @@ flechas, botas y demás piezas con primitivas propias.
 
 ## Bucle de juego
 
-1. **Zona segura**: el gladiador elige un campeón gratuito en uno de los tres
-   pedestales. La clase queda fijada para la partida; la fuente cura fuera de
-   combate y el mercader/forja/obelisco solo se usan en la base.
+1. **Zona segura**: cada gladiador elige un campeón gratuito en uno de los tres
+   pedestales. La clase queda fijada para la partida; en co-op cada persona debe
+   elegir una distinta. La fuente cura fuera de combate y el mercader/forja/
+   obelisco solo se usan en la base.
 2. La oleada avisa con 30 s de preparación; al abrirse los portones hay 8 s de
    entrada con +35 % de velocidad y luego se cierran.
 3. Cada oleada exige defender el **Estandarte de Rebelión** (900 PV); puede
    recogerse con **G** y colocarse en otro punto del arena.
 4. Al superar una oleada: oro, puntos de atributo, punto rojo de talento y 25 %
-   de curación; los niveles dan puntos de habilidad y desbloquean Q/W/E y R.
+   de curación; cada nivel sube automáticamente los atributos de la clase y una
+   habilidad aleatoria (Q/W/E/R) que no esté al máximo.
 5. Cada 5 oleadas aparece un **jefe**; la oleada 20 cierra la partida.
 6. Si el jugador permanece 14 s en un radio de 5 m, el público activa la
    **Furia del Público**: congela la ganancia de oro y lanza bolas de fuego
    durante 9 s. Moverse reinicia el contador.
+
+La clase se escoge una sola vez por partida: al elegir un campeón, los otros
+pedestales se apagan y desaparecen como opción. Los rangos de habilidad ya no
+se compran; el panel **T** solo invierte puntos rojos en talentos.
 
 ## Armas
 
@@ -169,12 +215,15 @@ scripts/
     AudienceFireball.gd     proyectil del público
   effects/AbilityEffect.gd  ejecutor de habilidades (daño, cura, provocar)
   game/
-    Arena.gd                construye el mundo, economía y condiciones
+    Arena.gd                construye el mundo, economía, red y condiciones
     ArenaCamera.gd          cámara ortográfica isométrica con límites
     WaveManager.gd          20 oleadas, jefes y recompensas
+  net/NetCoop.gd            WebSocket, RPCs, lobby y snapshots
+  net/Supabase.gd           registro de servidores y partidas por REST
   ui/
-    ArenaHUD.gd             consola 175 px, retrato, ficha, 2x3 y parrilla 4x3
+    ArenaHUD.gd             consola 185 px, retrato, ficha, 2x3 y parrilla 4x3
     ArenaMinimap.gd         radar 2D del patio
+    MenuRed.gd              menú Jugar solo / Unirse a partida
     DamageNumbers.gd        números de daño/curación con pool
     TalentPanel.gd          panel de talentos con rangos y requisitos
     ShopPanel.gd            tienda, recetario, forja y tooltips
@@ -182,8 +231,13 @@ scripts/
     ItemModelFactory.gd     modelos de objetos y comandos con primitivas
     GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
-  smoke_test.gd             prueba de humo headless (61 comprobaciones)
+  smoke_test.gd             prueba de humo headless (68 comprobaciones)
+  net_smoke.gd              cliente coop: conexión, compra y clase única
+  net_smoke_b.gd            segundo cliente: clase única entre jugadores
   wave_sim.gd               simulación acelerada de las 20 oleadas
+Dockerfile                  servidor cooperativo headless
+fly.toml / render.yaml      despliegue del servidor
+supabase/migrations/        esquema de servidores y partidas
 ```
 
 La escena se genera por código (`Arena._ready`) para iterar sin editor; los
@@ -194,13 +248,21 @@ sistemas son nodos independientes y sustituibles.
 ```powershell
 godot --headless --path . --script res://tests/smoke_test.gd
 godot --headless --path . --script res://tests/wave_sim.gd
+
+# Red: servidor + cliente A + cliente B (ver docs/ONLINE.md)
+godot --headless -- --servidor --puerto=9080 --red-rapida
+godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9080
+godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1:9080
 ```
 
 La prueba de humo cubre construcción de la arena, catálogo, compra, bonos,
 talentos con requisitos y rangos, habilidades (radio, invocación, sinergias),
+crecimiento por nivel, subida aleatoria de habilidades, clase única por partida,
 oleada, ataque básico, estandarte, fases del jefe, ciclo de la Furia del Público,
 inventario, pociones, forja en cadena hasta legendario y cierre de partida. La
 simulación recorre las 20 oleadas y verifica jefes en 5/10/15/20 y la victoria.
+Las pruebas de red verifican conexión, snapshots, movimiento autoritativo,
+compra, enemigos, oleadas y clase única entre dos jugadores.
 
 Capturas de depuración (sin editor):
 
@@ -228,6 +290,54 @@ Salida esperada en `build/web/`: `index.html`, `index.js`, `index.wasm`
 (~39 MB), `index.pck` y los worklets de audio. Para probarla hace falta servirla
 por HTTP; abrir el `index.html` con `file://` no funciona.
 
+## GitHub Pages
+
+El workflow `.github/workflows/web-pages.yml` exporta la build Web en cada push a
+`main` y la publica con GitHub Pages.
+
+1. En GitHub, entra en **Settings → Pages** y elige **Source: GitHub Actions**.
+2. Haz push a `main` (o lanza el workflow **Web / GitHub Pages** a mano desde
+   **Actions**).
+3. La URL queda en
+   `https://chary-lab.github.io/gladiators-revenge/`.
+
+El workflow instala Godot 4.7.2 con sus plantillas, exporta con el preset `Web`
+(sin threads, así no necesita cabeceras COOP/COEP) y sube `build/web` como
+artefacto de Pages.
+
+## APK Android
+
+El preset `Android` compila un APK de depuración (`build/android/`). El workflow
+`.github/workflows/android-apk.yml` lo genera en la nube:
+
+- Se lanza desde **Actions → Android APK → Run workflow** o al empujar una tag
+  `v*`.
+- Instala Java 17, plantillas Android de Godot 4.7.2 y el SDK Android 35.
+- Genera un keystore de depuración (`debug.keystore`, ignorado por git) y sube el
+  APK como artefacto; en tags lo adjunta a la release.
+
+Para compilarlo en local hacen falta el SDK Android, JDK 17 y las plantillas
+Android de Godot:
+
+```powershell
+# Crear debug.keystore si no existe (requiere keytool del JDK)
+keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android `
+  -keystore debug.keystore -storepass android `
+  -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+New-Item -ItemType Directory -Force build/android
+godot --headless --path . --export-debug "Android" "build/android/gladiators-revenge.apk"
+```
+
+El juego usa el renderizador **GL Compatibility** y vista 1280×720 con
+`canvas_items`, así que el mismo proyecto escala a móviles y tablets.
+
+## Multijugador online
+
+El cooperativo online ya está implementado: servidor Godot headless
+autoritativo, WebSocket y snapshots. Hasta 3 jugadores con una clase distinta
+cada uno; el servidor rechaza repetir clase o cambiarla. La guía de ejecución,
+pruebas y despliegue está en [`docs/ONLINE.md`](docs/ONLINE.md).
+
 ## Rendimiento web
 
 - Renderizador **GL Compatibility**.
@@ -240,13 +350,14 @@ por HTTP; abrir el `index.html` con `file://` no funciona.
 
 ## Límites conocidos
 
-- Cooperativo aún no implementado: el diseño lo permite (grupo `gladiadores`,
-  objetivo por jugador), pero `Arena` crea un solo gladiador.
+- Las invocaciones del Cetro y los números de daño flotantes no se replican en
+  red; el daño se ve en las barras y en los efectos de habilidad.
+- El servidor no persiste la partida ni permite reconectar a mitad de oleada.
 - Sin guardado ni tabla de récords; reiniciar recarga la escena.
 - El audio usa efectos CC0 de Kenney; no hay música ni voces.
-- Probado en Edge (WebAssembly) con 0 errores de consola: movimiento, objetivo,
-  compra de armas, compra en el mercader, talentos, Furia del Público, derrota y
-  reinicio.
+- Probado en Edge (WebAssembly) con 0 errores de consola: menú, unión al
+  servidor, movimiento, objetivo, compra de armas, compra en el mercader,
+  talentos, Furia del Público, derrota y reinicio.
 
 ## Créditos
 

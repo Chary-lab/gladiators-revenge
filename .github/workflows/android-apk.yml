@@ -1,0 +1,73 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar Godot 4.7.2 + export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+          include-templates: true
+
+      - name: Instalar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar build-tools y plataforma
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Generar keystore de depuración
+        run: |
+          keytool -keyalg RSA -genkeypair \
+            -alias androiddebugkey -keypass android -keystore debug.keystore \
+            -storepass android -dname "CN=Android Debug,O=Android,C=US" \
+            -validity 9999 -deststoretype pkcs12
+
+      - name: Configurar SDK para Godot
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          SETTINGS="$HOME/.config/godot/editor_settings-4.7.tres"
+          mkdir -p "$(dirname "$SETTINGS")"
+          printf '[resource]\nexport/android/android_sdk_path = "%s"\n' "$ANDROID_SDK_ROOT" > "$SETTINGS"
+
+      - name: Importar proyecto
+        run: godot --headless --editor --quit
+
+      - name: Exportar APK de depuración
+        run: |
+          mkdir -p build/android
+          godot --headless --export-debug "Android" "$PWD/build/android/gladiators-revenge.apk"
+
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: gladiators-revenge-debug-apk
+          path: build/android/*.apk
+
+      - name: Adjuntar APK a la release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/android/*.apk

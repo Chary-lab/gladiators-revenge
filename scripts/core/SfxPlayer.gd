@@ -30,6 +30,8 @@ static var _conectado := false
 
 
 static func reproducir(nombre: StringName, volumen_db := 0.0) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	var arbol := Engine.get_main_loop() as SceneTree
 	if arbol == null:
 		return

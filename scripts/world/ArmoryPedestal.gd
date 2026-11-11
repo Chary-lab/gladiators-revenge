@@ -5,6 +5,7 @@ extends Node3D
 var arma: WeaponItem
 var vendida := false
 var es_campeon := false
+var seleccionable := true
 
 var _icono: MeshInstance3D
 var _etiqueta: Label3D
@@ -59,9 +60,25 @@ func _construir() -> void:
 func _process(delta: float) -> void:
 	if not vendida and _icono != null:
 		_icono.rotate_y(delta * 1.6)
+	if not seleccionable:
+		if _etiqueta != null:
+			_etiqueta.visible = false
+		return
 	if _etiqueta != null:
 		var jugador := get_tree().get_first_node_in_group(GladiatorController.GRUPO_GLADIADORES) as Node3D
 		_etiqueta.visible = jugador != null and _es_el_pedestal_mas_cercano(jugador)
+
+
+## Oculta la opción de elegir esta clase: ya se escogió un campeón en la partida.
+func desactivar() -> void:
+	seleccionable = false
+	vendida = true
+	if _etiqueta != null:
+		_etiqueta.visible = false
+	if _icono != null:
+		var gris := StandardMaterial3D.new()
+		gris.albedo_color = Color(0.22, 0.22, 0.22)
+		_icono.material_override = gris
 
 
 func _actualizar_etiqueta() -> void:
@@ -96,7 +113,7 @@ func comprar(jugador: GladiatorController) -> bool:
 
 func _es_el_pedestal_mas_cercano(jugador: Node3D) -> bool:
 	var distancia := jugador.global_position.distance_to(global_position)
-	if distancia > 9.0:
+	if distancia > 3.5:
 		return false
 	for nodo in get_tree().get_nodes_in_group("pedestales"):
 		var otro := nodo as Node3D

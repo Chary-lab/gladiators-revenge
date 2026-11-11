@@ -31,6 +31,7 @@ var _pendientes := 0
 var _temporizador := 0.0
 var _pool: ObjectPool
 var _jugador: GladiatorController
+var _jugadores: Array[GladiatorController] = []
 var _bandera: Node3D
 var _contenedor: Node3D
 var _puntos_spawn: Array[Vector3] = []
@@ -44,12 +45,19 @@ func _ready() -> void:
 
 
 func iniciar(
-	jugador: GladiatorController,
+	jugadores,
 	bandera: Node3D,
 	puntos_spawn: Array[Vector3],
 	contenedor: Node3D
 ) -> void:
-	_jugador = jugador
+	_jugadores.clear()
+	if jugadores is Array:
+		for jugador in jugadores:
+			if jugador is GladiatorController:
+				_jugadores.append(jugador)
+	elif jugadores is GladiatorController:
+		_jugadores.append(jugadores)
+	_jugador = _jugadores[0] if not _jugadores.is_empty() else null
 	_bandera = bandera
 	_puntos_spawn = puntos_spawn
 	_contenedor = contenedor
@@ -67,6 +75,20 @@ func iniciar(
 
 func enemigos_restantes() -> int:
 	return _pendientes + get_tree().get_nodes_in_group("enemigos").size()
+
+
+func agregar_jugador(jugador: GladiatorController) -> void:
+	if jugador == null or _jugadores.has(jugador):
+		return
+	_jugadores.append(jugador)
+	if _jugador == null:
+		_jugador = jugador
+
+
+func quitar_jugador(jugador: GladiatorController) -> void:
+	_jugadores.erase(jugador)
+	if _jugador == jugador:
+		_jugador = _jugadores[0] if not _jugadores.is_empty() else null
 
 
 func _process(delta: float) -> void:
@@ -213,13 +235,24 @@ func _al_morir_jefe() -> void:
 
 
 func _otorgar_xp(cantidad: int) -> void:
-	if _jugador == null or not is_instance_valid(_jugador) or cantidad <= 0:
+	if cantidad <= 0:
 		return
-	_jugador.otorgar_experiencia(cantidad)
-	var excedente := _jugador.estadisticas.reclamar_excedente()
-	if excedente > 0:
-		oro_ganado.emit(maxi(1, excedente / 4))
-		mensaje.emit("Nivel máximo: %d XP convertida en oro." % excedente, 2.0)
+	var excedente_total := 0
+	for jugador in _jugadores:
+		if jugador == null or not is_instance_valid(jugador):
+			continue
+		jugador.otorgar_experiencia(cantidad)
+		excedente_total += jugador.estadisticas.reclamar_excedente()
+	if excedente_total > 0:
+		oro_ganado.emit(maxi(1, excedente_total / 4))
+		mensaje.emit("Nivel máximo: %d XP convertida en oro." % excedente_total, 2.0)
+
+
+func aplicar_estado_red(numero: int, pendientes: int, estado: int, tiempo: float) -> void:
+	oleada_actual = numero
+	_pendientes = pendientes
+	_estado = estado as Estado
+	_temporizador = tiempo
 
 
 func tiempo_preparacion() -> float:

@@ -1,0 +1,35 @@
+name: Server Docker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "project.godot"
+      - "scripts/**"
+      - "assets/**"
+      - ".github/workflows/server-docker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir imagen del servidor
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: gladiators-revenge-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

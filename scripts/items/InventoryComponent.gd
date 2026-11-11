@@ -41,6 +41,34 @@ func energia_restante(indice: int) -> float:
 	return _cooldowns[indice]
 
 
+## Sustituye las ranuras con el estado autoritativo del servidor. No recalcula
+## bonos: GladiatorStats recibe los totales dentro del snapshot de red.
+func aplicar_estado_red(datos: Array) -> void:
+	if ranuras.size() != RANURAS:
+		_ready()
+	var cambio := false
+	for i in RANURAS:
+		var item: ItemData = null
+		var cantidad := 0
+		var cd := 0.0
+		if i < datos.size() and datos[i] is Dictionary:
+			var fila: Dictionary = datos[i]
+			var id := StringName(fila.get("id", &""))
+			if id != &"":
+				item = ItemCatalog.obtener(id)
+			cantidad = int(fila.get("cantidad", 0))
+			cd = float(fila.get("cd", 0.0))
+		var anterior: ItemData = ranuras[i].get("item")
+		var id_anterior: StringName = anterior.id if anterior != null else &""
+		var id_nuevo: StringName = item.id if item != null else &""
+		if id_anterior != id_nuevo or int(ranuras[i].get("cantidad", 0)) != cantidad:
+			cambio = true
+		ranuras[i] = {"item": item, "cantidad": cantidad}
+		_cooldowns[i] = cd
+	if cambio:
+		cambiado.emit()
+
+
 func cooldown_pocion() -> float:
 	return _cd_pocion
 

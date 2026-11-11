@@ -16,11 +16,23 @@ extends Resource
 signal atributos_cambiados
 signal experiencia_cambiada(actual: int, requerida: int, nivel: int)
 signal nivel_subido(nivel: int)
-signal puntos_habilidad_cambiados(cantidad: int)
 
 const TIPO_FISICO := &"fisico"
 const TIPO_MAGICO := &"magico"
 const TIPO_VERDADERO := &"verdadero"
+
+## Daño de ataque básico que aporta cada punto del atributo principal de la
+## clase equipada (Bastión: FUE, Filo: AGI, Cetro: INT, Prisionero: FUE).
+const DANO_ATAQUE_POR_ATRIBUTO := 1.0
+
+## Crecimiento automático por nivel según la clase (FUE, AGI, INT). Los
+## decimales se acumulan para no perder fracciones entre niveles.
+const CRECIMIENTO_POR_CLASE := {
+	&"prisionero": Vector3(3.2, 1.4, 1.2),
+	&"bastion": Vector3(3.2, 1.4, 1.2),
+	&"filo": Vector3(1.6, 3.4, 1.4),
+	&"cetro": Vector3(1.3, 1.5, 3.5),
+}
 
 # --- Fuerza ---------------------------------------------------------------
 const VIDA_BASE := 120.0
@@ -68,9 +80,13 @@ const HERENCIA_INVOCACION_MAXIMA := 0.85
 @export_range(0, 999, 1) var puntos_libres: int = 0
 @export_range(1, 20, 1) var nivel: int = 1
 @export_range(0, 999999, 1) var experiencia: int = 0
-@export_range(0, 99, 1) var puntos_habilidad: int = 0
 ## XP sobrante al alcanzar el nivel máximo; Arena la convierte en oro.
 var experiencia_excedente: int = 0
+
+## Clase equipada: define la curva de crecimiento automático por nivel.
+var clase: StringName = &"prisionero"
+var _crecimiento: Vector3 = CRECIMIENTO_POR_CLASE[&"prisionero"]
+var _resto_crecimiento := Vector3.ZERO
 
 ## Bonos temporales aportados por el arma equipada (no se serializan: el arma
 ## los vuelve a aplicar al equiparse).
@@ -192,6 +208,45 @@ var robo_vida: float:
 
 # --- API ------------------------------------------------------------------
 
+## Total del atributo por su nombre canónico (&"fuerza", &"agilidad",
+## &"inteligencia"). Cualquier valor desconocido cae en Fuerza.
+func atributo_total(atributo: StringName) -> int:
+	match atributo:
+		&"agilidad":
+			return agilidad_total
+		&"inteligencia":
+			return inteligencia_total
+		_:
+			return fuerza_total
+
+
+## Daño del ataque automático: base del arma + 1 por punto de su atributo
+## principal. Única fórmula del ataque básico; el controlador no la replica.
+func escalar_ataque_principal(dano_base: float, atributo: StringName) -> float:
+	return dano_base + float(atributo_total(atributo)) * DANO_ATAQUE_POR_ATRIBUTO
+
+
+## Fija la curva de crecimiento de la clase equipada. Se llama al equipar.
+func configurar_clase(nueva_clase: StringName) -> void:
+	clase = nueva_clase
+	_crecimiento = CRECIMIENTO_POR_CLASE.get(nueva_clase, CRECIMIENTO_POR_CLASE[&"prisionero"])
+	_resto_crecimiento = Vector3.ZERO
+
+
+## Aplica el crecimiento de un nivel, acumulando las fracciones pendientes.
+func _aplicar_crecimiento_nivel() -> void:
+	_resto_crecimiento += _crecimiento
+	var ganancia_fuerza := int(floor(_resto_crecimiento.x))
+	var ganancia_agilidad := int(floor(_resto_crecimiento.y))
+	var ganancia_inteligencia := int(floor(_resto_crecimiento.z))
+	fuerza += ganancia_fuerza
+	agilidad += ganancia_agilidad
+	inteligencia += ganancia_inteligencia
+	_resto_crecimiento.x -= ganancia_fuerza
+	_resto_crecimiento.y -= ganancia_agilidad
+	_resto_crecimiento.z -= ganancia_inteligencia
+
+
 ## Aplica daño plano a una habilidad según su tipo. El crítico lo resuelve
 ## quien ataca, no este recurso.
 func escalar_dano(dano_base: float, tipo_dano: StringName = TIPO_FISICO) -> float:
@@ -267,9 +322,7 @@ func otorgar_experiencia(cantidad: int) -> int:
 		nivel += 1
 		subidas += 1
 		puntos_libres += 1
-		if nivel >= 4 and nivel <= 14:
-			puntos_habilidad += 1
-			puntos_habilidad_cambiados.emit(puntos_habilidad)
+		_aplicar_crecimiento_nivel()
 		nivel_subido.emit(nivel)
 
 	# Al llegar al máximo, lo que sobre pasa al fondo de oro.
@@ -286,14 +339,6 @@ func reclamar_excedente() -> int:
 	var cantidad := experiencia_excedente
 	experiencia_excedente = 0
 	return cantidad
-
-
-func gastar_punto_habilidad() -> bool:
-	if puntos_habilidad <= 0:
-		return false
-	puntos_habilidad -= 1
-	puntos_habilidad_cambiados.emit(puntos_habilidad)
-	return true
 
 
 ## Sustituye los bonos del arma equipada. Se llama al equipar y al desequipar.

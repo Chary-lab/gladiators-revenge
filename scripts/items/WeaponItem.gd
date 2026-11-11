@@ -48,6 +48,8 @@ const MAX_HABILIDADES := 4
 @export var alcance_ataque: float = 2.8
 
 @export_group("Escalado")
+## Atributo que potencia el ataque básico (1 punto de daño por punto).
+@export var atributo_principal: StringName = &"fuerza"
 ## Bonos planos por atributo: {"fuerza": 8, "agilidad": 0, "inteligencia": 0}.
 @export var bonificaciones_atributos: Dictionary = {
 	"fuerza": 0,
@@ -64,6 +66,19 @@ func obtener_habilidad(slot: int) -> AbilityData:
 	if slot < 0 or slot >= habilidades.size():
 		return null
 	return habilidades[slot]
+
+
+## Identificador canónico de la clase para la curva de crecimiento de GladiatorStats.
+func id_clase() -> StringName:
+	match clase:
+		Clase.BASTION:
+			return &"bastion"
+		Clase.FILO:
+			return &"filo"
+		Clase.CETRO:
+			return &"cetro"
+		_:
+			return &"prisionero"
 
 
 func validar() -> PackedStringArray:
@@ -111,6 +126,7 @@ static func crear_prisionero() -> WeaponItem:
 	arma.precio_oro = 0
 	arma.dano_ataque_base = 6.0
 	arma.alcance_ataque = 2.4
+	arma.atributo_principal = &"fuerza"
 	arma.habilidades = _kit_prisionero()
 	_aplicar_iconos(arma)
 	_configurar_rangos(arma)
@@ -164,6 +180,7 @@ static func _crear_bastion() -> WeaponItem:
 	arma.precio_oro = 200
 	arma.dano_ataque_base = 20.0
 	arma.alcance_ataque = 3.0
+	arma.atributo_principal = &"fuerza"
 	arma.bonificaciones_atributos = {"fuerza": 8, "agilidad": 0, "inteligencia": 0}
 	arma.escena_visual = load("res://assets/kaykit/weapons/axe_2handed.gltf")
 	arma.rotacion_visual = Vector3(90.0, 0.0, 0.0)
@@ -182,6 +199,7 @@ static func _crear_filo() -> WeaponItem:
 	arma.precio_oro = 200
 	arma.dano_ataque_base = 15.0
 	arma.alcance_ataque = 2.8
+	arma.atributo_principal = &"agilidad"
 	arma.bonificaciones_atributos = {"fuerza": 0, "agilidad": 8, "inteligencia": 0}
 	arma.escena_visual = load("res://assets/kaykit/weapons/sword_1handed.gltf")
 	arma.rotacion_visual = Vector3(90.0, 0.0, 0.0)
@@ -200,6 +218,7 @@ static func _crear_cetro() -> WeaponItem:
 	arma.precio_oro = 200
 	arma.dano_ataque_base = 11.0
 	arma.alcance_ataque = 7.5
+	arma.atributo_principal = &"inteligencia"
 	arma.bonificaciones_atributos = {"fuerza": 0, "agilidad": 0, "inteligencia": 8}
 	arma.escena_visual = load("res://assets/kaykit/weapons/staff.gltf")
 	arma.rotacion_visual = Vector3(90.0, 0.0, 0.0)

@@ -17,6 +17,8 @@ var _tick := 0.0
 var _color := Color(0.95, 0.65, 0.20)
 var _golpe_provocado := false
 var _ya_vinculo := false
+## En clientes de red: dibuja el efecto pero no aplica daño ni curación.
+var solo_visual := false
 
 
 func configurar(datos: AbilityData, portador: GladiatorController) -> void:
@@ -68,8 +70,13 @@ func configurar(datos: AbilityData, portador: GladiatorController) -> void:
 	if _cura > 0.0:
 		_color = Color(0.35, 1.0, 0.45)
 
-	_aplicar_efectos_al_portador()
+	if not solo_visual:
+		_aplicar_efectos_al_portador()
 	_construir_visual()
+	if solo_visual:
+		_restante = _duracion if _duracion > 0.0 else 0.4
+		_tick = 999.0
+		return
 	if datos.efecto_especial == &"descarga":
 		_descarga_encadenada()
 	else:
@@ -96,6 +103,10 @@ func _aplicar_efectos_al_portador() -> void:
 
 func _process(delta: float) -> void:
 	_restante -= delta
+	if solo_visual:
+		if _restante <= 0.0:
+			queue_free()
+		return
 	if _datos != null and _datos.tipo == AbilityData.Tipo.ZONA and _hay_elite_en_radio():
 		_restante -= delta * 1.5
 

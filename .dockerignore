@@ -1,0 +1,15 @@
+.git
+.godot
+.github
+.commandcode
+.playwright-cli
+build
+captura*
+docs
+tests
+supabase
+*.apk
+*.aab
+*.pck
+*.zip
+debug.keystore

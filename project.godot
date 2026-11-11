@@ -17,6 +17,17 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 
+[red]
+
+servidor_url=""
+servidor_publico_url=""
+
+[supabase]
+
+url="https://ntmxmaxaprmqmvhsxtmd.supabase.co"
+anon_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50bXhtYXhhcHJtcW12aHN4dG1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0MzQ4OTUsImV4cCI6MjExMDAxMDg5NX0.G9DlSHkjFUncREHSSWm4pcNgdrnKeE647vW97MVPbJw"
+region="local"
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"

@@ -33,15 +33,13 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var fuente := ThemeDB.fallback_font
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.045, 0.04, 0.96), true)
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.55, 0.4, 0.22), false, 2.0)
-	draw_string(fuente, Vector2(8, 15), "MAPA", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.86, 0.68, 0.32))
 
 	var margen := 8.0
-	var area := Vector2(size.x - margen * 2.0, size.y - margen * 2.0 - 12.0)
+	var area := Vector2(size.x - margen * 2.0, size.y - margen * 2.0)
 	var escala := minf(area.x / ANCHO_ARENA, area.y / LARGO_ARENA)
-	var centro := Vector2(size.x * 0.5, 12.0 + area.y * 0.5 + margen)
+	var centro := Vector2(size.x * 0.5, size.y * 0.5)
 	var mitad := Vector2(ANCHO_ARENA * 0.5 * escala, LARGO_ARENA * 0.5 * escala)
 	var patio := Rect2(centro - mitad, mitad * 2.0)
 	draw_rect(patio, Color(0.22, 0.18, 0.14), true)

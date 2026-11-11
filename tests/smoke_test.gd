@@ -66,6 +66,17 @@ func _ejecutar() -> void:
 	_comprobar(escena.oro == oro_antes, "elegir campeón no cuesta oro")
 	_comprobar(pedestal.vendida, "el pedestal queda marcado como elegido")
 	_comprobar(jugador.estadisticas.fuerza_total > fuerza_antes, "el arma aplica bonos de atributo")
+	var clase_fijada := jugador.arma_actual.clase
+	_comprobar(
+		pedestales[1].vendida and pedestales[2].vendida,
+		"las otras clases desaparecen de la selección al elegir campeón"
+	)
+	jugador.global_position = pedestales[1].global_position + Vector3(0.0, 0.0, 1.6)
+	escena._interactuar_cercano()
+	_comprobar(
+		jugador.arma_actual.clase == clase_fijada,
+		"solo se puede escoger un tipo por partida"
+	)
 
 	# --- Objetos, inventario y forja --------------------------------------
 	var catalogo_objetos := ItemCatalog.crear_catalogo()
@@ -135,6 +146,18 @@ func _ejecutar() -> void:
 
 	var cetro := WeaponItem.crear_catalogo_base()[2]
 	jugador.equipar_arma(cetro)
+	_comprobar(cetro.atributo_principal == &"inteligencia", "el Cetro escala con Inteligencia")
+	var dano_ataque_cetro := jugador.estadisticas.escalar_ataque_principal(
+		cetro.dano_ataque_base, cetro.atributo_principal
+	)
+	jugador.estadisticas.inteligencia += 4
+	var dano_ataque_cetro_mas := jugador.estadisticas.escalar_ataque_principal(
+		cetro.dano_ataque_base, cetro.atributo_principal
+	)
+	_comprobar(
+		is_equal_approx(dano_ataque_cetro_mas, dano_ataque_cetro + 4.0),
+		"subir Inteligencia aumenta el daño de ataque básico del Cetro"
+	)
 	jugador.otorgar_puntos_rojos(6)
 	var estandarte := cetro.habilidades[1]
 	jugador.desbloquear_talento(estandarte.talentos[0])
@@ -154,6 +177,32 @@ func _ejecutar() -> void:
 	_comprobar(not get_nodes_in_group("aliados")[0].is_in_group("enemigos"), "el espíritu no se registra como enemigo")
 	for aliado in get_nodes_in_group("aliados"):
 		aliado.queue_free()
+
+	# --- Crecimiento por nivel y subida aleatoria de habilidades ----------
+	var nivel_previo := jugador.estadisticas.nivel
+	var fuerza_base_antes := jugador.estadisticas.fuerza
+	var agilidad_base_antes := jugador.estadisticas.agilidad
+	var inteligencia_base_antes := jugador.estadisticas.inteligencia
+	var rangos_antes := 0
+	for indice in 4:
+		var hab := jugador.arma_actual.obtener_habilidad(indice)
+		if hab != null:
+			rangos_antes += jugador.rango_habilidad(hab.id)
+	var xp_nivel := jugador.estadisticas.experiencia_requerida
+	jugador.otorgar_experiencia(xp_nivel)
+	var rangos_despues := 0
+	for indice in 4:
+		var hab := jugador.arma_actual.obtener_habilidad(indice)
+		if hab != null:
+			rangos_despues += jugador.rango_habilidad(hab.id)
+	_comprobar(jugador.estadisticas.nivel == nivel_previo + 1, "otorgar XP sube de nivel")
+	_comprobar(
+		jugador.estadisticas.fuerza > fuerza_base_antes
+		and jugador.estadisticas.agilidad > agilidad_base_antes
+		and jugador.estadisticas.inteligencia > inteligencia_base_antes,
+		"el crecimiento de clase sube las estadísticas base"
+	)
+	_comprobar(rangos_despues == rangos_antes + 1, "una habilidad sube de nivel al azar al subir de nivel")
 
 	# --- Oleada y combate automático --------------------------------------
 	oleadas.espera_inicial = 0.3
