@@ -61,8 +61,39 @@ func _ejecutar() -> void:
 	_comprobar(pedestal.vendida, "el pedestal queda marcado como vendido")
 	_comprobar(jugador.estadisticas.fuerza_total > fuerza_antes, "el arma aplica bonos de atributo")
 
+	# --- Talentos de combate ---------------------------------------------
+	jugador.otorgar_puntos_rojos(12)
+	var muro := jugador.arma_actual.habilidades[0]
+	var talento_radio := muro.talentos[0]
+	var talento_duracion := muro.talentos[1]
+	_comprobar(not jugador.desbloquear_talento(talento_duracion), "un talento exige su requisito")
+	_comprobar(jugador.desbloquear_talento(talento_radio), "compra el primer rango de talento")
+	_comprobar(jugador.rango_talento(talento_radio.id) == 1, "el rango de talento sube")
+	_comprobar(jugador.desbloquear_talento(talento_duracion), "se desbloquea el talento dependiente")
+	_comprobar(jugador.puntos_rojos == 7, "los puntos rojos se descuentan")
+
+	var cetro := WeaponItem.crear_catalogo_base()[2]
+	jugador.equipar_arma(cetro)
+	jugador.otorgar_puntos_rojos(6)
+	var estandarte := cetro.habilidades[1]
+	jugador.desbloquear_talento(estandarte.talentos[0])
+	jugador.desbloquear_talento(estandarte.talentos[0])
+	var efecto := AbilityEffect.new()
+	escena.add_child(efecto)
+	efecto.configurar(estandarte, jugador)
+	_comprobar(is_equal_approx(float(efecto.get("_radio")), 7.0), "el talento amplía el radio por rango")
+	efecto.queue_free()
+
+	jugador.mana_actual = jugador.estadisticas.mana_maximo
+	_comprobar(jugador.intentar_habilidad(3), "el cetro lanza la ultimate")
+	_comprobar(not get_nodes_in_group("aliados").is_empty(), "la ultimate invoca un espíritu aliado")
+	for aliado in get_nodes_in_group("aliados"):
+		aliado.queue_free()
+
 	# --- Oleada y combate automático --------------------------------------
-	await _esperar_fisicas(360)  # 6 s: espera inicial + primer spawn
+	oleadas.espera_inicial = 0.3
+	oleadas.set("_temporizador", 0.3)
+	await _esperar_fisicas(360)  # arranque rápido + primer spawn
 	_comprobar(oleadas.oleada_actual == 1, "la oleada 1 arranca sola")
 	var enemigos := get_nodes_in_group("enemigos")
 	_comprobar(not enemigos.is_empty(), "la oleada genera enemigos")
@@ -116,6 +147,12 @@ func _ejecutar() -> void:
 	publico.tiempo_limite = 999.0  # evitar que se repita durante la comprobación
 	await _esperar_fisicas(90)
 	_comprobar(not escena.esta_congelado(), "el castigo termina y se puede volver a jugar")
+
+	# --- Fin de partida ----------------------------------------------------
+	escena._finalizar("DERROTA", "prueba de cierre")
+	_comprobar(escena.terminado, "terminar cierra la partida")
+	var panel = escena.get("_hud").get("_talentos")
+	_comprobar(panel != null and not panel.visible, "el panel de talentos se cierra al terminar")
 
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
 	quit(1 if _fallos > 0 else 0)

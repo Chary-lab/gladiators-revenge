@@ -37,6 +37,8 @@ enum Objetivo {
 @export var tipo_dano: StringName = &"fisico"
 ## Si es true, al impactar arrastra a los enemigos hacia el portador (taunt).
 @export var provoca: bool = false
+## Reducción de daño temporal (0-1) mientras dura la habilidad.
+@export_range(0.0, 0.9, 0.05) var reduccion_dano: float = 0.0
 ## Atributo que escala el daño de la habilidad (se lee desde GladiatorStats).
 @export var atributo_escalado: StringName = &"fuerza"
 @export var radio: float = 2.5

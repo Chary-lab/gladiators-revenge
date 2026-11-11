@@ -28,6 +28,7 @@ var _mensaje: Label
 var _pista: Label
 var _slots: Array[Label] = []
 var _aviso: Label
+var _talentos: TalentPanel
 
 var _mensaje_tiempo := 0.0
 var _final := false
@@ -60,7 +61,7 @@ func _ready() -> void:
 	_texto_puntos = _crear_etiqueta("", Vector2(980, 50), 280, 14, HORIZONTAL_ALIGNMENT_RIGHT)
 
 	_crear_etiqueta(
-		"Click derecho: mover   ·   QWER: habilidades   ·   1/2/3: FUE/AGI/INT   ·   F: armería",
+		"Click derecho: mover   ·   QWER: habilidades   ·   T: talentos   ·   K: skin   ·   1/2/3: FUE/AGI/INT   ·   F: armería",
 		Vector2(0, 702),
 		ANCHO,
 		12,
@@ -94,6 +95,11 @@ func configurar(
 	_oleadas = oleadas
 	_bandera = bandera
 	_arena = arena
+
+	_talentos = TalentPanel.new()
+	_talentos.name = "Talentos"
+	add_child(_talentos)
+	_talentos.configurar(_jugador)
 
 	if _bandera != null:
 		_barra_bandera.max_value = _bandera.salud_maxima
@@ -196,6 +202,16 @@ func mostrar_final(texto: String) -> void:
 	_mensaje.text = texto
 	_mensaje_tiempo = 9999.0
 	_mensaje.add_theme_font_size_override("font_size", 54)
+
+
+func alternar_talentos() -> void:
+	if _talentos != null:
+		_talentos.alternar()
+
+
+func cerrar_talentos() -> void:
+	if _talentos != null:
+		_talentos.cerrar_panel()
 
 
 func establecer_pista(texto: String) -> void:

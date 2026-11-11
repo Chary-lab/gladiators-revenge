@@ -11,6 +11,7 @@ var _base: MeshInstance3D
 
 
 func configurar(nueva_arma: WeaponItem) -> void:
+	add_to_group("pedestales")
 	arma = nueva_arma
 	_construir()
 	_actualizar_etiqueta()
@@ -44,12 +45,12 @@ func _construir() -> void:
 	add_child(_icono)
 
 	_etiqueta = Label3D.new()
-	_etiqueta.font_size = 72
-	_etiqueta.pixel_size = 0.008
-	_etiqueta.position = Vector3(0, 3.0, 0)
+	_etiqueta.font_size = 48
+	_etiqueta.pixel_size = 0.006
+	_etiqueta.position = Vector3(0, 2.9, 0)
 	_etiqueta.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_etiqueta.no_depth_test = true
-	_etiqueta.outline_size = 12
+	_etiqueta.outline_size = 10
 	_etiqueta.modulate = Color(1, 0.93, 0.75)
 	add_child(_etiqueta)
 
@@ -57,6 +58,9 @@ func _construir() -> void:
 func _process(delta: float) -> void:
 	if not vendida and _icono != null:
 		_icono.rotate_y(delta * 1.6)
+	if _etiqueta != null:
+		var jugador := get_tree().get_first_node_in_group(GladiatorController.GRUPO_GLADIADORES) as Node3D
+		_etiqueta.visible = jugador != null and _es_el_pedestal_mas_cercano(jugador)
 
 
 func _actualizar_etiqueta() -> void:
@@ -83,6 +87,17 @@ func comprar(jugador: GladiatorController) -> bool:
 	var gris := StandardMaterial3D.new()
 	gris.albedo_color = Color(0.22, 0.22, 0.22)
 	_base.material_override = gris
+	return true
+
+
+func _es_el_pedestal_mas_cercano(jugador: Node3D) -> bool:
+	var distancia := jugador.global_position.distance_to(global_position)
+	if distancia > 9.0:
+		return false
+	for nodo in get_tree().get_nodes_in_group("pedestales"):
+		var otro := nodo as Node3D
+		if otro != null and otro != self and jugador.global_position.distance_to(otro.global_position) < distancia:
+			return false
 	return true
 
 

@@ -29,6 +29,9 @@ const MAX_HABILIDADES := 4
 @export_multiline var descripcion: String = ""
 @export var icono: Texture2D
 @export var escena_visual: PackedScene
+## Ajuste fino del arma al hueso de la mano (grados y escala).
+@export var rotacion_visual: Vector3 = Vector3.ZERO
+@export var escala_visual: float = 1.0
 
 @export_group("Clase y rol")
 @export var clase: Clase = Clase.PRISIONERO
@@ -132,6 +135,9 @@ static func _crear_bastion() -> WeaponItem:
 	arma.dano_ataque_base = 20.0
 	arma.alcance_ataque = 3.0
 	arma.bonificaciones_atributos = {"fuerza": 8, "agilidad": 0, "inteligencia": 0}
+	arma.escena_visual = load("res://assets/kaykit/weapons/axe_2handed.gltf")
+	arma.rotacion_visual = Vector3(90.0, 0.0, 0.0)
+	arma.escala_visual = 0.85
 	arma.habilidades = _kit_bastion()
 	return arma
 
@@ -147,6 +153,9 @@ static func _crear_filo() -> WeaponItem:
 	arma.dano_ataque_base = 15.0
 	arma.alcance_ataque = 2.8
 	arma.bonificaciones_atributos = {"fuerza": 0, "agilidad": 8, "inteligencia": 0}
+	arma.escena_visual = load("res://assets/kaykit/weapons/sword_1handed.gltf")
+	arma.rotacion_visual = Vector3(90.0, 0.0, 0.0)
+	arma.escala_visual = 0.90
 	arma.habilidades = _kit_filo()
 	return arma
 
@@ -162,6 +171,9 @@ static func _crear_cetro() -> WeaponItem:
 	arma.dano_ataque_base = 11.0
 	arma.alcance_ataque = 7.5
 	arma.bonificaciones_atributos = {"fuerza": 0, "agilidad": 0, "inteligencia": 8}
+	arma.escena_visual = load("res://assets/kaykit/weapons/staff.gltf")
+	arma.rotacion_visual = Vector3(90.0, 0.0, 0.0)
+	arma.escala_visual = 0.90
 	arma.habilidades = _kit_cetro()
 	return arma
 
@@ -233,6 +245,9 @@ static func _kit_bastion() -> Array[AbilityData]:
 	muro.cooldown = 12.0
 	muro.radio = 5.0
 	muro.duracion = 3.0
+	muro.provoca = true
+	muro.talentos.append(_talento(&"muro_radio", "Muro reforzado", "Amplía el radio de provocación en 1,5 m por rango.", 2, &"", {&"radio": 1.5}, 2))
+	muro.talentos.append(_talento(&"muro_duracion", "Provocación prolongada", "La provocación dura 1,5 s más por rango.", 3, &"muro_radio", {&"duracion": 1.5}, 2))
 	kit.append(muro)
 
 	var sismico := AbilityData.new()
@@ -245,6 +260,8 @@ static func _kit_bastion() -> Array[AbilityData]:
 	sismico.cooldown = 9.0
 	sismico.dano_base = 35.0
 	sismico.radio = 3.5
+	sismico.talentos.append(_talento(&"sismico_onda", "Onda expansiva", "Aumenta el radio en 1,2 m por rango.", 2, &"", {&"radio": 1.2}, 2))
+	sismico.talentos.append(_talento(&"sismico_fractura", "Fractura", "Añade 15 de daño por rango.", 3, &"sismico_onda", {&"dano": 15.0}, 2))
 	kit.append(sismico)
 
 	var provocacion := AbilityData.new()
@@ -257,6 +274,8 @@ static func _kit_bastion() -> Array[AbilityData]:
 	provocacion.cooldown = 14.0
 	provocacion.radio = 6.0
 	provocacion.duracion = 1.5
+	provocacion.provoca = true
+	provocacion.talentos.append(_talento(&"provocacion_autoridad", "Autoridad de arena", "Amplía el radio en 2 m por rango.", 3, &"", {&"radio": 2.0}, 2))
 	kit.append(provocacion)
 
 	var bastion := AbilityData.new()
@@ -269,7 +288,9 @@ static func _kit_bastion() -> Array[AbilityData]:
 	bastion.cooldown = 45.0
 	bastion.radio = 8.0
 	bastion.duracion = 6.0
+	bastion.reduccion_dano = 0.4
 	bastion.atributo_escalado = &"fuerza"
+	bastion.talentos.append(_talento(&"bastion_ira", "Ira de la horda", "La ultimate dura 2 s más por rango.", 4, &"", {&"duracion": 2.0}, 2))
 	kit.append(bastion)
 
 	return kit
@@ -289,6 +310,8 @@ static func _kit_filo() -> Array[AbilityData]:
 	tajo.dano_base = 26.0
 	tajo.radio = 2.6
 	tajo.atributo_escalado = &"agilidad"
+	tajo.talentos.append(_talento(&"tajo_alcance", "Alcance gemelo", "Amplía el cono en 0,6 m por rango.", 2, &"", {&"radio": 0.6}, 2))
+	tajo.talentos.append(_talento(&"tajo_sangrado", "Sangrado", "Añade 10 de daño por rango.", 3, &"tajo_alcance", {&"dano": 10.0}, 2))
 	kit.append(tajo)
 
 	var paso := AbilityData.new()
@@ -301,6 +324,7 @@ static func _kit_filo() -> Array[AbilityData]:
 	paso.cooldown = 7.0
 	paso.radio = 5.5
 	paso.atributo_escalado = &"agilidad"
+	paso.talentos.append(_talento(&"paso_alcance", "Paso largo", "Aumenta la distancia del dash en 1,5 m por rango.", 2, &"", {&"radio": 1.5}, 2))
 	kit.append(paso)
 
 	var marca := AbilityData.new()
@@ -314,6 +338,7 @@ static func _kit_filo() -> Array[AbilityData]:
 	marca.radio = 2.2
 	marca.duracion = 5.0
 	marca.atributo_escalado = &"agilidad"
+	marca.talentos.append(_talento(&"marca_duradera", "Sentencia duradera", "La marca dura 1 s más por rango.", 2, &"", {&"duracion": 1.0}, 2))
 	kit.append(marca)
 
 	var ejecucion := AbilityData.new()
@@ -327,6 +352,7 @@ static func _kit_filo() -> Array[AbilityData]:
 	ejecucion.dano_base = 120.0
 	ejecucion.radio = 3.0
 	ejecucion.atributo_escalado = &"agilidad"
+	ejecucion.talentos.append(_talento(&"ejecucion_verdugo", "Sentencia del verdugo", "Añade 25 de daño por rango.", 4, &"", {&"dano": 25.0}, 2))
 	kit.append(ejecucion)
 
 	return kit
@@ -347,6 +373,7 @@ static func _kit_cetro() -> Array[AbilityData]:
 	espina.tipo_dano = &"magico"
 	espina.radio = 1.5
 	espina.atributo_escalado = &"inteligencia"
+	espina.talentos.append(_talento(&"espina_veneno", "Savia corrosiva", "Añade 8 de daño por rango.", 2, &"", {&"dano": 8.0}, 2))
 	kit.append(espina)
 
 	var estandarte := AbilityData.new()
@@ -358,6 +385,7 @@ static func _kit_cetro() -> Array[AbilityData]:
 	estandarte.coste_mana = 35.0
 	estandarte.cooldown = 16.0
 	estandarte.dano_base = 6.0
+	estandarte.curacion_base = 6.0
 	estandarte.tipo_dano = &"magico"
 	estandarte.radio = 4.0
 	estandarte.duracion = 8.0
@@ -368,6 +396,7 @@ static func _kit_cetro() -> Array[AbilityData]:
 	talento_radio.nombre = "Círculo Ampliado"
 	talento_radio.descripcion = "+1.5 m de radio al estandarte."
 	talento_radio.coste_puntos_rojos = 3
+	talento_radio.rango_maximo = 2
 	talento_radio.modificadores = {&"radio": 1.5}
 	estandarte.talentos.append(talento_radio)
 
@@ -392,6 +421,7 @@ static func _kit_cetro() -> Array[AbilityData]:
 	raices.radio = 2.0
 	raices.duracion = 2.0
 	raices.atributo_escalado = &"inteligencia"
+	raices.talentos.append(_talento(&"raices_profundas", "Raíces profundas", "Enraíza 1 s más por rango.", 3, &"", {&"duracion": 1.0}, 2))
 	kit.append(raices)
 
 	var ancestral := AbilityData.new()
@@ -406,6 +436,28 @@ static func _kit_cetro() -> Array[AbilityData]:
 	ancestral.tipo_dano = &"magico"
 	ancestral.duracion = 18.0
 	ancestral.atributo_escalado = &"inteligencia"
+	ancestral.talentos.append(_talento(&"ancestral_vinculo", "Vínculo ancestral", "El espíritu dura 2 s más por rango.", 4, &"", {&"duracion": 2.0}, 2))
 	kit.append(ancestral)
 
 	return kit
+
+
+## Constructor abreviado de talentos para mantener legibles los kits.
+static func _talento(
+	id: StringName,
+	nombre: String,
+	descripcion: String,
+	coste: int,
+	requerido: StringName,
+	modificadores: Dictionary,
+	rango_maximo: int = 1
+) -> TalentData:
+	var talento := TalentData.new()
+	talento.id = id
+	talento.nombre = nombre
+	talento.descripcion = descripcion
+	talento.coste_puntos_rojos = coste
+	talento.talento_requerido = requerido
+	talento.modificadores = modificadores
+	talento.rango_maximo = rango_maximo
+	return talento

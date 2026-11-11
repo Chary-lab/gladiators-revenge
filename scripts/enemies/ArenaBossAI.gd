@@ -46,12 +46,19 @@ enum Estado {
 @export_group("Objetivo")
 @export var objetivo: Node3D
 
+@export_group("Aspecto")
+@export_file("*.glb") var ruta_modelo := "res://assets/kaykit/adventurers/Knight.glb"
+@export var tinte_visual := Color(1.0, 0.72, 0.66)
+@export var escala_visual := 1.35
+@export var perfil_visual := "caballero"
+
 var salud_actual := 0.0
 var estado: Estado = Estado.INACTIVO
 var nivel_furia := 0
 var inmune_aturdimiento := false
 var usa_ataques_area := false
 var multiplicador_velocidad := 1.0
+var visual: CharacterVisual
 
 var _temporizador_ataque := 0.0
 var _temporizador_estado := 0.0
@@ -109,6 +116,8 @@ func _physics_process(delta: float) -> void:
 	velocity = velocity.move_toward(deseada, 24.0 * delta)
 	velocity.y = 0.0
 	move_and_slide()
+	if visual != null:
+		visual.mover(velocity.length())
 
 
 # --- Estados --------------------------------------------------------------
@@ -183,6 +192,8 @@ func _atacar_cuerpo() -> void:
 	if not _objetivo_valido():
 		return
 	ataque_ejecutado.emit(&"cuerpo")
+	if visual != null:
+		visual.atacar()
 	if objetivo.has_method("recibir_dano"):
 		objetivo.recibir_dano(dano_ataque, &"fisico", self)
 
@@ -190,6 +201,8 @@ func _atacar_cuerpo() -> void:
 func _atacar_area() -> void:
 	_cooldown_area_actual = cooldown_ataque_area
 	ataque_ejecutado.emit(&"area")
+	if visual != null:
+		visual.atacar()
 
 	for nodo in get_tree().get_nodes_in_group("gladiadores"):
 		var cuerpo := nodo as Node3D
@@ -223,7 +236,10 @@ func _activar_furia(nivel: int) -> void:
 		_interrumpir_aturdimiento()
 
 	_cambiar_estado(Estado.FURIA)
+	if visual != null:
+		visual.lanzar()
 	furia_activada.emit(nivel)
+	Sfx.reproducir("oleada", -3.0)
 
 
 func aplicar_aturdimiento(duracion: float) -> void:
@@ -247,6 +263,8 @@ func recibir_dano(cantidad: float, _tipo: StringName = &"fisico", _fuente: Node 
 
 	salud_actual = maxf(0.0, salud_actual - cantidad)
 	salud_cambiada.emit(salud_actual, salud_maxima)
+	if visual != null:
+		visual.recibir_golpe()
 
 	if salud_actual <= 0.0:
 		_morir()
@@ -262,7 +280,11 @@ func _morir() -> void:
 	velocity = Vector3.ZERO
 	remove_from_group("enemigos")
 	set_physics_process(false)
+	if visual != null:
+		visual.morir()
+	Sfx.reproducir("muerte", -2.0)
 	murio.emit()
+	get_tree().create_timer(3.0).timeout.connect(queue_free)
 
 
 # --- Soporte --------------------------------------------------------------
@@ -334,8 +356,16 @@ func _actualizar_temporizadores(delta: float) -> void:
 # --- Construcción programática -------------------------------------------
 
 ## Fábrica del jefe con malla y colisión, para prototipar sin escena .tscn.
-static func crear() -> ArenaBossAI:
+## `ruta` vacía conserva el caballero por defecto; `tinte` transparente también.
+static func crear(ruta := "", tinte := Color.TRANSPARENT, escala := 0.0, perfil := "caballero") -> ArenaBossAI:
 	var jefe := ArenaBossAI.new()
+	if not ruta.is_empty():
+		jefe.ruta_modelo = ruta
+	if tinte.a > 0.0:
+		jefe.tinte_visual = tinte
+	if escala > 0.0:
+		jefe.escala_visual = escala
+	jefe.perfil_visual = perfil
 	jefe._construir_visual()
 	return jefe
 
@@ -362,32 +392,17 @@ func _construir_visual() -> void:
 	material.albedo_color = Color(0.35, 0.10, 0.10)
 	material.roughness = 0.8
 	cuerpo.material_override = material
+	cuerpo.visible = false
 	add_child(cuerpo)
 
-	var hombreras := MeshInstance3D.new()
-	var caja := BoxMesh.new()
-	caja.size = Vector3(1.9, 0.35, 0.7)
-	hombreras.mesh = caja
-	hombreras.position.y = 2.45
-	var metal := StandardMaterial3D.new()
-	metal.albedo_color = Color(0.55, 0.45, 0.20)
-	metal.metallic = 0.7
-	hombreras.material_override = metal
-	add_child(hombreras)
-
-	var ojo := MeshInstance3D.new()
-	var esfera := SphereMesh.new()
-	esfera.radius = 0.14
-	esfera.height = 0.28
-	ojo.mesh = esfera
-	ojo.position = Vector3(0.3, 2.75, 0.55)
-	var brillo := StandardMaterial3D.new()
-	brillo.albedo_color = Color(1.0, 0.25, 0.05)
-	brillo.emission_enabled = true
-	brillo.emission = Color(1.0, 0.25, 0.05)
-	brillo.emission_energy_multiplier = 3.0
-	ojo.material_override = brillo
-	add_child(ojo)
+	visual = CharacterVisual.new()
+	visual.name = "Visual"
+	add_child(visual)
+	visual.configurar(ruta_modelo, tinte_visual, perfil_visual)
+	visual.usar_arma_pesada(true)
+	visual.scale = Vector3.ONE * escala_visual
+	var ruta_arma := "res://assets/kaykit/weapons/staff.gltf" if perfil_visual == "mago" else "res://assets/kaykit/weapons/sword_2handed.gltf"
+	visual.equipar_arma(load(ruta_arma), Vector3(90, 0, 0), 0.95)
 
 	var agente_nav := NavigationAgent3D.new()
 	agente_nav.name = "NavigationAgent3D"

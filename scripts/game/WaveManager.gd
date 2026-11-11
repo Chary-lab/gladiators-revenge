@@ -15,7 +15,7 @@ signal victoria
 enum Estado { ESPERA, COMBATE, FIN }
 
 @export var total_oleadas := 20
-@export var espera_inicial := 4.0
+@export var espera_inicial := 8.0
 @export var espera_entre_oleadas := 6.0
 @export var intervalo_spawn := 0.45
 @export var oleadas_con_jefe := 5
@@ -131,7 +131,13 @@ func _invocar_enemigo() -> void:
 
 
 func _invocar_jefe() -> void:
-	var jefe := ArenaBossAI.crear()
+	var lich := oleada_actual % 10 == 0
+	var jefe := ArenaBossAI.crear(
+		"res://assets/kaykit/skeletons/Skeleton_Mage.glb" if lich else "",
+		Color(0.55, 0.95, 0.72) if lich else Color.TRANSPARENT,
+		1.5 if lich else 0.0,
+		"mago" if lich else "caballero"
+	)
 	jefe.configurar_para_ronda(oleada_actual)
 	_contenedor.add_child(jefe)
 
@@ -140,7 +146,7 @@ func _invocar_jefe() -> void:
 	jefe.objetivo = _jugador
 	jefe.murio.connect(_al_morir_jefe)
 
-	mensaje.emit("¡Un campeón del Imperio entra en la arena!", 3.0)
+	mensaje.emit("¡El Liche de la Arena despierta!" if lich else "¡Un campeón del Imperio entra en la arena!", 3.0)
 
 
 func _probabilidad_elite() -> float:

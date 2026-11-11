@@ -41,6 +41,11 @@ const INTERVALO_REGENERACION := 0.25
 @export var estadisticas: GladiatorStats
 @export var arma_inicial: WeaponItem
 
+@export_group("Aspecto")
+## Modelo GLB del gladiador; se oculta la cápsula de bloqueo.
+@export_file("*.glb") var ruta_modelo := "res://assets/kaykit/adventurers/Barbarian.glb"
+@export var tinte_skin: Color = Color.WHITE
+
 @export_group("Control")
 @export var puede_moverse := true
 
@@ -52,12 +57,16 @@ var salud_actual := 0.0
 var mana_actual := 0.0
 var arma_actual: WeaponItem
 var esta_muerto := false
+var visual: CharacterVisual
 
 var _cooldowns := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
 var _tiene_orden_movimiento := false
 var _acumulador_regeneracion := 0.0
 var _temporizador_ataque := 0.0
 var _talentos_activos: Dictionary = {}
+var _reduccion_temporal := 0.0
+var _tiempo_reduccion := 0.0
+var _critico_asegurado := 0.0
 
 @onready var agente := $NavigationAgent3D as NavigationAgent3D
 @onready var modelo := get_node_or_null("Modelo") as Node3D
@@ -76,9 +85,23 @@ func _ready() -> void:
 	agente.path_desired_distance = 0.6
 	agente.target_desired_distance = 0.4
 
+	_preparar_visual()
+
 	if arma_inicial != null:
 		equipar_arma(arma_inicial)
 	_emitir_estado()
+
+
+## Sustituye la cápsula de bloqueo por el modelo animado del gladiador.
+func _preparar_visual() -> void:
+	if visual == null:
+		visual = CharacterVisual.new()
+		visual.name = "Visual"
+		add_child(visual)
+		visual.configurar(ruta_modelo, tinte_skin, "barbaro")
+		visual.anadir_colmillos()
+	if modelo != null:
+		modelo.visible = false
 
 
 func _physics_process(delta: float) -> void:
@@ -90,6 +113,10 @@ func _physics_process(delta: float) -> void:
 
 	_regenerar(delta)
 	_temporizador_ataque = maxf(0.0, _temporizador_ataque - delta)
+	_tiempo_reduccion = maxf(0.0, _tiempo_reduccion - delta)
+	if _tiempo_reduccion <= 0.0:
+		_reduccion_temporal = 0.0
+	_critico_asegurado = maxf(0.0, _critico_asegurado - delta)
 	if arma_actual != null and _temporizador_ataque <= 0.0:
 		_atacar_basico()
 
@@ -167,6 +194,8 @@ func _mover(delta: float) -> void:
 	velocity = velocity.move_toward(deseada, ACELERACION * delta)
 	velocity.y = 0.0
 	move_and_slide()
+	if visual != null:
+		visual.mover(velocity.length())
 
 
 func _orientar(direccion: Vector3, delta: float) -> void:
@@ -216,6 +245,13 @@ func equipar_arma(nueva_arma: WeaponItem) -> bool:
 	arma_actual = nueva_arma
 	estadisticas.aplicar_bonos_equipo(nueva_arma.bonificaciones_atributos)
 	_cooldowns.fill(0.0)
+	if visual != null:
+		visual.usar_arma_pesada(nueva_arma.clase == WeaponItem.Clase.BASTION)
+		visual.equipar_arma(
+			nueva_arma.escena_visual,
+			nueva_arma.rotacion_visual,
+			nueva_arma.escala_visual
+		)
 	arma_cambiada.emit(arma_actual)
 	return true
 
@@ -243,16 +279,63 @@ func intentar_habilidad(slot: int) -> bool:
 		if apuntado != null:
 			punto = apuntado
 
+	if habilidad.reduccion_dano > 0.0:
+		_reduccion_temporal = habilidad.reduccion_dano
+		_tiempo_reduccion = habilidad.duracion
+	if habilidad.tipo == AbilityData.Tipo.MOVILIDAD:
+		_ejecutar_dash(habilidad, punto)
+	elif habilidad.tipo == AbilityData.Tipo.INVOCACION:
+		_invocar_espiritu(habilidad, punto)
+
 	_instanciar_efecto(habilidad, punto)
+	if visual != null:
+		visual.lanzar()
 	habilidad_lanzada.emit(slot, habilidad)
+	Sfx.reproducir("magia" if arma_actual != null and arma_actual.clase == WeaponItem.Clase.CETRO else "habilidad", -7.0)
 	return true
 
 
-func _instanciar_efecto(habilidad: AbilityData, punto: Vector3) -> void:
-	if habilidad.escena_efecto == null:
+## Desplaza al gladiador hacia el punto apuntado, sin atravesar el navmesh.
+func _ejecutar_dash(habilidad: AbilityData, punto: Vector3) -> void:
+	var direccion := punto - global_position
+	direccion.y = 0.0
+	var distancia := minf(habilidad.radio, direccion.length())
+	if distancia < 0.25:
 		return
+	var destino := global_position + direccion.normalized() * distancia
+	var mapa := get_world_3d().navigation_map
+	if mapa.is_valid():
+		destino = NavigationServer3D.map_get_closest_point(mapa, destino)
+	global_position = destino
+	velocity = Vector3.ZERO
+	_tiene_orden_movimiento = false
+	if arma_actual != null and arma_actual.clase == WeaponItem.Clase.FILO:
+		_critico_asegurado = 3.0
+	if visual != null:
+		visual.mover(0.0)
 
-	var efecto := habilidad.escena_efecto.instantiate()
+
+func _invocar_espiritu(habilidad: AbilityData, punto: Vector3) -> void:
+	var espiritu := SpiritSummon.crear()
+	var contenedor: Node = get_tree().current_scene
+	if contenedor == null:
+		contenedor = get_parent()
+	contenedor.add_child(espiritu)
+	espiritu.global_position = punto
+	espiritu.configurar(
+		self,
+		maxf(1.0, estadisticas.escalar_invocacion(habilidad.dano_base)),
+		habilidad.duracion
+	)
+	Sfx.reproducir("espiritu", -8.0)
+
+
+func _instanciar_efecto(habilidad: AbilityData, punto: Vector3) -> void:
+	var efecto: Node
+	if habilidad.escena_efecto != null:
+		efecto = habilidad.escena_efecto.instantiate()
+	else:
+		efecto = AbilityEffect.new()
 	var contenedor: Node = get_tree().current_scene
 	if contenedor == null or contenedor == self:
 		contenedor = get_parent()
@@ -290,17 +373,20 @@ func _atacar_basico() -> void:
 
 	_temporizador_ataque = 1.0 / maxf(0.2, estadisticas.velocidad_ataque)
 	var dano := estadisticas.escalar_dano(arma_actual.dano_ataque_base, &"fisico")
-	var critico := randf() < estadisticas.probabilidad_critico
+	var critico := _critico_asegurado > 0.0 or randf() < estadisticas.probabilidad_critico
 	if critico:
 		dano *= estadisticas.multiplicador_critico
 
 	var direccion := objetivo.global_position - global_position
 	direccion.y = 0.0
 	_orientar(direccion.normalized(), 1.0)
+	if visual != null:
+		visual.atacar()
 
 	if objetivo.has_method("recibir_dano"):
 		objetivo.recibir_dano(dano, &"fisico", self)
 	ataque_basico.emit(objetivo, dano, critico)
+	Sfx.reproducir("critico" if critico else "golpe", -8.0)
 
 
 func cooldown_restante(slot: int) -> float:
@@ -310,38 +396,36 @@ func cooldown_restante(slot: int) -> float:
 
 
 func tiene_talento(id: StringName) -> bool:
-	return _talentos_activos.has(id)
+	return rango_talento(id) > 0
+
+
+func rango_talento(id: StringName) -> int:
+	return int(_talentos_activos.get(id, 0))
 
 
 func otorgar_puntos_rojos(cantidad: int) -> void:
 	if cantidad <= 0:
 		return
 	puntos_rojos += cantidad
-	_auto_desbloquear_talentos()
 	talentos_cambiados.emit()
 
 
-## Placeholder de UI: invierte los puntos rojos en el primer talento posible
-## del arma equipada. La UI definitiva elegirá la ranura manualmente.
-func _auto_desbloquear_talentos() -> void:
-	if arma_actual == null:
-		return
-	var desbloqueado := true
-	while desbloqueado:
-		desbloqueado = false
-		for habilidad in arma_actual.habilidades:
-			if habilidad == null:
-				continue
-			for talento in habilidad.talentos:
-				if talento == null or tiene_talento(talento.id):
-					continue
-				if talento.coste_puntos_rojos > puntos_rojos:
-					continue
-				if talento.talento_requerido != &"" and not tiene_talento(talento.talento_requerido):
-					continue
-				puntos_rojos -= talento.coste_puntos_rojos
-				_talentos_activos[talento.id] = true
-				desbloqueado = true
+## Compra un rango de talento. La UI de talentos es la única que debe llamar.
+func desbloquear_talento(talento: TalentData) -> bool:
+	if talento == null or arma_actual == null:
+		return false
+	var rango := rango_talento(talento.id)
+	if rango >= maxi(1, talento.rango_maximo):
+		return false
+	if talento.coste_puntos_rojos > puntos_rojos:
+		return false
+	if talento.talento_requerido != &"" and not tiene_talento(talento.talento_requerido):
+		return false
+
+	puntos_rojos -= talento.coste_puntos_rojos
+	_talentos_activos[talento.id] = rango + 1
+	talentos_cambiados.emit()
+	return true
 
 
 # --- Daño, curación y muerte ----------------------------------------------
@@ -365,8 +449,12 @@ func recibir_dano(
 			mitigacion = 0.0
 
 	var recibido := cantidad * (1.0 - clampf(mitigacion, 0.0, 0.9))
+	recibido *= 1.0 - clampf(_reduccion_temporal, 0.0, 0.9)
 	salud_actual = maxf(0.0, salud_actual - recibido)
 	salud_cambiada.emit(salud_actual, estadisticas.salud_maxima)
+	if visual != null:
+		visual.recibir_golpe()
+	Sfx.reproducir("dano", -6.0)
 
 	if salud_actual <= 0.0:
 		_morir()
@@ -387,6 +475,9 @@ func _morir() -> void:
 	_tiene_orden_movimiento = false
 	agente.set_physics_process(false)
 	remove_from_group(GRUPO_GLADIADORES)
+	if visual != null:
+		visual.morir()
+	Sfx.reproducir("muerte", -3.0)
 	murio.emit()
 
 
@@ -396,6 +487,13 @@ func _morir() -> void:
 ## salud/maná a los nuevos máximos.
 func gastar_punto_atributo(atributo: StringName) -> bool:
 	return estadisticas.gastar_punto(atributo)
+
+
+## Cambia la skin cosmética del orco sin alterar atributos.
+func aplicar_skin(tinte: Color) -> void:
+	tinte_skin = tinte
+	if visual != null:
+		visual.aplicar_skin(tinte)
 
 
 func _al_cambiar_atributos() -> void:

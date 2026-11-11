@@ -9,6 +9,7 @@ extends Node3D
 var _datos: AbilityData
 var _portador: GladiatorController
 var _radio := 2.5
+var _duracion := 0.0
 var _dano := 0.0
 var _cura := 0.0
 var _restante := 0.0
@@ -20,16 +21,28 @@ func configurar(datos: AbilityData, portador: GladiatorController) -> void:
 	_datos = datos
 	_portador = portador
 	_radio = datos.radio
+	_duracion = datos.duracion
 
 	for talento in datos.talentos:
-		if talento == null or not portador.tiene_talento(talento.id):
+		if talento == null:
+			continue
+		var rango := portador.rango_talento(talento.id)
+		if rango <= 0:
 			continue
 		if talento.modificadores.has(&"radio"):
-			_radio += float(talento.modificadores[&"radio"])
+			_radio += float(talento.modificadores[&"radio"]) * rango
+		if talento.modificadores.has(&"duracion"):
+			_duracion += float(talento.modificadores[&"duracion"]) * rango
 
 	_dano = portador.estadisticas.escalar_dano(datos.dano_base, datos.tipo_dano)
 	_cura = datos.curacion_base
 	_dano += _bono_fuego()
+	for talento in datos.talentos:
+		if talento == null:
+			continue
+		var rango := portador.rango_talento(talento.id)
+		if rango > 0 and talento.modificadores.has(&"dano"):
+			_dano += float(talento.modificadores[&"dano"]) * rango
 
 	match datos.tipo_dano:
 		GladiatorStats.TIPO_MAGICO:
@@ -41,8 +54,8 @@ func configurar(datos: AbilityData, portador: GladiatorController) -> void:
 
 	_construir_visual()
 	_aplicar_pulso()
-	_restante = datos.duracion if datos.duracion > 0.0 else 0.4
-	_tick = 0.5 if datos.duracion > 0.0 else 999.0
+	_restante = _duracion if _duracion > 0.0 else 0.4
+	_tick = 0.5 if _duracion > 0.0 else 999.0
 
 
 func _process(delta: float) -> void:
@@ -73,7 +86,7 @@ func _aplicar_pulso() -> void:
 		if _dano > 0.0 and enemigo.has_method("recibir_dano"):
 			enemigo.recibir_dano(_dano, _datos.tipo_dano, _portador)
 		if _datos.provoca and enemigo.has_method("aplicar_provocacion"):
-			enemigo.aplicar_provocacion(_portador, maxf(_datos.duracion, 2.0))
+			enemigo.aplicar_provocacion(_portador, maxf(_duracion, 2.0))
 
 	if _cura > 0.0 and _portador != null and is_instance_valid(_portador):
 		if _portador.global_position.distance_to(global_position) <= _radio:
@@ -85,9 +98,10 @@ func _bono_fuego() -> float:
 		return 0.0
 	var total := 0.0
 	for talento in _datos.talentos:
-		if talento != null and _portador.tiene_talento(talento.id):
-			if talento.modificadores.has(&"dano_fuego"):
-				total += float(talento.modificadores[&"dano_fuego"])
+		if talento != null:
+			var rango := _portador.rango_talento(talento.id)
+			if rango > 0 and talento.modificadores.has(&"dano_fuego"):
+				total += float(talento.modificadores[&"dano_fuego"]) * rango
 	return total
 
 

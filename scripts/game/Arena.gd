@@ -12,9 +12,22 @@ const ALTO_MURO := 1.4
 const RADIO_PUBLICO := 25.0
 const RADIO_INTERACCION := 3.5
 
+## Paletas de skin del gladiador: se multiplican sobre la textura base.
+const SKIN_TIERRA_BALDIA := Color(0.72, 0.95, 0.55)
+const SKIN_CENIZA := Color(0.78, 0.80, 0.78)
+const SKIN_SANGRE := Color(1.00, 0.62, 0.55)
+const SKIN_HIELO := Color(0.62, 0.82, 1.00)
+const SKINS := [
+	{"nombre": "Tierra Baldía", "tinte": SKIN_TIERRA_BALDIA},
+	{"nombre": "Ceniza", "tinte": SKIN_CENIZA},
+	{"nombre": "Sangre", "tinte": SKIN_SANGRE},
+	{"nombre": "Hielo", "tinte": SKIN_HIELO},
+]
+
 var oro := 200
 var puntos_atributo := 0
 var terminado := false
+var _skin_actual := 0
 
 var _jugador: GladiatorController
 var _camara: ArenaCamera
@@ -27,9 +40,11 @@ var _puntos_spawn: Array[Vector3] = []
 
 
 func _ready() -> void:
+	get_tree().paused = false
 	_crear_entorno()
 	_crear_suelo()
 	_crear_muros()
+	_crear_decoracion()
 	_crear_bandera()
 	_crear_jugador()
 	_crear_camara()
@@ -40,7 +55,7 @@ func _ready() -> void:
 	_conectar()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args:
 		_capturar()
 
 
@@ -55,18 +70,26 @@ func _unhandled_input(evento: InputEvent) -> void:
 	if not tecla.pressed or tecla.echo:
 		return
 
+	if terminado:
+		if tecla.physical_keycode == KEY_ENTER:
+			get_tree().reload_current_scene()
+		return
+
 	match tecla.physical_keycode:
 		KEY_F:
 			_comprar_cercana()
+		KEY_T:
+			_hud.alternar_talentos()
+		KEY_K:
+			_ciclar_skin()
+		KEY_ESCAPE:
+			_hud.cerrar_talentos()
 		KEY_1:
 			_gastar_punto(&"fuerza")
 		KEY_2:
 			_gastar_punto(&"agilidad")
 		KEY_3:
 			_gastar_punto(&"inteligencia")
-		KEY_ENTER:
-			if terminado:
-				get_tree().reload_current_scene()
 
 
 # --- Construcción del mundo ----------------------------------------------
@@ -138,7 +161,7 @@ func _crear_suelo() -> void:
 	plano_exterior.size = Vector2(ANCHO * 2.4, LARGO * 2.4)
 	exterior.mesh = plano_exterior
 	exterior.position.y = -0.05
-	exterior.material_override = _material(Color(0.14, 0.12, 0.13))
+	exterior.material_override = _material(Color(0.33, 0.27, 0.22))
 	add_child(exterior)
 
 	# Anillo central bajo el estandarte.
@@ -174,6 +197,48 @@ func _crear_muros() -> void:
 	_crear_caja_estatica(Vector3(ANCHO * 0.5, ALTO_MURO * 0.5, 0), Vector3(1.0, ALTO_MURO, LARGO), piedra)
 
 
+## Props modulares de KayKit: columnas, antorchas y estandartes del Imperio.
+func _crear_decoracion() -> void:
+	var columna := load("res://assets/kaykit/dungeon/column.gltf.glb") as PackedScene
+	var antorcha := load("res://assets/kaykit/dungeon/torch_lit.gltf.glb") as PackedScene
+	var banderin := load("res://assets/kaykit/dungeon/banner_red.gltf.glb") as PackedScene
+
+	var esquinas := [
+		Vector3(-ANCHO * 0.5 + 2.0, 0, -LARGO * 0.5 + 2.0),
+		Vector3(ANCHO * 0.5 - 2.0, 0, -LARGO * 0.5 + 2.0),
+		Vector3(-ANCHO * 0.5 + 2.0, 0, LARGO * 0.5 - 2.0),
+		Vector3(ANCHO * 0.5 - 2.0, 0, LARGO * 0.5 - 2.0),
+	]
+	for punto in esquinas:
+		_instanciar_prop(columna, punto, 1.6)
+		_instanciar_prop(antorcha, punto + Vector3(0, 2.7, 0), 1.4)
+		var luz := OmniLight3D.new()
+		luz.position = punto + Vector3(0, 3.0, 0)
+		luz.omni_range = 9.0
+		luz.light_energy = 1.2
+		luz.light_color = Color(1.0, 0.58, 0.26)
+		add_child(luz)
+
+	# Columnas intermedias: ritmo visual sin coste de mallas animadas.
+	for x in [-11.0, 0.0, 11.0]:
+		_instanciar_prop(columna, Vector3(x, 0, -LARGO * 0.5 + 1.6), 1.5)
+		_instanciar_prop(columna, Vector3(x, 0, LARGO * 0.5 - 1.6), 1.5)
+
+	for x in [-8.0, 8.0]:
+		_instanciar_prop(banderin, Vector3(x, 2.2, -LARGO * 0.5 + 1.1), 1.3)
+
+
+func _instanciar_prop(escena: PackedScene, pos: Vector3, escala: float) -> void:
+	if escena == null:
+		return
+	var nodo := escena.instantiate() as Node3D
+	if nodo == null:
+		return
+	nodo.position = pos
+	nodo.scale = Vector3.ONE * escala
+	add_child(nodo)
+
+
 func _crear_bandera() -> void:
 	_bandera = RebellionBanner.crear()
 	add_child(_bandera)
@@ -198,40 +263,7 @@ func _crear_jugador() -> void:
 	agente.name = "NavigationAgent3D"
 	_jugador.add_child(agente)
 
-	var modelo := Node3D.new()
-	modelo.name = "Modelo"
-
-	var cuerpo := MeshInstance3D.new()
-	var malla_cuerpo := CapsuleMesh.new()
-	malla_cuerpo.radius = 0.45
-	malla_cuerpo.height = 1.6
-	cuerpo.mesh = malla_cuerpo
-	cuerpo.position.y = 0.8
-	cuerpo.material_override = _material(Color(0.34, 0.52, 0.22))
-	modelo.add_child(cuerpo)
-
-	var cabeza := MeshInstance3D.new()
-	var esfera := SphereMesh.new()
-	esfera.radius = 0.27
-	esfera.height = 0.54
-	cabeza.mesh = esfera
-	cabeza.position = Vector3(0, 1.62, 0.08)
-	cabeza.material_override = _material(Color(0.40, 0.58, 0.25))
-	modelo.add_child(cabeza)
-
-	var arma := MeshInstance3D.new()
-	var caja_arma := BoxMesh.new()
-	caja_arma.size = Vector3(0.10, 0.10, 1.3)
-	arma.mesh = caja_arma
-	arma.position = Vector3(0.5, 1.0, 0.45)
-	var acero := StandardMaterial3D.new()
-	acero.albedo_color = Color(0.72, 0.72, 0.78)
-	acero.metallic = 0.8
-	acero.roughness = 0.4
-	arma.material_override = acero
-	modelo.add_child(arma)
-
-	_jugador.add_child(modelo)
+	_jugador.tinte_skin = SKIN_TIERRA_BALDIA
 	_jugador.estadisticas = GladiatorStats.new()
 	_jugador.arma_inicial = WeaponItem.crear_prisionero()
 
@@ -276,6 +308,7 @@ func _crear_hud() -> void:
 
 
 func _conectar() -> void:
+	_oleadas.oleada_iniciada.connect(_al_iniciar_oleada)
 	_oleadas.oleada_terminada.connect(_al_terminar_oleada)
 	_oleadas.oro_ganado.connect(_al_ganar_oro)
 	_oleadas.victoria.connect(_al_victoria)
@@ -286,6 +319,10 @@ func _conectar() -> void:
 
 
 # --- Economía y armería ---------------------------------------------------
+
+func _al_iniciar_oleada(_numero: int, _total: int) -> void:
+	Sfx.reproducir("oleada", -5.0)
+
 
 func _al_terminar_oleada(numero: int) -> void:
 	if terminado:
@@ -313,6 +350,16 @@ func _gastar_punto(atributo: StringName) -> void:
 		puntos_atributo -= 1
 
 
+## Rota entre las skins cosméticas del orco (K).
+func _ciclar_skin() -> void:
+	if _jugador == null:
+		return
+	_skin_actual = (_skin_actual + 1) % SKINS.size()
+	var skin: Dictionary = SKINS[_skin_actual]
+	_jugador.aplicar_skin(skin["tinte"])
+	_hud.mostrar_mensaje("Skin: %s" % skin["nombre"], 2.0)
+
+
 func _comprar_cercana() -> void:
 	if terminado:
 		return
@@ -325,6 +372,7 @@ func _comprar_cercana() -> void:
 	if pedestal.comprar(_jugador):
 		oro -= pedestal.precio()
 		_hud.mostrar_mensaje("Has tomado %s" % pedestal.arma.nombre, 2.5)
+		Sfx.reproducir("compra", -3.0)
 
 
 func _pedestal_cercano() -> ArmoryPedestal:
@@ -381,11 +429,9 @@ func _finalizar(titulo: String, detalle: String) -> void:
 	_jugador.puede_moverse = false
 	_oleadas.set_process(false)
 	_publico.set_process(false)
-	_hud.mostrar_final("%s\n%s" % [titulo, detalle])
-	if _jugador.esta_muerto:
-		_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle])
-	else:
-		_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle])
+	_hud.cerrar_talentos()
+	Sfx.reproducir("victoria" if titulo == "VICTORIA" else "derrota")
+	_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle])
 
 
 func esta_congelado() -> bool:
@@ -434,18 +480,58 @@ func _crear_caja_estatica(pos: Vector3, tam: Vector3, color: Color) -> void:
 
 ## Captura una imagen para revisar la dirección visual sin abrir el editor.
 func _capturar() -> void:
-	var combate := "--captura-combate" in OS.get_cmdline_user_args()
+	await get_tree().process_frame
+	var args := OS.get_cmdline_user_args()
+	var cerca := "--captura-cerca" in args
+	var talentos := "--captura-talentos" in args
+	var habilidad := "--captura-habilidad" in args
+	var capturar_jefe := "--captura-jefe" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe
 	if combate:
 		var sin_arma: bool = _jugador != null and _jugador.arma_actual != null and _jugador.arma_actual.clase == WeaponItem.Clase.PRISIONERO
 		if sin_arma:
-			_jugador.equipar_arma(WeaponItem.crear_catalogo_base()[0])
-		await get_tree().create_timer(8.5).timeout
+			var catalogo := WeaponItem.crear_catalogo_base()
+			_jugador.equipar_arma(catalogo[2] if habilidad else catalogo[0])
+		if talentos:
+			_jugador.otorgar_puntos_rojos(8)
+			_hud.alternar_talentos()
+		if habilidad:
+			_jugador.mana_actual = _jugador.estadisticas.mana_maximo
+			var hab := _jugador.arma_actual.obtener_habilidad(3)
+			if hab != null:
+				_jugador._invocar_espiritu(hab, _jugador.global_position + Vector3(1.8, 0, 1.2))
+			if _camara != null:
+				_camara.size = 14.0
+		elif capturar_jefe:
+			var jefe := ArenaBossAI.crear(
+				"res://assets/kaykit/skeletons/Skeleton_Mage.glb",
+				Color(0.55, 0.95, 0.72), 1.5, "mago"
+			)
+			jefe.configurar_para_ronda(10)
+			add_child(jefe)
+			jefe.global_position = _jugador.global_position + Vector3(2.0, 0, -1.5)
+			jefe.objetivo = _jugador
+			if _camara != null:
+				_camara.size = 14.0
+		elif cerca and _camara != null:
+			_camara.size = 7.0
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var imagen := get_viewport().get_texture().get_image()
-	var ruta := "res://captura_combate.png" if combate else "res://captura.png"
+	var ruta := "res://captura.png"
+	if cerca:
+		ruta = "res://captura_cerca.png"
+	elif talentos:
+		ruta = "res://captura_talentos.png"
+	elif habilidad:
+		ruta = "res://captura_habilidad.png"
+	elif capturar_jefe:
+		ruta = "res://captura_jefe.png"
+	elif combate:
+		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))
 	print("CAPTURA: guardada en ", ruta, " error=", error, " tamaño=", imagen.get_size())
 	get_tree().quit()
