@@ -15,6 +15,7 @@ signal murio(oro: int)
 
 const GRUPO := &"enemigos"
 const RUTA_ESQUELETO := "res://assets/kaykit/skeletons/Skeleton_Warrior.glb"
+const RUTA_ESPECTRO := "res://assets/kaykit/skeletons/Skeleton_Rogue.glb"
 const RUTA_CABALLERO := "res://assets/kaykit/adventurers/Knight.glb"
 
 var es_elite := false
@@ -38,6 +39,9 @@ var _temporizador := 0.0
 var _flash := 0.0
 var _tipo_visual := &""
 var _tiempo_muerte := 0.0
+var _marca_verdugo := 0.0
+var _vulnerable_magico := 0.0
+var _aturdido := 0.0
 
 
 static func crear() -> ArenaEnemy:
@@ -60,10 +64,12 @@ func _construir() -> void:
 
 
 ## Construye o reutiliza el modelo animado según el tipo de enemigo.
-func _configurar_visual(elite: bool) -> void:
-	var tipo := &"caballero" if elite else &"esqueleto"
-	var ruta := RUTA_CABALLERO if elite else RUTA_ESQUELETO
+func _configurar_visual(elite: bool, ligero: bool = false) -> void:
+	var tipo := &"caballero" if elite else (&"espectro" if ligero else &"esqueleto")
+	var ruta := RUTA_CABALLERO if elite else (RUTA_ESPECTRO if ligero else RUTA_ESQUELETO)
 	var tinte := Color(1.0, 0.72, 0.66) if elite else Color(0.82, 0.95, 0.90)
+	if ligero:
+		tinte = Color(0.74, 0.86, 1.0)
 
 	if visual != null and _tipo_visual == tipo:
 		visual.aplicar_skin(tinte)
@@ -74,7 +80,7 @@ func _configurar_visual(elite: bool) -> void:
 	visual = CharacterVisual.new()
 	visual.name = "Visual"
 	add_child(visual)
-	visual.configurar(ruta, tinte, String(tipo))
+	visual.configurar(ruta, tinte, "caballero" if elite else "esqueleto")
 	_tipo_visual = tipo
 
 
@@ -94,17 +100,24 @@ func preparar(
 	_pool = pool
 
 	var factor_elite := 2.4 if elite else 1.0
+	var ligero := not elite and randf() < 0.35
 	salud_maxima = (26.0 + ronda * 10.0) * factor_elite
-	salud_actual = salud_maxima
 	dano = (4.0 + ronda * 1.5) * (1.5 if elite else 1.0)
 	velocidad = 2.3 + minf(ronda * 0.04, 0.9)
+	if ligero:
+		salud_maxima *= 0.85
+		velocidad *= 1.12
+	salud_actual = salud_maxima
 	recompensa = (8 + ronda) * (3 if elite else 1)
 	_temporizador = randf_range(0.0, 0.5)
 	_provocado = 0.0
 	_fuente_provocacion = null
 	_flash = 0.0
 	_tiempo_muerte = 0.0
-	_configurar_visual(elite)
+	_marca_verdugo = 0.0
+	_vulnerable_magico = 0.0
+	_aturdido = 0.0
+	_configurar_visual(elite, ligero)
 	scale = Vector3.ONE * (1.25 if elite else 1.0)
 	add_to_group(GRUPO)
 
@@ -133,6 +146,16 @@ func _physics_process(delta: float) -> void:
 
 	if _provocado > 0.0:
 		_provocado -= delta
+	if _marca_verdugo > 0.0:
+		_marca_verdugo -= delta
+	if _vulnerable_magico > 0.0:
+		_vulnerable_magico -= delta
+	if _aturdido > 0.0:
+		_aturdido -= delta
+		velocity = Vector3.ZERO
+		if visual != null:
+			visual.mover(0.0)
+		return
 
 	var objetivo := _elegir_objetivo()
 	if objetivo == null:
@@ -186,12 +209,38 @@ func aplicar_provocacion(fuente: Node3D, duracion: float) -> void:
 	_provocado = maxf(_provocado, duracion)
 
 
-func recibir_dano(cantidad: float, _tipo: StringName = &"fisico", _fuente: Node = null) -> void:
+func esta_provocado() -> bool:
+	return _provocado > 0.0
+
+
+func aplicar_marca(duracion: float) -> void:
+	if activo:
+		_marca_verdugo = maxf(_marca_verdugo, duracion)
+
+
+func esta_marcado() -> bool:
+	return _marca_verdugo > 0.0
+
+
+func aplicar_vulnerabilidad(duracion: float) -> void:
+	if activo:
+		_vulnerable_magico = maxf(_vulnerable_magico, duracion)
+
+
+func aplicar_aturdimiento(duracion: float) -> void:
+	if activo:
+		_aturdido = maxf(_aturdido, duracion)
+
+
+func recibir_dano(cantidad: float, tipo: StringName = &"fisico", _fuente: Node = null, critico := false) -> void:
 	if not activo or cantidad <= 0.0:
 		return
+	if tipo == GladiatorStats.TIPO_MAGICO and _vulnerable_magico > 0.0:
+		cantidad *= 1.35
 
 	salud_actual = maxf(0.0, salud_actual - cantidad)
 	_flash = 0.08
+	NumerosDano.mostrar(global_position + Vector3(0, 1.3, 0), cantidad, tipo, critico)
 	if visual != null:
 		visual.recibir_golpe()
 

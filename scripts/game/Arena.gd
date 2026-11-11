@@ -35,6 +35,8 @@ var _bandera: RebellionBanner
 var _oleadas: WaveManager
 var _publico: AudienceFury
 var _hud: ArenaHUD
+var _tienda: ShopPedestal
+var _texto_pista := ""
 var _pedestales: Array[ArmoryPedestal] = []
 var _puntos_spawn: Array[Vector3] = []
 
@@ -49,13 +51,14 @@ func _ready() -> void:
 	_crear_jugador()
 	_crear_camara()
 	_crear_armeria()
+	_crear_tienda()
 	_crear_oleadas()
 	_crear_publico()
 	_crear_hud()
 	_conectar()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args:
 		_capturar()
 
 
@@ -77,13 +80,14 @@ func _unhandled_input(evento: InputEvent) -> void:
 
 	match tecla.physical_keycode:
 		KEY_F:
-			_comprar_cercana()
+			_interactuar_cercano()
 		KEY_T:
 			_hud.alternar_talentos()
 		KEY_K:
 			_ciclar_skin()
 		KEY_ESCAPE:
 			_hud.cerrar_talentos()
+			_hud.cerrar_tienda()
 		KEY_1:
 			_gastar_punto(&"fuerza")
 		KEY_2:
@@ -270,6 +274,19 @@ func _crear_jugador() -> void:
 	add_child(_jugador)
 	_jugador.global_position = Vector3(0, 0, 6)
 
+	var inventario := InventoryComponent.new()
+	inventario.name = "Inventario"
+	_jugador.add_child(inventario)
+	_jugador.inventario = inventario
+	inventario.configurar(_jugador)
+	inventario.agregar(ItemCatalog.obtener(&"pocion_vida"))
+
+
+func _crear_tienda() -> void:
+	_tienda = ShopPedestal.new()
+	add_child(_tienda)
+	_tienda.global_position = Vector3(13.0, 0, 6.5)
+
 
 func _crear_camara() -> void:
 	_camara = ArenaCamera.new()
@@ -364,19 +381,27 @@ func _ciclar_skin() -> void:
 	_hud.mostrar_mensaje("Skin: %s" % skin["nombre"], 2.0)
 
 
-func _comprar_cercana() -> void:
+func _interactuar_cercano() -> void:
 	if terminado:
 		return
 	var pedestal := _pedestal_cercano()
-	if pedestal == null:
+	if pedestal != null:
+		if oro < pedestal.precio():
+			_hud.mostrar_mensaje("Necesitas %d de oro" % pedestal.precio(), 2.0)
+			return
+		if pedestal.comprar(_jugador):
+			oro -= pedestal.precio()
+			_hud.mostrar_mensaje("Has tomado %s" % pedestal.arma.nombre, 2.5)
+			Sfx.reproducir("compra", -3.0)
 		return
-	if oro < pedestal.precio():
-		_hud.mostrar_mensaje("Necesitas %d de oro" % pedestal.precio(), 2.0)
-		return
-	if pedestal.comprar(_jugador):
-		oro -= pedestal.precio()
-		_hud.mostrar_mensaje("Has tomado %s" % pedestal.arma.nombre, 2.5)
-		Sfx.reproducir("compra", -3.0)
+	if _tienda_cercana():
+		_hud.alternar_tienda()
+
+
+func _tienda_cercana() -> bool:
+	if _tienda == null or _jugador == null:
+		return false
+	return _jugador.global_position.distance_to(_tienda.global_position) <= RADIO_INTERACCION
 
 
 func _pedestal_cercano() -> ArmoryPedestal:
@@ -392,15 +417,87 @@ func _pedestal_cercano() -> ArmoryPedestal:
 	return mejor
 
 
+func puede_comprar_objeto(item: ItemData) -> bool:
+	if item == null or terminado or _jugador == null or _jugador.inventario == null:
+		return false
+	var inventario := _jugador.inventario
+	var receta := inventario.receta_completada_por(item)
+	var coste := item.precio + (receta.precio_forja if receta != null else 0)
+	if oro < coste:
+		return false
+	if receta != null:
+		return true
+	return inventario.espacio_para(item)
+
+
+## Compra un objeto y ejecuta la forja automática en cadena.
+func comprar_objeto(item: ItemData) -> bool:
+	if not puede_comprar_objeto(item):
+		if oro < item.precio:
+			_hud.mostrar_mensaje("Necesitas %d de oro" % item.precio, 2.0)
+		else:
+			_hud.mostrar_mensaje("La mochila está llena y no completa ninguna receta", 2.5)
+		return false
+	var inventario := _jugador.inventario
+	var receta := inventario.receta_completada_por(item)
+	var forjados: PackedStringArray = []
+
+	if receta != null:
+		oro -= item.precio + receta.precio_forja
+		var creado := inventario.forjar_con(item, receta)
+		if creado == null:
+			oro += item.precio + receta.precio_forja
+			_hud.mostrar_mensaje("No se pudo completar la forja", 2.0)
+			return false
+		forjados.append(creado.nombre)
+		var actual := creado
+		for i in 4:
+			var siguiente := inventario.receta_completada_por(actual)
+			if siguiente == null or oro < siguiente.precio_forja:
+				break
+			oro -= siguiente.precio_forja
+			var encadenado := inventario.forjar_con(actual, siguiente)
+			if encadenado == null:
+				oro += siguiente.precio_forja
+				break
+			forjados.append(encadenado.nombre)
+			actual = encadenado
+		_hud.mostrar_mensaje("Forjado: %s" % " > ".join(forjados), 3.0)
+	else:
+		if not inventario.agregar(item):
+			_hud.mostrar_mensaje("La mochila está llena", 2.0)
+			return false
+		oro -= item.precio
+		_hud.mostrar_mensaje("Comprado: %s" % item.nombre, 2.0)
+
+	Sfx.reproducir("compra", -3.0)
+	return true
+
+
 func _actualizar_pista() -> void:
 	if _hud == null or _jugador == null or terminado:
 		return
 	var pedestal := _pedestal_cercano()
-	if pedestal == null:
-		_hud.establecer_pista("")
+	if pedestal != null:
+		var alcanza := " " if oro >= pedestal.precio() else "  ·  falta oro"
+		_texto_pista = "F — %s (%d oro)%s" % [pedestal.arma.nombre, pedestal.precio(), alcanza]
+		_hud.establecer_pista(_texto_pista)
 		return
-	var alcanza := " " if oro >= pedestal.precio() else "  ·  falta oro"
-	_hud.establecer_pista("F — %s (%d oro)%s" % [pedestal.arma.nombre, pedestal.precio(), alcanza])
+	if _tienda_cercana():
+		_texto_pista = "F — Mercader de la Rebelión: objetos y forja"
+	else:
+		_texto_pista = ""
+	_hud.establecer_pista(_texto_pista)
+
+
+func pista_actual() -> String:
+	return _texto_pista
+
+
+func nombre_skin() -> String:
+	if _skin_actual >= 0 and _skin_actual < SKINS.size():
+		return str(SKINS[_skin_actual]["nombre"])
+	return "Tierra Baldía"
 
 
 # --- Final de partida -----------------------------------------------------
@@ -434,6 +531,7 @@ func _finalizar(titulo: String, detalle: String) -> void:
 	_oleadas.set_process(false)
 	_publico.set_process(false)
 	_hud.cerrar_talentos()
+	_hud.cerrar_tienda()
 	Sfx.reproducir("victoria" if titulo == "VICTORIA" else "derrota")
 	_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle])
 
@@ -490,7 +588,8 @@ func _capturar() -> void:
 	var talentos := "--captura-talentos" in args
 	var habilidad := "--captura-habilidad" in args
 	var capturar_jefe := "--captura-jefe" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe
+	var tienda := "--captura-tienda" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda
 	if combate:
 		var sin_arma: bool = _jugador != null and _jugador.arma_actual != null and _jugador.arma_actual.clase == WeaponItem.Clase.PRISIONERO
 		if sin_arma:
@@ -517,9 +616,13 @@ func _capturar() -> void:
 			jefe.objetivo = _jugador
 			if _camara != null:
 				_camara.size = 14.0
+		elif tienda:
+			oro = 1600
+			_jugador.inventario.agregar(ItemCatalog.obtener(&"brasa_forja"))
+			_hud.alternar_tienda()
 		elif cerca and _camara != null:
 			_camara.size = 7.0
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe) else 8.5).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -534,6 +637,8 @@ func _capturar() -> void:
 		ruta = "res://captura_habilidad.png"
 	elif capturar_jefe:
 		ruta = "res://captura_jefe.png"
+	elif tienda:
+		ruta = "res://captura_tienda.png"
 	elif combate:
 		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))

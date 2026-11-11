@@ -57,6 +57,9 @@ var estado: Estado = Estado.INACTIVO
 var nivel_furia := 0
 var inmune_aturdimiento := false
 var usa_ataques_area := false
+var _vulnerable_magico := 0.0
+var _marca_verdugo := 0.0
+var _provocado := 0.0
 var multiplicador_velocidad := 1.0
 var visual: CharacterVisual
 
@@ -257,11 +260,14 @@ func _interrumpir_aturdimiento() -> void:
 
 # --- Daño y muerte --------------------------------------------------------
 
-func recibir_dano(cantidad: float, _tipo: StringName = &"fisico", _fuente: Node = null) -> void:
+func recibir_dano(cantidad: float, tipo: StringName = &"fisico", _fuente: Node = null, critico := false) -> void:
 	if estado == Estado.MUERTO or cantidad <= 0.0:
 		return
+	if tipo == GladiatorStats.TIPO_MAGICO and _vulnerable_magico > 0.0:
+		cantidad *= 1.35
 
 	salud_actual = maxf(0.0, salud_actual - cantidad)
+	NumerosDano.mostrar(global_position + Vector3(0, 2.6, 0), cantidad, tipo, critico)
 	salud_cambiada.emit(salud_actual, salud_maxima)
 	if visual != null:
 		visual.recibir_golpe()
@@ -351,6 +357,32 @@ func _orientar(direccion: Vector3, delta: float) -> void:
 
 func _actualizar_temporizadores(delta: float) -> void:
 	_cooldown_area_actual = maxf(0.0, _cooldown_area_actual - delta)
+	_vulnerable_magico = maxf(0.0, _vulnerable_magico - delta)
+	_marca_verdugo = maxf(0.0, _marca_verdugo - delta)
+	_provocado = maxf(0.0, _provocado - delta)
+
+
+func esta_provocado() -> bool:
+	return _provocado > 0.0
+
+
+func aplicar_marca(duracion: float) -> void:
+	if estado != Estado.MUERTO:
+		_marca_verdugo = maxf(_marca_verdugo, duracion)
+
+
+func esta_marcado() -> bool:
+	return _marca_verdugo > 0.0
+
+
+func aplicar_vulnerabilidad(duracion: float) -> void:
+	if estado != Estado.MUERTO:
+		_vulnerable_magico = maxf(_vulnerable_magico, duracion)
+
+
+func provocar(duracion: float) -> void:
+	if estado != Estado.MUERTO and not inmune_aturdimiento:
+		_provocado = maxf(_provocado, duracion)
 
 
 # --- Construcción programática -------------------------------------------

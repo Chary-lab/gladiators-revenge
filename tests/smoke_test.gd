@@ -61,11 +61,66 @@ func _ejecutar() -> void:
 	var fuerza_antes := jugador.estadisticas.fuerza_total
 	var oro_antes: int = escena.oro
 	jugador.global_position = pedestal.global_position + Vector3(0.0, 0.0, 1.6)
-	escena._comprar_cercana()
+	escena._interactuar_cercano()
 	_comprobar(jugador.arma_actual != null and jugador.arma_actual.clase == WeaponItem.Clase.BASTION, "comprar en la armería equipa el Bastión")
 	_comprobar(escena.oro == oro_antes - pedestal.precio(), "la compra descuenta el oro")
 	_comprobar(pedestal.vendida, "el pedestal queda marcado como vendido")
 	_comprobar(jugador.estadisticas.fuerza_total > fuerza_antes, "el arma aplica bonos de atributo")
+
+	# --- Objetos, inventario y forja --------------------------------------
+	var catalogo_objetos := ItemCatalog.crear_catalogo()
+	var ids := {}
+	var validos := true
+	for objeto in catalogo_objetos:
+		if objeto == null or objeto.id == &"" or ids.has(objeto.id):
+			validos = false
+			break
+		ids[objeto.id] = true
+		if objeto.es_equipo() and objeto.bonificaciones.is_empty():
+			validos = false
+	_comprobar(validos and catalogo_objetos.size() >= 20, "catálogo de objetos válido y sin ids duplicados")
+
+	var inventario := jugador.inventario
+	_comprobar(inventario != null and inventario.tiene(&"pocion_vida"), "el gladiador empieza con una poción")
+	jugador.salud_actual = maxf(1.0, jugador.estadisticas.salud_maxima - 100.0)
+	var vida_antes_pocion := jugador.salud_actual
+	_comprobar(inventario.usar(0, jugador), "la poción de vida se usa")
+	_comprobar(jugador.salud_actual > vida_antes_pocion, "la poción cura al gladiador")
+	_comprobar(not inventario.usar(0, jugador), "las pociones comparten enfriamiento")
+
+	escena.oro = 5000
+	var brasa := ItemCatalog.obtener(&"brasa_forja")
+	var placa := ItemCatalog.obtener(&"placa_oxidada")
+	var piel := ItemCatalog.obtener(&"piel_basalto")
+	jugador.global_position = Vector3(10.0, 0, 12.6)
+	_comprobar(escena.comprar_objeto(brasa), "se compra un componente en la tienda")
+	_comprobar(inventario.tiene(&"brasa_forja"), "el componente entra en la mochila")
+	_comprobar(escena.comprar_objeto(placa), "se compra el segundo componente")
+	_comprobar(inventario.tiene(&"nucleo_ferreo") and not inventario.tiene(&"brasa_forja"), "la forja automática crea el objeto intermedio")
+	_comprobar(escena.comprar_objeto(piel), "se compra la piel y se encadena la receta")
+	_comprobar(inventario.tiene(&"corazon_obsidiana"), "la cadena de forja llega al legendario")
+	var indice_corazon := -1
+	for i in inventario.ranuras.size():
+		var ranura: Dictionary = inventario.ranuras[i]
+		var objeto: ItemData = ranura["item"]
+		if objeto != null and objeto.id == &"corazon_obsidiana":
+			indice_corazon = i
+	_comprobar(indice_corazon >= 0, "el legendario ocupa una ranura activa")
+	if indice_corazon >= 0:
+		_comprobar(inventario.usar(indice_corazon, jugador), "la habilidad activa del legendario se lanza")
+		_comprobar(jugador.escudo_actual > 0.0, "el Corazón de Obsidiana otorga escudo")
+
+	jugador.mana_actual = jugador.estadisticas.mana_maximo
+	var banda: RebellionBanner = escena.get("_bandera")
+	jugador.global_position = Vector3(0.0, 0.0, 2.0)
+	banda.recibir_dano(120.0, GladiatorStats.TIPO_VERDADERO)
+	var vida_banda := banda.salud_actual
+	var cuerno := ItemCatalog.obtener(&"cuerno_rebelion")
+	_comprobar(jugador.lanzar_habilidad_item(cuerno.habilidad), "el Cuerno de la Rebelión se activa")
+	_comprobar(banda.salud_actual > vida_banda, "el Grito de Guerra cura el estandarte")
+	_comprobar(float(jugador.get("_buff_ataque")) > 0.0, "el Grito de Guerra acelera al gladiador")
+
+	escena.oro = 200
 
 	# --- Talentos de combate ---------------------------------------------
 	jugador.otorgar_puntos_rojos(12)

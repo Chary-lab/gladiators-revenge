@@ -70,10 +70,22 @@ func _ready() -> void:
 	salud_actual = salud_maxima
 
 
-func recibir_dano(cantidad: float, _tipo: StringName = &"fisico", _fuente: Node = null) -> void:
+func recibir_dano(cantidad: float, tipo: StringName = &"fisico", _fuente: Node = null) -> void:
 	if salud_actual <= 0.0 or cantidad <= 0.0:
 		return
 	salud_actual = maxf(0.0, salud_actual - cantidad)
+	NumerosDano.mostrar(global_position + Vector3(0, 4.1, 0), cantidad, tipo)
 	salud_cambiada.emit(salud_actual, salud_maxima)
 	if salud_actual <= 0.0:
 		destruida.emit()
+
+
+func curar(cantidad: float) -> void:
+	if salud_actual <= 0.0 or cantidad <= 0.0:
+		return
+	var antes := salud_actual
+	salud_actual = minf(salud_maxima, salud_actual + cantidad)
+	var curado := salud_actual - antes
+	if curado > 0.5:
+		NumerosDano.mostrar(global_position + Vector3(0, 4.1, 0), curado, GladiatorStats.TIPO_VERDADERO, false, true)
+	salud_cambiada.emit(salud_actual, salud_maxima)

@@ -1,0 +1,210 @@
+class_name InventoryComponent
+extends Node
+## Mochila de 6 ranuras activas (Z X C V B N).
+## Los objetos de equipo otorgan bonus permanentes mientras estén en la mochila;
+## pociones/pergaminos se consumen. La forja automática consume la receta.
+
+signal cambiado
+signal objeto_usado(indice: int, nombre: String)
+
+const RANURAS := 6
+const COOLDOWN_POCION := 8.0
+
+var ranuras: Array[Dictionary] = []
+var _cooldowns := PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+var _cd_pocion := 0.0
+var _jugador: GladiatorController
+
+
+func _ready() -> void:
+	if ranuras.is_empty():
+		for i in RANURAS:
+			ranuras.append({"item": null, "cantidad": 0})
+
+
+func configurar(jugador: GladiatorController) -> void:
+	_jugador = jugador
+	if ranuras.is_empty():
+		_ready()
+	_recalcular_bonos()
+
+
+func actualizar(delta: float) -> void:
+	for i in _cooldowns.size():
+		_cooldowns[i] = maxf(0.0, _cooldowns[i] - delta)
+	_cd_pocion = maxf(0.0, _cd_pocion - delta)
+
+
+func energia_restante(indice: int) -> float:
+	if indice < 0 or indice >= _cooldowns.size():
+		return 0.0
+	return _cooldowns[indice]
+
+
+func cooldown_pocion() -> float:
+	return _cd_pocion
+
+
+func espacio_para(item: ItemData) -> bool:
+	if item == null:
+		return false
+	if item.consumible:
+		for ranura in ranuras:
+			if ranura["item"] != null and ranura["item"].id == item.id and ranura["cantidad"] < item.maximo_pila:
+				return true
+	for ranura in ranuras:
+		if ranura["item"] == null:
+			return true
+	return false
+
+
+func agregar(item: ItemData, cantidad := 1) -> bool:
+	if item == null or cantidad <= 0:
+		return false
+	if item.consumible:
+		for ranura in ranuras:
+			if ranura["item"] != null and ranura["item"].id == item.id and ranura["cantidad"] < item.maximo_pila:
+				var espacio: int = item.maximo_pila - int(ranura["cantidad"])
+				var meter: int = mini(espacio, cantidad)
+				ranura["cantidad"] = int(ranura["cantidad"]) + meter
+				_recalcular_bonos()
+				cambiado.emit()
+				return true
+	for i in ranuras.size():
+		if ranuras[i]["item"] == null:
+			ranuras[i] = {"item": item, "cantidad": cantidad}
+			_recalcular_bonos()
+			cambiado.emit()
+			return true
+	return false
+
+
+func tiene(id: StringName, cantidad := 1) -> bool:
+	return contar(id) >= cantidad
+
+
+func contar(id: StringName) -> int:
+	var total := 0
+	for ranura in ranuras:
+		if ranura["item"] != null and ranura["item"].id == id:
+			total += int(ranura["cantidad"])
+	return total
+
+
+func consumir(id: StringName, cantidad := 1) -> bool:
+	if contar(id) < cantidad:
+		return false
+	var resto := cantidad
+	for i in ranuras.size():
+		var ranura: Dictionary = ranuras[i]
+		if ranura["item"] == null or ranura["item"].id != id:
+			continue
+		var quitar: int = mini(resto, int(ranura["cantidad"]))
+		ranura["cantidad"] = int(ranura["cantidad"]) - quitar
+		resto -= quitar
+		if int(ranura["cantidad"]) <= 0:
+			ranuras[i] = {"item": null, "cantidad": 0}
+			_cooldowns[i] = 0.0
+		if resto <= 0:
+			break
+	_recalcular_bonos()
+	cambiado.emit()
+	return true
+
+
+## Devuelve la receta que se completaría comprando `item` (el ingrediente que
+## falta), o null si no hay ninguna.
+func receta_completada_por(item: ItemData) -> ItemData:
+	if item == null:
+		return null
+	var mejor: ItemData = null
+	for receta in ItemCatalog.recetas():
+		if not receta.receta.has(item.id):
+			continue
+		var completa := true
+		for ingrediente in receta.receta:
+			if ingrediente == item.id:
+				continue
+			if not tiene(ingrediente):
+				completa = false
+				break
+		if completa and (mejor == null or receta.nivel > mejor.nivel):
+			mejor = receta
+	return mejor
+
+
+func forjar_con(item_nuevo: ItemData, receta: ItemData) -> ItemData:
+	## Consume los ingredientes que ya estaban en la mochila y crea la receta.
+	## `item_nuevo` se asume ya pagado y no se agrega por separado.
+	if receta == null:
+		return null
+	for ingrediente in receta.receta:
+		if ingrediente == item_nuevo.id:
+			continue
+		if not consumir(ingrediente):
+			return null
+	var creado := receta
+	if not agregar(creado):
+		return null
+	_recalcular_bonos()
+	cambiado.emit()
+	return creado
+
+
+func usar(indice: int, jugador: GladiatorController) -> bool:
+	if jugador == null or jugador.esta_muerto:
+		return false
+	if indice < 0 or indice >= ranuras.size():
+		return false
+	var ranura: Dictionary = ranuras[indice]
+	var item: ItemData = ranura["item"]
+	if item == null:
+		return false
+	if _cooldowns[indice] > 0.0:
+		return false
+
+	if item.es_pocion() and _cd_pocion > 0.0:
+		return false
+
+	if item.consumible:
+		if item.curacion_vida > 0.0:
+			jugador.curar(item.curacion_vida + jugador.estadisticas.fuerza_total * 0.4)
+		if item.curacion_mana > 0.0:
+			jugador.restaurar_mana(item.curacion_mana + jugador.estadisticas.inteligencia_total * 0.3)
+		if item.efecto_especial == &"escudo_estandarte":
+			jugador.otorgar_escudo(120.0, 8.0)
+			for nodo in get_tree().get_nodes_in_group("banderas"):
+				if nodo.has_method("curar"):
+					nodo.curar(220.0)
+		elif item.efecto_especial == &"furia_temporal":
+			jugador.aplicar_furia_temporal(8.0, 0.35, 0.15)
+		elif item.habilidad != null:
+			if not jugador.lanzar_habilidad_item(item.habilidad):
+				return false
+		_cooldowns[indice] = COOLDOWN_POCION if item.es_pocion() else 6.0
+		if item.es_pocion():
+			_cd_pocion = COOLDOWN_POCION
+		consumir(item.id)
+		objeto_usado.emit(indice, item.nombre)
+		return true
+
+	if item.habilidad != null:
+		if not jugador.lanzar_habilidad_item(item.habilidad):
+			return false
+		_cooldowns[indice] = maxf(6.0, item.habilidad.cooldown)
+		objeto_usado.emit(indice, item.nombre)
+		return true
+
+	return false
+
+
+func _recalcular_bonos() -> void:
+	var totales: Dictionary = {}
+	for ranura in ranuras:
+		var item: ItemData = ranura["item"]
+		if item == null:
+			continue
+		for clave in item.bonificaciones:
+			totales[clave] = float(totales.get(clave, 0.0)) + float(item.bonificaciones[clave])
+	if _jugador != null and _jugador.estadisticas != null:
+		_jugador.estadisticas.aplicar_bonos_inventario(totales)

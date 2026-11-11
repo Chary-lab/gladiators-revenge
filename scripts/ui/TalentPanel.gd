@@ -3,8 +3,8 @@ extends PanelContainer
 ## Árbol de talentos de combate: lista las habilidades del arma equipada y
 ## permite invertir puntos rojos en sus ranuras. Se abre con T.
 
-const ANCHO := 660.0
-const ALTO := 560.0
+const ANCHO := 760.0
+const ALTO := 500.0
 
 var _jugador: GladiatorController
 var _lista: VBoxContainer
@@ -18,13 +18,13 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(ANCHO, ALTO)
 	size = Vector2(ANCHO, ALTO)
 	anchor_left = 0.5
-	anchor_top = 0.5
+	anchor_top = 0.0
 	anchor_right = 0.5
-	anchor_bottom = 0.5
+	anchor_bottom = 0.0
 	offset_left = -ANCHO * 0.5
-	offset_top = -ALTO * 0.5
+	offset_top = 16.0
 	offset_right = ANCHO * 0.5
-	offset_bottom = ALTO * 0.5
+	offset_bottom = 16.0 + ALTO
 	add_theme_stylebox_override("panel", _estilo())
 
 	var margen := MarginContainer.new()

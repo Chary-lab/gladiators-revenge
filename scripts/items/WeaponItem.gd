@@ -112,6 +112,7 @@ static func crear_prisionero() -> WeaponItem:
 	arma.dano_ataque_base = 6.0
 	arma.alcance_ataque = 2.4
 	arma.habilidades = _kit_prisionero()
+	_aplicar_iconos(arma)
 	return arma
 
 
@@ -121,7 +122,34 @@ static func crear_catalogo_base() -> Array[WeaponItem]:
 	catalogo.append(_crear_bastion())
 	catalogo.append(_crear_filo())
 	catalogo.append(_crear_cetro())
+	for arma in catalogo:
+		_aplicar_iconos(arma)
 	return catalogo
+
+
+## Glifos de texto para las ranuras de habilidad; no requieren texturas.
+static func _aplicar_iconos(arma: WeaponItem) -> void:
+	const ICONOS := {
+		&"prisionero_punetazo": "◉",
+		&"prisionero_patada": "↯",
+		&"prisionero_rodar": "↻",
+		&"prisionero_grito": "◈",
+		&"bastion_muro_escudos": "◈",
+		&"bastion_golpe_sismico": "✹",
+		&"bastion_provocacion": "◉",
+		&"bastion_inquebrantable": "◆",
+		&"filo_tajo_gemelo": "╱",
+		&"filo_paso_sombrio": "↯",
+		&"filo_marca_verdugo": "☠",
+		&"filo_ejecucion": "✖",
+		&"cetro_espina_vital": "❖",
+		&"cetro_estandarte_rebelion": "⚑",
+		&"cetro_lazo_raices": "✸",
+		&"cetro_espiritu_ancestral": "✦",
+	}
+	for habilidad in arma.habilidades:
+		if habilidad != null:
+			habilidad.glifo = str(ICONOS.get(habilidad.id, "◆"))
 
 
 static func _crear_bastion() -> WeaponItem:
@@ -289,6 +317,9 @@ static func _kit_bastion() -> Array[AbilityData]:
 	bastion.radio = 8.0
 	bastion.duracion = 6.0
 	bastion.reduccion_dano = 0.4
+	bastion.escudo_por_atributo = 0.55
+	bastion.inmunidad_aturdimiento = 3.5
+	bastion.efecto_especial = &"egida"
 	bastion.atributo_escalado = &"fuerza"
 	bastion.talentos.append(_talento(&"bastion_ira", "Ira de la horda", "La ultimate dura 2 s más por rango.", 4, &"", {&"duracion": 2.0}, 2))
 	kit.append(bastion)
@@ -317,14 +348,17 @@ static func _kit_filo() -> Array[AbilityData]:
 	var paso := AbilityData.new()
 	paso.id = &"filo_paso_sombrio"
 	paso.nombre = "Paso Sombrío"
-	paso.descripcion = "Dash hacia el cursor que el siguiente golpe sea crítico."
+	paso.descripcion = "Dash hacia el cursor que deja un rastro y potencia el siguiente Tajo Gemelo (+40 %)."
 	paso.tipo = AbilityData.Tipo.MOVILIDAD
 	paso.objetivo = AbilityData.Objetivo.SUELO
 	paso.coste_mana = 20.0
 	paso.cooldown = 7.0
 	paso.radio = 5.5
+	paso.dano_base = 18.0
+	paso.tipo_dano = GladiatorStats.TIPO_FISICO
 	paso.atributo_escalado = &"agilidad"
 	paso.talentos.append(_talento(&"paso_alcance", "Paso largo", "Aumenta la distancia del dash en 1,5 m por rango.", 2, &"", {&"radio": 1.5}, 2))
+	paso.talentos.append(_talento(&"paso_filo", "Filo sombrío", "El impacto del dash añade 12 de daño por rango.", 3, &"paso_alcance", {&"dano": 12.0}, 2))
 	kit.append(paso)
 
 	var marca := AbilityData.new()
@@ -337,8 +371,10 @@ static func _kit_filo() -> Array[AbilityData]:
 	marca.cooldown = 12.0
 	marca.radio = 2.2
 	marca.duracion = 5.0
+	marca.efecto_especial = &"marca_verdugo"
 	marca.atributo_escalado = &"agilidad"
 	marca.talentos.append(_talento(&"marca_duradera", "Sentencia duradera", "La marca dura 1 s más por rango.", 2, &"", {&"duracion": 1.0}, 2))
+	marca.talentos.append(_talento(&"marca_alcance", "Señal amplia", "Amplía el radio de la marca en 1 m por rango.", 3, &"marca_duradera", {&"radio": 1.0}, 2))
 	kit.append(marca)
 
 	var ejecucion := AbilityData.new()
@@ -351,6 +387,7 @@ static func _kit_filo() -> Array[AbilityData]:
 	ejecucion.cooldown = 40.0
 	ejecucion.dano_base = 120.0
 	ejecucion.radio = 3.0
+	ejecucion.efecto_especial = &"ejecucion"
 	ejecucion.atributo_escalado = &"agilidad"
 	ejecucion.talentos.append(_talento(&"ejecucion_verdugo", "Sentencia del verdugo", "Añade 25 de daño por rango.", 4, &"", {&"dano": 25.0}, 2))
 	kit.append(ejecucion)
@@ -364,7 +401,7 @@ static func _kit_cetro() -> Array[AbilityData]:
 	var espina := AbilityData.new()
 	espina.id = &"cetro_espina_vital"
 	espina.nombre = "Espina Vital"
-	espina.descripcion = "Dardo de savia que daña y ralentiza."
+	espina.descripcion = "Dardo de savia que daña y sana a un aliado o estandarte cercano."
 	espina.tipo = AbilityData.Tipo.PROYECTIL
 	espina.objetivo = AbilityData.Objetivo.ENEMIGO
 	espina.coste_mana = 18.0
@@ -372,8 +409,10 @@ static func _kit_cetro() -> Array[AbilityData]:
 	espina.dano_base = 22.0
 	espina.tipo_dano = &"magico"
 	espina.radio = 1.5
+	espina.efecto_especial = &"vinculo"
 	espina.atributo_escalado = &"inteligencia"
 	espina.talentos.append(_talento(&"espina_veneno", "Savia corrosiva", "Añade 8 de daño por rango.", 2, &"", {&"dano": 8.0}, 2))
+	espina.talentos.append(_talento(&"espina_radio", "Zarcillo largo", "Amplía el radio de la espina en 0,8 m por rango.", 3, &"espina_veneno", {&"radio": 0.8}, 2))
 	kit.append(espina)
 
 	var estandarte := AbilityData.new()
@@ -420,8 +459,11 @@ static func _kit_cetro() -> Array[AbilityData]:
 	raices.cooldown = 13.0
 	raices.radio = 2.0
 	raices.duracion = 2.0
+	raices.vulnerabilidad_magica = true
+	raices.efecto_especial = &"raices"
 	raices.atributo_escalado = &"inteligencia"
 	raices.talentos.append(_talento(&"raices_profundas", "Raíces profundas", "Enraíza 1 s más por rango.", 3, &"", {&"duracion": 1.0}, 2))
+	raices.talentos.append(_talento(&"raices_radio", "Raíz expansiva", "Amplía el radio 1,2 m por rango.", 3, &"raices_profundas", {&"radio": 1.2}, 2))
 	kit.append(raices)
 
 	var ancestral := AbilityData.new()

@@ -26,6 +26,7 @@ const REGEN_VIDA_BASE := 0.4
 const REGEN_VIDA_POR_FUERZA := 0.06
 const DANO_FISICO_POR_FUERZA := 1.6
 const MITIGACION_FISICA_POR_FUERZA := 0.0035
+const ARMADURA_POR_PUNTO := 0.004
 const MITIGACION_FISICA_MAXIMA := 0.60
 
 # --- Agilidad -------------------------------------------------------------
@@ -67,40 +68,54 @@ const HERENCIA_INVOCACION_MAXIMA := 0.85
 ## Bonos temporales aportados por el arma equipada (no se serializan: el arma
 ## los vuelve a aplicar al equiparse).
 var _bonos_equipo: Dictionary = {"fuerza": 0, "agilidad": 0, "inteligencia": 0}
+## Bonos permanentes de los 6 objetos del inventario. Se recalculan al cambiar
+## cualquier ranura; las fórmulas derivadas siguen viviendo solo aquí.
+var _bonos_inventario: Dictionary = {}
 
 
-# --- Totales (base + equipo) ---------------------------------------------
+# --- Totales (base + arma + inventario) -----------------------------------
+
+func _bono(clave: String) -> float:
+	return float(_bonos_equipo.get(clave, 0)) + float(_bonos_inventario.get(clave, 0))
 
 var fuerza_total: int:
 	get:
-		return fuerza + int(_bonos_equipo["fuerza"])
+		return fuerza + int(_bono("fuerza"))
 
 var agilidad_total: int:
 	get:
-		return agilidad + int(_bonos_equipo["agilidad"])
+		return agilidad + int(_bono("agilidad"))
 
 var inteligencia_total: int:
 	get:
-		return inteligencia + int(_bonos_equipo["inteligencia"])
+		return inteligencia + int(_bono("inteligencia"))
 
 
 # --- Derivados de Fuerza --------------------------------------------------
 
 var salud_maxima: float:
 	get:
-		return VIDA_BASE + fuerza_total * VIDA_POR_FUERZA
+		return VIDA_BASE + fuerza_total * VIDA_POR_FUERZA + _bono("vida")
 
 var regeneracion_salud: float:
 	get:
-		return REGEN_VIDA_BASE + fuerza_total * REGEN_VIDA_POR_FUERZA
+		return REGEN_VIDA_BASE + fuerza_total * REGEN_VIDA_POR_FUERZA + _bono("regeneracion")
 
 var bono_dano_fisico: float:
 	get:
-		return fuerza_total * DANO_FISICO_POR_FUERZA
+		return fuerza_total * DANO_FISICO_POR_FUERZA + _bono("dano_fisico")
+
+var armadura_total: float:
+	get:
+		return maxf(0.0, _bono("armadura"))
 
 var mitigacion_fisica: float:
 	get:
-		return clampf(fuerza_total * MITIGACION_FISICA_POR_FUERZA, 0.0, MITIGACION_FISICA_MAXIMA)
+		return clampf(
+			fuerza_total * MITIGACION_FISICA_POR_FUERZA + armadura_total * ARMADURA_POR_PUNTO,
+			0.0,
+			MITIGACION_FISICA_MAXIMA
+		)
 
 
 # --- Derivados de Agilidad ------------------------------------------------
@@ -108,34 +123,46 @@ var mitigacion_fisica: float:
 ## Multiplicador de frecuencia de ataque (1.0 = ritmo base del arma).
 var velocidad_ataque: float:
 	get:
-		return clampf(VEL_ATAQUE_BASE + agilidad_total * VEL_ATAQUE_POR_AGI, VEL_ATAQUE_MIN, VEL_ATAQUE_MAX)
+		return clampf(
+			VEL_ATAQUE_BASE + agilidad_total * VEL_ATAQUE_POR_AGI + _bono("velocidad_ataque"),
+			VEL_ATAQUE_MIN,
+			VEL_ATAQUE_MAX
+		)
 
 var probabilidad_critico: float:
 	get:
-		return clampf(CRITICO_BASE + agilidad_total * CRITICO_POR_AGI, 0.0, CRITICO_MAXIMO)
+		return clampf(
+			CRITICO_BASE + agilidad_total * CRITICO_POR_AGI + _bono("critico"),
+			0.0,
+			CRITICO_MAXIMO
+		)
 
 var multiplicador_critico: float:
 	get:
-		return CRITICO_DANO_BASE + agilidad_total * CRITICO_DANO_POR_AGI
+		return CRITICO_DANO_BASE + agilidad_total * CRITICO_DANO_POR_AGI + _bono("dano_critico")
 
 var velocidad_movimiento: float:
 	get:
-		return clampf(VEL_MOV_BASE + agilidad_total * VEL_MOV_POR_AGI, VEL_MOV_MIN, VEL_MOV_MAX)
+		return clampf(
+			VEL_MOV_BASE + agilidad_total * VEL_MOV_POR_AGI + _bono("velocidad_movimiento"),
+			VEL_MOV_MIN,
+			VEL_MOV_MAX
+		)
 
 
 # --- Derivados de Inteligencia -------------------------------------------
 
 var mana_maximo: float:
 	get:
-		return MANA_BASE + inteligencia_total * MANA_POR_INT
+		return MANA_BASE + inteligencia_total * MANA_POR_INT + _bono("mana")
 
 var regeneracion_mana: float:
 	get:
-		return REGEN_MANA_BASE + inteligencia_total * REGEN_MANA_POR_INT
+		return REGEN_MANA_BASE + inteligencia_total * REGEN_MANA_POR_INT + _bono("regeneracion_mana")
 
 var bono_dano_magico: float:
 	get:
-		return inteligencia_total * DANO_MAGICO_POR_INT
+		return inteligencia_total * DANO_MAGICO_POR_INT + _bono("dano_magico")
 
 var mitigacion_magica: float:
 	get:
@@ -149,6 +176,11 @@ var herencia_invocaciones: float:
 			0.0,
 			HERENCIA_INVOCACION_MAXIMA
 		)
+
+## Fracción del daño físico infligido que vuelve como vida (ítems).
+var robo_vida: float:
+	get:
+		return clampf(_bono("robo_vida"), 0.0, 0.35)
 
 
 # --- API ------------------------------------------------------------------
@@ -200,9 +232,13 @@ func otorgar_puntos(cantidad: int) -> void:
 
 ## Sustituye los bonos del arma equipada. Se llama al equipar y al desequipar.
 func aplicar_bonos_equipo(bonos: Dictionary) -> void:
-	_bonos_equipo["fuerza"] = int(bonos.get("fuerza", 0))
-	_bonos_equipo["agilidad"] = int(bonos.get("agilidad", 0))
-	_bonos_equipo["inteligencia"] = int(bonos.get("inteligencia", 0))
+	_bonos_equipo = bonos.duplicate(true)
+	atributos_cambiados.emit()
+
+
+## Sustituye los bonos agregados del inventario (6 ranuras).
+func aplicar_bonos_inventario(bonos: Dictionary) -> void:
+	_bonos_inventario = bonos.duplicate(true)
 	atributos_cambiados.emit()
 
 
