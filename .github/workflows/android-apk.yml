@@ -69,6 +69,9 @@ jobs:
       - name: Importar proyecto
         run: godot --headless --editor --quit
 
+      - name: Arrancar adb
+        run: adb start-server || true
+
       - name: Diagnóstico Android
         if: always()
         run: |
