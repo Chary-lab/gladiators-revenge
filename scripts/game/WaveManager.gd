@@ -23,7 +23,7 @@ enum Estado { ESPERA, ENTRADA, COMBATE, FIN }
 @export var espera_entre_oleadas := 30.0
 @export var duracion_entrada := 8.0
 @export var intervalo_spawn := 0.55
-@export var oleadas_con_jefe := 4
+@export var oleadas_con_jefe := 3
 
 var oleada_actual := 0
 
@@ -141,7 +141,7 @@ func _iniciar_oleada() -> void:
 
 
 func _comenzar_combate() -> void:
-	_pendientes = 8 + oleada_actual * 3
+	_pendientes = 12 + oleada_actual * 4
 	_estado = Estado.COMBATE
 	_temporizador = 0.0
 
@@ -223,7 +223,7 @@ func _invocar_jefe() -> void:
 
 
 func _probabilidad_elite() -> float:
-	return clampf((oleada_actual - 3) * 0.04, 0.0, 0.22)
+	return clampf((oleada_actual - 2) * 0.06, 0.0, 0.35)
 
 
 func al_morir_enemigo(oro: int, xp: int = 0) -> void:
