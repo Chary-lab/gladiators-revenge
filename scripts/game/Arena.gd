@@ -1260,6 +1260,17 @@ func _conectar() -> void:
 	if _jugador != null and _camara != null:
 		_jugador.recibio_dano.connect(_camara.agitar)
 	_oleadas.jefe_invocado.connect(_al_jefe_invocado)
+	if _jugador != null:
+		_jugador.habilidad_mejorada.connect(_al_habilidad_mejorada)
+
+
+# --- Notificaciones de habilidad ------------------------------------------
+
+func _al_habilidad_mejorada(slot: int, habilidad: AbilityData, rango: int) -> void:
+	var nombres_slot := ["Q", "W", "E", "R"]
+	var nombre_slot: String = nombres_slot[slot] if slot < nombres_slot.size() else str(slot)
+	var nombre_habilidad := habilidad.nombre if habilidad != null else "?"
+	_avisar("¡%s subió a rango %d! (%s)" % [nombre_habilidad, rango, nombre_slot], 3.0)
 
 
 # --- Economía y armería ---------------------------------------------------
