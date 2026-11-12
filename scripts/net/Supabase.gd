@@ -131,10 +131,15 @@ func _latir() -> void:
 func _parse_servidores(code: int, body: String, callback: Callable) -> void:
 	var ok := code >= 200 and code < 300
 	var lista: Array = []
-	if ok:
-		var datos = JSON.parse_string(body)
+	var limpio := body.strip_edges()
+	if ok and (limpio.begins_with("[") or limpio.begins_with("{")):
+		var datos = JSON.parse_string(limpio)
 		if datos is Array:
 			lista = datos
+		elif datos is Dictionary:
+			lista = [datos]
+	else:
+		ok = false
 	callback.call(ok, lista)
 
 
@@ -153,6 +158,7 @@ func _peticion(
 
 	var http := HTTPRequest.new()
 	http.timeout = 12.0
+	http.accept_gzip = false
 	add_child(http)
 	http.request_completed.connect(_al_responder.bind(http, callback))
 
@@ -161,6 +167,7 @@ func _peticion(
 		"Authorization: Bearer %s" % clave,
 		"Content-Type: application/json",
 		"Accept: application/json",
+		"Accept-Encoding: identity",
 	])
 	if metodo == HTTPClient.METHOD_POST and TABLA_SERVIDORES in ruta:
 		cabeceras.append("Prefer: resolution=merge-duplicates,return=minimal")
