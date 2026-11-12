@@ -1501,6 +1501,7 @@ func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 			forjados.append(encadenado.nombre)
 			actual = encadenado
 		_avisar("Forjado: %s" % " > ".join(forjados), 3.0)
+		revisar_forjas_automaticas()
 	else:
 		if not inventario.agregar(item):
 			_avisar("La mochila está llena", 2.0)
