@@ -14,6 +14,7 @@ signal preparacion_iniciada(duracion: float)
 signal entrada_iniciada(duracion: float)
 signal entrada_terminada
 signal victoria
+signal jefe_invocado(jefe: ArenaBossAI)
 
 enum Estado { ESPERA, ENTRADA, COMBATE, FIN }
 
@@ -215,6 +216,8 @@ func _invocar_jefe() -> void:
 	jefe.global_position = punto + Vector3(0, 0, 2.5)
 	jefe.objetivo = _jugador
 	jefe.murio.connect(_al_morir_jefe)
+	jefe.salud_cambiada.connect(func(actual: float, maxima: float): jefe_invocado.emit(jefe))
+	jefe_invocado.emit(jefe)
 
 	mensaje.emit("¡El Liche de la Arena despierta!" if lich else "¡Un campeón del Imperio entra en la arena!", 3.0)
 

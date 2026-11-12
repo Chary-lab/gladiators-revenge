@@ -312,6 +312,11 @@ func configurar_para_ronda(ronda: int) -> void:
 
 
 func _elegir_objetivo() -> void:
+	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
+	if tracker != null:
+		objetivo = tracker.buscar_mas_cercano(global_position)
+		return
+
 	var mejor: Node3D = null
 	var mejor_distancia := INF
 
