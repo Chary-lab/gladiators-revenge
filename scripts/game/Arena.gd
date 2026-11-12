@@ -1429,16 +1429,19 @@ func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 
 ## Vende un objeto del inventario del jugador y suma su precio de venta al oro.
 func vender_objeto(jugador: GladiatorController, indice: int) -> bool:
-		if jugador == null or jugador.inventario == null:
-			return false
-		var item := jugador.inventario.extraer(indice)
-		if item == null:
-			return false
-		var ganancia := maxi(1, int(item.precio / 2.0))
-		oro += ganancia
-		_avisar("Vendido: %s  ·  +%d oro" % [item.nombre, ganancia], 2.0)
-		Sfx.reproducir("venta", -3.0)
-		return true
+	if jugador == null or jugador.inventario == null:
+		return false
+	var item := jugador.inventario.extraer(indice)
+	if item == null:
+		return false
+	var ganancia := maxi(1, int(item.precio / 2.0))
+	if game_state != null:
+		game_state.agregar_oro(ganancia)
+	else:
+		_oro_local += ganancia
+	_avisar("Vendido: %s  ·  +%d oro" % [item.nombre, ganancia], 2.0)
+	Sfx.reproducir("venta", -3.0)
+	return true
 
 ## Revisa si algún objeto del inventario completa una receta y hay oro para forjar.
 ## Se llama al ganar oro y al entrar a la tienda. Forja en cadena hasta que no sea posible.
