@@ -82,6 +82,7 @@ var arma_actual: WeaponItem
 var esta_muerto := false
 var visual: CharacterVisual
 var inventario: InventoryComponent
+var combat: CombatComponent
 var objetivo_actual: Node3D
 var mantener_posicion := false
 var modo_ataque_movimiento := false
@@ -144,6 +145,8 @@ func _ready() -> void:
 	_preparar_visual()
 	_crear_marcadores()
 
+	_combat_setup()
+
 	if arma_inicial != null:
 		equipar_arma(arma_inicial)
 	_emitir_estado()
@@ -205,20 +208,44 @@ func _ocultar_marcadores() -> void:
 			marcador.visible = false
 
 
+func _combat_setup() -> void:
+	combat = CombatComponent.new()
+	combat.name = "CombatComponent"
+	add_child(combat)
+	combat.estadisticas = estadisticas
+	combat.arma_actual = arma_actual
+	combat.visual = visual
+	combat.inventario = inventario
+	combat.controlador = self
+
+	# Conectar señales
+	combat.salud_cambiada.connect(func(actual: float, maxima: float): salud_cambiada.emit(actual, maxima))
+	combat.mana_cambiada.connect(func(actual: float, maximo: float): mana_cambiada.emit(actual, maximo))
+	combat.escudo_cambiado.connect(func(actual: float, maximo: float): escudo_cambiado.emit(actual, maximo))
+	combat.ataque_basico.connect(func(objetivo: Node3D, dano: float, critico: bool): ataque_basico.emit(objetivo, dano, critico))
+	combat.murio.connect(murio.emit)
+	combat.estadisticas_combate_cambiadas.connect(estadisticas_combate_cambiadas.emit)
+
+	# Inicializar estado
+	combat.inicializar_estado()
+
+	salud_actual = combat.salud_actual
+	mana_actual = combat.mana_actual
+	escudo_actual = combat.escudo_actual
+
+
 func _physics_process(delta: float) -> void:
 	if es_espejo:
 		return
-	_actualizar_cooldowns(delta)
-	_actualizar_estados(delta)
+	combat._physics_process(delta)
 	if inventario != null:
 		inventario.actualizar(delta)
 
-	if esta_muerto:
+	if combat.esta_muerto:
 		velocity = Vector3.ZERO
 		return
 
-	_regenerar(delta)
-	_temporizador_ataque = maxf(0.0, _temporizador_ataque - delta)
+	_temporizador_ataque = combat._temporizador_ataque
 	_actualizar_objetivo(delta)
 	_actualizar_marcador_objetivo()
 
@@ -229,6 +256,12 @@ func _physics_process(delta: float) -> void:
 		_mover(delta)
 	else:
 		velocity = Vector3.ZERO
+
+	# Sincronizar estado desde combat component
+	salud_actual = combat.salud_actual
+	mana_actual = combat.mana_actual
+	escudo_actual = combat.escudo_actual
+	esta_muerto = combat.esta_muerto
 
 
 ## Los espejos de red interpolan la posición autoritativa del servidor.
@@ -982,10 +1015,10 @@ func usar_objeto(indice: int) -> bool:
 
 
 func restaurar_mana(cantidad: float) -> void:
-	if esta_muerto or cantidad <= 0.0:
-		return
-	mana_actual = minf(estadisticas.mana_maximo, mana_actual + cantidad)
-	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
+	combat.restaurar_mana(cantidad)
+	salud_actual = combat.salud_actual
+	mana_actual = combat.mana_actual
+	escudo_actual = combat.escudo_actual
 
 
 func aplicar_furia_temporal(duracion: float, bonus_ataque: float, robo: float) -> void:
@@ -1225,44 +1258,29 @@ func desbloquear_talento(talento: TalentData) -> bool:
 
 ## Punto único de entrada del daño. `fuente` permite atribuir muertes y aggro.
 func otorgar_escudo(cantidad: float, duracion: float) -> void:
-	if cantidad <= 0.0:
-		return
-	escudo_actual = maxf(escudo_actual, cantidad)
-	_escudo_maximo = maxf(_escudo_maximo, escudo_actual)
-	_tiempo_escudo = maxf(_tiempo_escudo, duracion)
-	escudo_cambiado.emit(escudo_actual, _escudo_maximo)
+	combat.otorgar_escudo(cantidad, duracion)
+	salud_actual = combat.salud_actual
+	mana_actual = combat.mana_actual
+	escudo_actual = combat.escudo_actual
 
 
 func otorgar_inmunidad_aturdimiento(duracion: float) -> void:
-	_inmunidad_aturdimiento = maxf(_inmunidad_aturdimiento, duracion)
+	combat.otorgar_inmunidad_aturdimiento(duracion)
 
 func _otorgar_inmunidad_daño(duracion: float) -> void:
-	_inmunidad_daño = maxf(_inmunidad_daño, duracion)
+	combat.otorgar_inmunidad_daño(duracion)
 
 
 func aplicar_grito_guerra(duracion: float, bonus_ataque: float, robo: float) -> void:
-	_buff_ataque = maxf(_buff_ataque, bonus_ataque)
-	_buff_robo = maxf(_buff_robo, robo)
-	_tiempo_buff = maxf(_tiempo_buff, duracion)
-	# El grito también cura al estandarte y a las invocaciones cercanas.
-	var cantidad := estadisticas.escalar_invocacion(60.0 + estadisticas.inteligencia_total * 1.2)
-	for grupo in [&"banderas", &"aliados"]:
-		for nodo in get_tree().get_nodes_in_group(grupo):
-			var aliado := nodo as Node3D
-			if aliado == null:
-				continue
-			if aliado.global_position.distance_to(global_position) > 10.0:
-				continue
-			if aliado.has_method("curar"):
-				aliado.curar(cantidad)
-			if aliado.has_method("aplicar_buff"):
-				aliado.aplicar_buff(duracion, bonus_ataque, robo)
-	estadisticas_combate_cambiadas.emit()
+	combat.aplicar_grito_guerra(duracion, bonus_ataque, robo)
+	_buff_ataque = combat._buff_ataque
+	_buff_robo = combat._buff_robo
+	_buff_dano = combat._buff_dano
+	_tiempo_buff = combat._tiempo_buff
 
 
 func registrar_dano(cantidad: float) -> void:
-	dano_infligido += cantidad
-	estadisticas_combate_cambiadas.emit()
+	combat.registrar_dano(cantidad)
 
 
 func recibir_dano(
@@ -1270,69 +1288,22 @@ func recibir_dano(
 	tipo: StringName = GladiatorStats.TIPO_FISICO,
 	fuente: Node = null
 ) -> void:
-	if esta_muerto or cantidad <= 0.0:
-		return
-	if _inmunidad_daño > 0.0:
-		return
-
-	var mitigacion := 0.0
-	match tipo:
-		GladiatorStats.TIPO_FISICO:
-			mitigacion = estadisticas.mitigacion_fisica
-		GladiatorStats.TIPO_MAGICO:
-			mitigacion = estadisticas.mitigacion_magica
-		_:
-			mitigacion = 0.0
-
-	var recibido := cantidad * (1.0 - clampf(mitigacion, 0.0, 0.9))
-	recibido *= 1.0 - clampf(_reduccion_temporal, 0.0, 0.9)
-
-	if escudo_actual > 0.0:
-		var absorbido := minf(escudo_actual, recibido)
-		escudo_actual -= absorbido
-		recibido -= absorbido
-		escudo_cambiado.emit(escudo_actual, _escudo_maximo)
-		NumerosDano.mostrar(global_position + Vector3(0, 1.9, 0), absorbido, GladiatorStats.TIPO_VERDADERO)
-
-	# Bastión R: la Égida devuelve daño físico proporcional a la Fuerza.
-	if _tiempo_escudo > 0.0 and tipo == GladiatorStats.TIPO_FISICO and fuente != null:
-		if is_instance_valid(fuente) and fuente.has_method("recibir_dano"):
-			var reflejo := estadisticas.fuerza_total * 0.8
-			fuente.recibir_dano(reflejo, GladiatorStats.TIPO_VERDADERO, self)
-			estadisticas_combate_cambiadas.emit()
-
-	if recibido <= 0.0:
-		return
-
-	salud_actual = maxf(0.0, salud_actual - recibido)
-	dano_recibido += recibido
-	if salud_actual > 0.0:
-		NumerosDano.mostrar(global_position + Vector3(0, 1.8, 0), recibido, tipo)
-	salud_cambiada.emit(salud_actual, estadisticas.salud_maxima)
-	estadisticas_combate_cambiadas.emit()
-	if visual != null:
-		visual.recibir_golpe()
-	Sfx.reproducir("dano", -6.0)
-
-	if salud_actual <= 0.0:
-		_morir()
+	combat.recibir_dano(cantidad, tipo, fuente)
+	salud_actual = combat.salud_actual
+	mana_actual = combat.mana_actual
+	escudo_actual = combat.escudo_actual
+	esta_muerto = combat.esta_muerto
 
 
 func curar(cantidad: float) -> void:
-	if esta_muerto or cantidad <= 0.0:
-		return
-	var antes := salud_actual
-	salud_actual = minf(estadisticas.salud_maxima, salud_actual + cantidad)
-	var curado := salud_actual - antes
-	if curado > 0.5:
-		NumerosDano.mostrar(global_position + Vector3(0, 1.9, 0), curado, GladiatorStats.TIPO_VERDADERO, false, true)
-	salud_cambiada.emit(salud_actual, estadisticas.salud_maxima)
+	combat.curar(cantidad)
+	salud_actual = combat.salud_actual
+	mana_actual = combat.mana_actual
+	escudo_actual = combat.escudo_actual
 
 
 func _morir() -> void:
-	if esta_muerto:
-		return
-	esta_muerto = true
+	combat._morir()
 	velocity = Vector3.ZERO
 	_tiene_orden_movimiento = false
 	objetivo_actual = null
