@@ -140,8 +140,8 @@ func preparar(
 	if es_arquero:
 		salud_maxima *= 0.70
 		velocidad *= 0.85
-	salud_maxima = (50.0 + ronda * 18.0) * factor_elite
-	dano = (7.0 + ronda * 2.5) * (1.5 if elite else 1.0)
+	salud_maxima = (70.0 + ronda * 28.0) * factor_elite
+	dano = (9.0 + ronda * 4.0) * (1.5 if elite else 1.0)
 	velocidad = 2.3 + minf(ronda * 0.04, 0.9)
 	if ligero:
 		salud_maxima *= 0.85

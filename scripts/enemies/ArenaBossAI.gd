@@ -297,7 +297,7 @@ func _morir() -> void:
 
 ## Escala el jefe para una oleada del 1 al 20. Llama antes de mostrarlo.
 func configurar_para_ronda(ronda: int) -> void:
-	var factor := 1.0 + 0.12 * maxf(0.0, float(ronda - 1))
+	var factor := 1.0 + 0.18 * maxf(0.0, float(ronda - 1))
 	salud_maxima *= factor
 	dano_ataque *= factor
 	dano_area *= factor

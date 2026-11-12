@@ -141,7 +141,7 @@ func _iniciar_oleada() -> void:
 
 
 func _comenzar_combate() -> void:
-	_pendientes = 12 + oleada_actual * 4
+	_pendientes = 16 + oleada_actual * 5
 	_estado = Estado.COMBATE
 	_temporizador = 0.0
 

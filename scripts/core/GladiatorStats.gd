@@ -28,10 +28,10 @@ const DANO_ATAQUE_POR_ATRIBUTO := 1.0
 ## Crecimiento automático por nivel según la clase (FUE, AGI, INT). Los
 ## decimales se acumulan para no perder fracciones entre niveles.
 const CRECIMIENTO_POR_CLASE := {
-	&"prisionero": Vector3(3.2, 1.4, 1.2),
-	&"bastion": Vector3(3.2, 1.4, 1.2),
-	&"filo": Vector3(1.6, 3.4, 1.4),
-	&"cetro": Vector3(1.3, 1.5, 3.5),
+	&"prisionero": Vector3(3, 1, 1),
+	&"bastion": Vector3(3, 1, 1),
+	&"filo": Vector3(1, 3, 1),
+	&"cetro": Vector3(1, 1, 3),
 }
 
 # --- Fuerza ---------------------------------------------------------------
@@ -41,8 +41,8 @@ const REGEN_VIDA_BASE := 0.4
 const REGEN_VIDA_POR_FUERZA := 0.06
 const DANO_FISICO_POR_FUERZA := 1.6
 const MITIGACION_FISICA_POR_FUERZA := 0.0035
-const ARMADURA_POR_PUNTO := 0.004
-const AGILIDAD_POR_ARMADURA := 0.002
+const ARMADURA_POR_PUNTO := 0.01
+const AGILIDAD_POR_ARMADURA := 0.05
 const MITIGACION_FISICA_MAXIMA := 0.60
 
 # --- Agilidad -------------------------------------------------------------
