@@ -89,7 +89,9 @@ func _init() -> void:
 		if arg.begins_with("--esperar="):
 			espera = float(arg.substr("--esperar=".length()))
 	if espera > 0.0:
-		await create_timer(espera).timeout
+		for i in int(espera):
+			red.enviar_accion(&"debug_curar", {})
+			await create_timer(1.0).timeout
 
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
 	Sfx.liberar()

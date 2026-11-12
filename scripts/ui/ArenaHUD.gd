@@ -50,6 +50,7 @@ var _habilidad_botones: Array[Button] = []
 var _habilidad_velos: Array[ColorRect] = []
 var _habilidad_cd: Array[Label] = []
 var _habilidad_pips: Array = []
+var _habilidad_flashes: Array[ColorRect] = []
 var _inventario_botones: Array[Button] = []
 var _inventario_velos: Array[ColorRect] = []
 var _inventario_cantidad: Array[Label] = []
@@ -59,6 +60,15 @@ var _contador_talentos: Label
 var _retrato: GladiatorPortrait
 var _estado: Label
 var _minimapa: ArenaMinimap
+var _revive_panel: Panel
+var _revive_titulo: Label
+var _revive_detalle: Label
+var _revive_barra: ProgressBar
+var _tooltip: TooltipRico
+var _capa_tooltip: CanvasLayer
+var _comandos_datos: Array = []
+var _comando_activo: Array = [false, false, false, false, false, false, false, false]
+var _cd_antes: Array = [0.0, 0.0, 0.0, 0.0]
 var _overlay: Panel
 var _overlay_detalle: VBoxContainer
 var _overlay_titulo: Button
@@ -91,7 +101,7 @@ func configurar(
 	_talentos.configurar(_jugador)
 	_tienda = ShopPanel.new()
 	add_child(_tienda)
-	_tienda.configurar(_jugador, _arena)
+	_tienda.configurar(_jugador, _arena, self)
 	if _oleadas != null:
 		_oleadas.mensaje.connect(mostrar_mensaje)
 	if _jugador != null and not _jugador.nivel_alcanzado.is_connected(_al_subir_nivel):
@@ -141,6 +151,12 @@ func construir() -> void:
 	_crear_barra_superior()
 	_crear_overlay()
 	_crear_mensajes()
+	_crear_revive()
+	_capa_tooltip = CanvasLayer.new()
+	_capa_tooltip.layer = 60
+	add_child(_capa_tooltip)
+	_tooltip = TooltipRico.new()
+	_capa_tooltip.add_child(_tooltip)
 
 
 func _crear_minimapa() -> void:
@@ -235,11 +251,12 @@ func _crear_inventario() -> void:
 		var pos := Vector2(900 + columna * 60, 552 + fila * 57)
 		var boton := _boton(pos, Vector2(54, 54), "")
 		boton.pressed.connect(_usar_ranura.bind(i))
+		boton.mouse_entered.connect(_mostrar_tooltip_inventario.bind(i))
+		boton.mouse_exited.connect(_ocultar_tooltip)
 		_raiz.add_child(boton)
 		_inventario_botones.append(boton)
 		_inventario_velos.append(_velo(boton, Vector2(54, 54)))
-		var tecla := _texto(boton, ["Z", "X", "C", "V", "B", "N"][i], Vector2(3, 1), Vector2(16, 14), 9, ORO)
-		tecla.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_insignia(boton, ["Z", "X", "C", "V", "B", "N"][i], Vector2(3, 1), 18)
 		var cantidad := _texto(boton, "", Vector2(28, 37), Vector2(22, 14), 10, TEXTO)
 		cantidad.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		cantidad.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -259,18 +276,19 @@ func _crear_habilidades() -> void:
 		["tienda", "F", "Abrir el mercader de la rebelión.", _comando_tienda],
 		["estadisticas", "-", "Mostrar u ocultar estadísticas de combate.", _comando_estadisticas],
 	]
+	_comandos_datos = comandos
 	for i in comandos.size():
 		var columna := i % 4
 		var fila := i / 4
 		var datos: Array = comandos[i]
 		var boton := _boton(Vector2(1024 + columna * 62, 552 + fila * 57), Vector2(54, 54), "")
-		boton.tooltip_text = datos[2]
 		boton.pressed.connect(datos[3])
+		boton.mouse_entered.connect(_mostrar_tooltip_comando.bind(i))
+		boton.mouse_exited.connect(_ocultar_tooltip)
 		_boton_icono(boton, datos[0], IconStudio.CATEGORIA_COMANDO)
 		_raiz.add_child(boton)
 		_comando_botones.append(boton)
-		var tecla := _texto(boton, datos[1], Vector2(3, 1), Vector2(44, 14), 9, ORO)
-		tecla.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_insignia(boton, datos[1], Vector2(3, 1), 28 if datos[0] == "atributos" else 18)
 		if datos[0] == "atributos":
 			_contador_atributos = _texto(boton, "", Vector2(34, 2), Vector2(17, 13), 9, Color(0.55, 1.0, 0.55))
 			_contador_atributos.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -281,17 +299,25 @@ func _crear_habilidades() -> void:
 	for i in 4:
 		var boton := _boton(Vector2(1024 + i * 62, 666), Vector2(54, 54), "")
 		boton.pressed.connect(_lanzar_habilidad.bind(i))
+		boton.mouse_entered.connect(_mostrar_tooltip_habilidad.bind(i))
+		boton.mouse_exited.connect(_ocultar_tooltip)
 		boton.add_theme_font_size_override("font_size", 10)
 		_raiz.add_child(boton)
 		_habilidad_botones.append(boton)
 		_habilidad_velos.append(_velo(boton, Vector2(54, 54)))
-		var tecla := _texto(boton, ["Q", "W", "E", "R"][i], Vector2(3, 1), Vector2(16, 14), 10, ORO)
-		tecla.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_insignia(boton, ["Q", "W", "E", "R"][i], Vector2(3, 1), 18)
 		var cd := _texto(boton, "", Vector2(0, 20), Vector2(54, 14), 10, Color(1.0, 0.86, 0.55))
 		cd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cd.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_habilidad_cd.append(cd)
 		_habilidad_pips.append(_crear_pips(boton))
+		var flash := ColorRect.new()
+		flash.color = Color(1.0, 0.84, 0.35, 0.0)
+		flash.position = Vector2.ZERO
+		flash.size = Vector2(54, 54)
+		flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		boton.add_child(flash)
+		_habilidad_flashes.append(flash)
 		if _jugador != null and _jugador.arma_actual != null:
 			var hab := _jugador.arma_actual.obtener_habilidad(i)
 			if hab != null:
@@ -372,6 +398,50 @@ func _crear_mensajes() -> void:
 	_pista.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
+func _crear_revive() -> void:
+	_revive_panel = _panel(
+		Vector2(430, 402), Vector2(420, 108),
+		Color(0.12, 0.055, 0.045, 0.97), Color(0.92, 0.58, 0.22)
+	)
+	_raiz.add_child(_revive_panel)
+	_revive_panel.visible = false
+
+	_icono_estatico(
+		_revive_panel, &"pocion_vida", Vector2(14, 20), Vector2(58, 58),
+		IconStudio.CATEGORIA_OBJETO
+	)
+	_revive_titulo = _texto(
+		_revive_panel, "HAS CAÍDO", Vector2(84, 8), Vector2(320, 28),
+		22, Color(1.0, 0.62, 0.35)
+	)
+	_revive_detalle = _texto(
+		_revive_panel, "", Vector2(84, 36), Vector2(320, 36),
+		12, TEXTO
+	)
+	_revive_detalle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_revive_barra = _barra(
+		_revive_panel, Vector2(84, 82), Vector2(320, 11),
+		Color(0.95, 0.42, 0.22)
+	)
+	_revive_barra.max_value = Arena.TIEMPO_REVIVIR
+	_revive_barra.value = 0.0
+
+
+func _actualizar_revive() -> void:
+	if _revive_panel == null or _jugador == null:
+		return
+	var mostrar := _jugador.esta_muerto and _jugador.revive_en > 0.0
+	_revive_panel.visible = mostrar
+	if not mostrar:
+		_revive_panel.modulate.a = 1.0
+		return
+	var restante: float = maxf(0.0, _jugador.revive_en)
+	_revive_detalle.text = "Revives en %.1f s\nAcércate a un aliado vivo para acelerar." % restante
+	_revive_barra.max_value = Arena.TIEMPO_REVIVIR
+	_revive_barra.value = restante
+	_revive_panel.modulate.a = 0.84 + 0.16 * sin(Time.get_ticks_msec() * 0.006)
+
+
 # --- Actualización --------------------------------------------------------
 
 func _process(_delta: float) -> void:
@@ -384,6 +454,8 @@ func _process(_delta: float) -> void:
 	_actualizar_overlay()
 	_actualizar_superior()
 	_actualizar_aviso()
+	_actualizar_revive()
+	_actualizar_comandos()
 
 
 func _actualizar_ficha() -> void:
@@ -452,9 +524,9 @@ func _actualizar_habilidades() -> void:
 		var cd := _habilidad_cd[i]
 		var pips: Array = _habilidad_pips[i]
 		boton.text = ""
+		boton.tooltip_text = ""
 		if arma == null:
 			boton.icon = null
-			boton.tooltip_text = "Sin arma"
 			cd.text = ""
 			_actualizar_velo(_habilidad_velos[i], 0.0)
 			_actualizar_pips(pips, 0, 0, false)
@@ -462,7 +534,6 @@ func _actualizar_habilidades() -> void:
 		var habilidad := arma.obtener_habilidad(i)
 		if habilidad == null:
 			boton.icon = null
-			boton.tooltip_text = "Ranura vacía"
 			cd.text = ""
 			_actualizar_velo(_habilidad_velos[i], 0.0)
 			_actualizar_pips(pips, 0, 0, false)
@@ -471,7 +542,6 @@ func _actualizar_habilidades() -> void:
 			var nivel_libre := _jugador.nivel_desbloqueo_habilidad(i)
 			_boton_icono(boton, habilidad.id, IconStudio.CATEGORIA_HABILIDAD)
 			boton.modulate = Color(0.48, 0.46, 0.44, 1.0)
-			boton.tooltip_text = "%s\nBLOQUEADA · Se desbloquea al nivel %d." % [habilidad.nombre, nivel_libre]
 			boton.disabled = true
 			cd.text = "Nv %d" % nivel_libre
 			_actualizar_velo(_habilidad_velos[i], 0.55)
@@ -484,10 +554,10 @@ func _actualizar_habilidades() -> void:
 		cd.text = ("%ds" % int(ceil(restante))) if restante > 0.0 else ""
 		_actualizar_velo(_habilidad_velos[i], restante / maxf(0.01, _jugador.cooldown_habilidad(habilidad)))
 		_actualizar_pips(pips, rango, maxi(1, habilidad.rango_maximo), true)
+		if _cd_antes[i] > 0.0 and restante <= 0.0:
+			_destello_habilidad(i)
+		_cd_antes[i] = restante
 		boton.disabled = restante > 0.0 or _jugador.mana_actual < habilidad.coste_mana
-		boton.tooltip_text = "%s · Rango %d/%d\n%s" % [
-			habilidad.nombre, rango, habilidad.rango_maximo, _tooltip_habilidad(habilidad, i)
-		]
 
 
 func _actualizar_pips(pips: Array, rango: int, maximo: int, visible: bool) -> void:
@@ -503,6 +573,7 @@ func _actualizar_inventario() -> void:
 	for i in _inventario_botones.size():
 		var boton := _inventario_botones[i]
 		var cantidad_texto := _inventario_cantidad[i]
+		boton.tooltip_text = ""
 		if inventario == null:
 			boton.icon = null
 			cantidad_texto.text = ""
@@ -511,7 +582,6 @@ func _actualizar_inventario() -> void:
 		var item: ItemData = ranura["item"]
 		if item == null:
 			boton.icon = null
-			boton.tooltip_text = "Ranura vacía · %s" % ["Z", "X", "C", "V", "B", "N"][i]
 			boton.disabled = true
 			cantidad_texto.text = ""
 			_actualizar_velo(_inventario_velos[i], 0.0)
@@ -529,7 +599,6 @@ func _actualizar_inventario() -> void:
 			cantidad_texto.text = "x%d" % cantidad
 		else:
 			cantidad_texto.text = ""
-		boton.tooltip_text = _tooltip_item(item)
 		boton.disabled = restante > 0.0
 
 
@@ -830,21 +899,53 @@ func _boton(pos: Vector2, tam: Vector2, texto: String) -> Button:
 	boton.add_theme_font_size_override("font_size", 12)
 	boton.add_theme_color_override("font_color", TEXTO)
 	boton.add_theme_color_override("font_disabled_color", Color(0.55, 0.5, 0.44))
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.15, 0.13, 0.11)
-	normal.border_color = Color(0.45, 0.34, 0.2)
-	normal.set_border_width_all(1)
-	normal.corner_radius_top_left = 3
-	normal.corner_radius_top_right = 3
-	normal.corner_radius_bottom_left = 3
-	normal.corner_radius_bottom_right = 3
-	boton.add_theme_stylebox_override("normal", normal)
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = Color(0.24, 0.20, 0.15)
-	hover.border_color = ORO
-	boton.add_theme_stylebox_override("hover", hover)
-	boton.add_theme_stylebox_override("pressed", hover)
+	_aplicar_estilo_boton(boton, false)
 	return boton
+
+
+func _aplicar_estilo_boton(boton: Button, activo: bool) -> void:
+	if boton == null:
+		return
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.20, 0.14, 0.06) if activo else Color(0.12, 0.10, 0.09)
+	normal.border_color = ORO if activo else Color(0.42, 0.31, 0.18)
+	normal.set_border_width_all(2)
+	normal.corner_radius_top_left = 5
+	normal.corner_radius_top_right = 5
+	normal.corner_radius_bottom_left = 5
+	normal.corner_radius_bottom_right = 5
+	normal.shadow_color = Color(0, 0, 0, 0.45)
+	normal.shadow_size = 3
+	normal.shadow_offset = Vector2(0, 1)
+	boton.add_theme_stylebox_override("normal", normal)
+
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.26, 0.20, 0.11)
+	hover.border_color = ORO
+	hover.shadow_size = 5
+	boton.add_theme_stylebox_override("hover", hover)
+
+	var pressed := hover.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(0.32, 0.24, 0.12)
+	boton.add_theme_stylebox_override("pressed", pressed)
+
+
+func _insignia(boton: Control, texto: String, pos: Vector2, ancho: float) -> void:
+	var placa := Panel.new()
+	placa.position = pos
+	placa.size = Vector2(ancho, 14)
+	placa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0.035, 0.03, 0.025, 0.94)
+	estilo.border_color = Color(0.62, 0.47, 0.24)
+	estilo.set_border_width_all(1)
+	estilo.set_corner_radius_all(3)
+	placa.add_theme_stylebox_override("panel", estilo)
+	boton.add_child(placa)
+	var etiqueta := _texto(placa, texto, Vector2.ZERO, Vector2(ancho, 14), 9, ORO)
+	etiqueta.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	etiqueta.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	etiqueta.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 # --- Iconos y comandos ----------------------------------------------------
@@ -960,3 +1061,248 @@ func _comando_tienda() -> void:
 
 func _comando_estadisticas() -> void:
 	_alternar_overlay()
+
+
+# --- Tooltips ricos -------------------------------------------------------
+
+func mostrar_tooltip_item(item: ItemData, subtitulo := "") -> void:
+	if _tooltip == null or item == null:
+		return
+	var sub := subtitulo
+	if sub.is_empty():
+		sub = "%s  ·  %d oro" % [_tipo_item(item), item.precio]
+	_tooltip.mostrar(
+		item.nombre,
+		sub,
+		_bbcode_item(item),
+		item.id,
+		IconStudio.CATEGORIA_OBJETO,
+		_rareza_color(item)
+	)
+
+
+func _ocultar_tooltip() -> void:
+	if _tooltip != null:
+		_tooltip.ocultar()
+
+
+func _mostrar_tooltip_comando(indice: int) -> void:
+	if _tooltip == null or _jugador == null or indice >= _comandos_datos.size():
+		return
+	var datos: Array = _comandos_datos[indice]
+	var id := str(datos[0])
+	var lineas: PackedStringArray = []
+	lineas.append(str(datos[2]))
+	var estado := _estado_comando(id)
+	if not estado.is_empty():
+		lineas.append("")
+		lineas.append("[color=#d8b45a]Estado[/color]  %s" % estado)
+	var acento := ORO
+	if id == "atributos":
+		acento = Color(0.55, 0.95, 0.62)
+	elif id == "talentos":
+		acento = Color(1.0, 0.52, 0.38)
+	elif id == "tienda":
+		acento = Color(0.95, 0.78, 0.38)
+	_tooltip.mostrar(
+		_nombre_comando(id),
+		"Tecla %s" % datos[1],
+		"\n".join(lineas),
+		StringName(id),
+		IconStudio.CATEGORIA_COMANDO,
+		acento
+	)
+
+
+func _mostrar_tooltip_habilidad(indice: int) -> void:
+	if _tooltip == null or _jugador == null or _jugador.arma_actual == null:
+		return
+	var habilidad := _jugador.arma_actual.obtener_habilidad(indice)
+	if habilidad == null:
+		return
+	var tecla: String = ["Q", "W", "E", "R"][indice]
+	if not _jugador.habilidad_desbloqueada(indice):
+		var nivel := _jugador.nivel_desbloqueo_habilidad(indice)
+		_tooltip.mostrar(
+			habilidad.nombre,
+			"%s  ·  Bloqueada" % tecla,
+			"%s\n\n[color=#c8c0ae]Se desbloquea al nivel %d.[/color]" % [habilidad.descripcion, nivel],
+			habilidad.id,
+			IconStudio.CATEGORIA_HABILIDAD,
+			Color(0.58, 0.55, 0.5)
+		)
+		return
+	var rango := _jugador.rango_habilidad(habilidad.id)
+	var maximo := maxi(1, habilidad.rango_maximo)
+	var acento := ORO
+	match _jugador.arma_actual.clase:
+		WeaponItem.Clase.FILO:
+			acento = Color(0.38, 0.88, 0.96)
+		WeaponItem.Clase.CETRO:
+			acento = Color(0.75, 0.50, 1.0)
+	_tooltip.mostrar(
+		habilidad.nombre,
+		"%s  ·  Rango %d/%d" % [tecla, rango, maximo],
+		_bbcode_habilidad(habilidad, rango, maximo),
+		habilidad.id,
+		IconStudio.CATEGORIA_HABILIDAD,
+		acento
+	)
+
+
+func _mostrar_tooltip_inventario(indice: int) -> void:
+	if _tooltip == null or _jugador == null or _jugador.inventario == null:
+		return
+	var tecla: String = ["Z", "X", "C", "V", "B", "N"][indice]
+	var ranura: Dictionary = _jugador.inventario.ranuras[indice]
+	var item: ItemData = ranura.get("item")
+	if item == null:
+		_tooltip.mostrar(
+			"Ranura vacía",
+			"Tecla %s" % tecla,
+			"Compra pociones, pergaminos y componentes en el [color=#d8b45a]Mercader de la Rebelión[/color] (F).",
+			&"",
+			IconStudio.CATEGORIA_OBJETO,
+			BRONCE
+		)
+		return
+	mostrar_tooltip_item(item, "Ranura %s  ·  x%d" % [tecla, int(ranura.get("cantidad", 1))])
+
+
+func _actualizar_comandos() -> void:
+	if _jugador == null or _comando_botones.size() < 3:
+		return
+	var estados := [
+		bool(_jugador.get("_modo_ataque_armado")),
+		false,
+		bool(_jugador.get("mantener_posicion")),
+	]
+	for i in 3:
+		if estados[i] == _comando_activo[i]:
+			continue
+		_comando_activo[i] = estados[i]
+		_aplicar_estilo_boton(_comando_botones[i], estados[i])
+
+
+func _destello_habilidad(indice: int) -> void:
+	if indice < 0 or indice >= _habilidad_flashes.size():
+		return
+	var flash := _habilidad_flashes[indice]
+	flash.color.a = 0.55
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tween.tween_property(flash, "color:a", 0.0, 0.5)
+
+
+func _nombre_comando(id: String) -> String:
+	match id:
+		"atacar": return "Atacar-mover"
+		"detener": return "Detener"
+		"mantener": return "Mantener posición"
+		"skin": return "Cambiar piel"
+		"atributos": return "Subir atributo"
+		"talentos": return "Talentos"
+		"tienda": return "Mercader"
+		"estadisticas": return "Estadísticas"
+	return id.capitalize()
+
+
+func _estado_comando(id: String) -> String:
+	match id:
+		"atacar":
+			return "ARMADO" if bool(_jugador.get("_modo_ataque_armado")) else "inactivo"
+		"mantener":
+			return "ACTIVO" if bool(_jugador.get("mantener_posicion")) else "inactivo"
+		"skin":
+			return "Piel: %s" % _nombre_skin()
+		"atributos":
+			return "Puntos: %d  ·  Principal: %s" % [_puntos_atributo(), _nombre_atributo(_atributo_principal())]
+		"talentos":
+			return "Puntos rojos: %d" % _jugador.puntos_rojos
+		"tienda":
+			return "Oro: %d" % _oro_arena()
+		"estadisticas":
+			return "Infligido %d  ·  Recibido %d" % [int(_jugador.dano_infligido), int(_jugador.dano_recibido)]
+	return ""
+
+
+func _nombre_atributo(atributo: StringName) -> String:
+	match atributo:
+		&"agilidad": return "AGI"
+		&"inteligencia": return "INT"
+	return "FUE"
+
+
+func _bbcode_habilidad(habilidad: AbilityData, rango: int, maximo: int) -> String:
+	var lineas: PackedStringArray = []
+	lineas.append(habilidad.descripcion)
+	lineas.append("")
+	if habilidad.dano_base > 0.0:
+		var real := int(round(_jugador.estadisticas.escalar_dano(habilidad.dano_base, habilidad.tipo_dano)))
+		var tipo := "físico" if habilidad.tipo_dano == GladiatorStats.TIPO_FISICO else "mágico"
+		lineas.append("[color=#d8b45a]Daño[/color]  %d base  ·  [color=#7dff9a]%d[/color] con tus atributos (%s)" % [
+			int(habilidad.dano_base), real, tipo
+		])
+	if habilidad.curacion_base > 0.0:
+		lineas.append("[color=#d8b45a]Curación[/color]  %d base" % int(habilidad.curacion_base))
+	lineas.append("[color=#d8b45a]Maná[/color]  %d  ·  [color=#d8b45a]Recarga[/color]  %.1f s" % [
+		int(habilidad.coste_mana), _jugador.cooldown_habilidad(habilidad)
+	])
+	if habilidad.radio > 0.0:
+		lineas.append("[color=#d8b45a]Radio[/color]  %.1f m" % _jugador.radio_habilidad(habilidad))
+	if habilidad.duracion > 0.0:
+		lineas.append("[color=#d8b45a]Duración[/color]  %.1f s" % _jugador.duracion_habilidad(habilidad))
+	lineas.append("[color=#d8b45a]Rango[/color]  %d/%d" % [rango, maximo])
+	var siguiente := habilidad.descripcion_siguiente_rango(rango)
+	if not siguiente.is_empty() and rango < maximo:
+		lineas.append("[color=#7dff9a]Siguiente rango:[/color] %s" % siguiente)
+	if not habilidad.talentos.is_empty():
+		lineas.append("[color=#c792ff]Talentos:[/color] %d ranuras (T)" % habilidad.talentos.size())
+	return "\n".join(lineas)
+
+
+func _bbcode_item(item: ItemData) -> String:
+	var lineas: PackedStringArray = []
+	lineas.append(item.descripcion)
+	var bonos := item.descripcion_bonos()
+	if not bonos.is_empty():
+		lineas.append("")
+		for linea in bonos.split("\n"):
+			lineas.append("[color=#7dff9a]%s[/color]" % linea)
+	if item.habilidad != null:
+		lineas.append("")
+		lineas.append("[color=#d8b45a]ACTIVO[/color]  %s  ·  %d maná  ·  %.0f s" % [
+			item.habilidad.nombre, int(item.habilidad.coste_mana), item.habilidad.cooldown
+		])
+	if not item.receta.is_empty():
+		lineas.append("")
+		lineas.append("[color=#d8b45a]RECETA[/color]")
+		for ingrediente in item.receta:
+			var otro := ItemCatalog.obtener(ingrediente)
+			var nombre := otro.nombre if otro != null else String(ingrediente)
+			var tiene := _jugador != null and _jugador.inventario != null and _jugador.inventario.tiene(ingrediente)
+			lineas.append(("%s %s" % ["[color=#7dff9a]✔[/color]" if tiene else "[color=#ff8a6a]✘[/color]", nombre]))
+		lineas.append("[color=#d8b45a]Forja[/color]  %d oro" % item.precio_forja)
+	else:
+		lineas.append("")
+		lineas.append("[color=#d8b45a]Precio[/color]  %d oro" % item.precio)
+	return "\n".join(lineas)
+
+
+func _tipo_item(item: ItemData) -> String:
+	match item.tipo:
+		ItemData.Tipo.POCION: return "Poción"
+		ItemData.Tipo.PERGAMINO: return "Pergamino"
+		ItemData.Tipo.COMPONENTE: return "Componente"
+		ItemData.Tipo.INTERMEDIO: return "Intermedio"
+		ItemData.Tipo.LEGENDARIO: return "Legendario"
+	return "Objeto"
+
+
+func _rareza_color(item: ItemData) -> Color:
+	match item.tipo:
+		ItemData.Tipo.POCION: return Color(0.45, 0.90, 0.55)
+		ItemData.Tipo.PERGAMINO: return Color(0.72, 0.52, 1.0)
+		ItemData.Tipo.INTERMEDIO: return Color(0.38, 0.72, 1.0)
+		ItemData.Tipo.LEGENDARIO: return Color(1.0, 0.78, 0.30)
+	return Color(0.70, 0.66, 0.58)

@@ -13,9 +13,10 @@ renderizadas, inventario de 6 ranuras con forja automática, objetos legendarios
 arte 3D animado y audio CC0. **Cooperativo online autoritativo** para hasta 3
 gladiadores; sin guardado todavía.
 
-- 68 comprobaciones de humo + 18 comprobaciones de red + simulación de 20 oleadas.
+- 73 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
+- Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
 - Todo el arte es **CC0** (KayKit, Kenney); el código es **MIT**.
 
 ## Ejecutar
@@ -48,6 +49,8 @@ acciones y reciben snapshots a 10 Hz.
 - Los pedestales de clases ocupadas se apagan en todos los clientes; al elegir,
   el jugador deja de ver cualquier opción de campeón.
 - Los efectos de habilidad se dibujan en los clientes sin aplicar daño local.
+- Si un jugador cae y otro sigue vivo, revive automáticamente en 10 s (≈4 s si
+  un aliado está cerca) conservando nivel, talentos e inventario.
 - Guía de despliegue y pruebas: [`docs/ONLINE.md`](docs/ONLINE.md).
 
 ## Supabase
@@ -231,9 +234,9 @@ scripts/
     ItemModelFactory.gd     modelos de objetos y comandos con primitivas
     GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
-  smoke_test.gd             prueba de humo headless (68 comprobaciones)
+  smoke_test.gd             prueba de humo headless (73 comprobaciones)
   net_smoke.gd              cliente coop: conexión, compra y clase única
-  net_smoke_b.gd            segundo cliente: clase única entre jugadores
+  net_smoke_b.gd            segundo cliente: clase única y revivir
   wave_sim.gd               simulación acelerada de las 20 oleadas
 Dockerfile                  servidor cooperativo headless
 fly.toml / render.yaml      despliegue del servidor
@@ -261,8 +264,9 @@ crecimiento por nivel, subida aleatoria de habilidades, clase única por partida
 oleada, ataque básico, estandarte, fases del jefe, ciclo de la Furia del Público,
 inventario, pociones, forja en cadena hasta legendario y cierre de partida. La
 simulación recorre las 20 oleadas y verifica jefes en 5/10/15/20 y la victoria.
-Las pruebas de red verifican conexión, snapshots, movimiento autoritativo,
-compra, enemigos, oleadas y clase única entre dos jugadores.
+Las pruebas de red verifican conexión, snapshots binarios, movimiento
+autoritativo, compra, enemigos, oleadas, clase única, muerte y revivir con el
+inventario intacto.
 
 Capturas de depuración (sin editor):
 

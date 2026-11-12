@@ -270,6 +270,19 @@ func _ejecutar() -> void:
 	_comprobar((hud.get("_comando_botones") as Array).size() == 8, "la parrilla tiene 8 comandos y 4 habilidades")
 	_comprobar((hud.get("_inventario_botones") as Array).size() == 6, "el inventario conserva 6 ranuras")
 	_comprobar(IconStudio.obtener(&"atacar", IconStudio.CATEGORIA_COMANDO) != null, "IconStudio entrega iconos en headless")
+	_comprobar(hud.get("_revive_panel") != null, "la consola tiene panel de revivir")
+	_comprobar(hud.get("_tooltip") != null, "la consola tiene tooltip rico")
+
+	# --- Revivir cooperativo conserva el equipo ---------------------------
+	var pociones_antes := jugador.inventario.contar(&"pocion_vida")
+	jugador.esta_muerto = true
+	jugador.revivir_red(jugador.global_position, 0.6)
+	_comprobar(not jugador.esta_muerto, "revivir devuelve al gladiador al combate")
+	_comprobar(jugador.salud_actual > 0.0, "revivir restaura vida")
+	_comprobar(
+		jugador.inventario.contar(&"pocion_vida") == pociones_antes,
+		"revivir conserva el inventario"
+	)
 
 	# --- Fin de partida ----------------------------------------------------
 	escena._finalizar("DERROTA", "prueba de cierre")

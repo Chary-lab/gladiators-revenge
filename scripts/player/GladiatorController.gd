@@ -73,6 +73,8 @@ var es_local_red := false
 var punto_red := Vector3.ZERO
 var tiene_punto_red := false
 var _pos_objetivo_red := Vector3.ZERO
+## Segundos restantes para revivir en co-op; 0 si está vivo o sin rescate.
+var revive_en := 0.0
 
 var salud_actual := 0.0
 var mana_actual := 0.0
@@ -233,7 +235,7 @@ func _process(delta: float) -> void:
 	if not es_espejo:
 		return
 	var antes := global_position
-	global_position = global_position.lerp(_pos_objetivo_red, clampf(12.0 * delta, 0.0, 1.0))
+	global_position = global_position.lerp(_pos_objetivo_red, clampf(18.0 * delta, 0.0, 1.0))
 	if visual != null:
 		visual.mover(antes.distance_to(global_position) / maxf(0.001, delta))
 
@@ -1365,6 +1367,7 @@ func aplicar_estado_red(datos: Dictionary) -> void:
 	salud_actual = float(datos.get("salud", salud_actual))
 	mana_actual = float(datos.get("mana", mana_actual))
 	escudo_actual = float(datos.get("escudo", 0.0))
+	revive_en = float(datos.get("revive_en", 0.0))
 	dano_infligido = float(datos.get("dano", dano_infligido))
 	dano_recibido = float(datos.get("recibido", dano_recibido))
 
@@ -1409,6 +1412,40 @@ func _aplicar_muerte_espejo(muerto: bool) -> void:
 			visual.morir()
 	elif visual != null:
 		visual.revivir()
+
+
+## Revive al gladiador conservando stats, talentos, nivel e inventario.
+## Solo el servidor lo llama; los clientes reciben el estado por snapshot.
+func revivir_red(posicion: Vector3, fraccion_salud := 0.6) -> void:
+	esta_muerto = false
+	revive_en = 0.0
+	global_position = posicion
+	salud_actual = maxf(1.0, estadisticas.salud_maxima * clampf(fraccion_salud, 0.1, 1.0))
+	mana_actual = estadisticas.mana_maximo * 0.5
+	escudo_actual = 0.0
+	velocity = Vector3.ZERO
+	_tiene_orden_movimiento = false
+	mantener_posicion = false
+	modo_ataque_movimiento = false
+	_autoataque_activo = true
+	objetivo_actual = null
+	_temporizador_ataque = 0.0
+	_tiempo_reduccion = 0.0
+	_reduccion_temporal = 0.0
+	_buff_ataque = 0.0
+	_buff_robo = 0.0
+	_buff_dano = 0.0
+	_tiempo_buff = 0.0
+	_tiempo_escudo = 0.0
+	_escudo_maximo = 0.0
+	puede_moverse = true
+	add_to_group(GRUPO_GLADIADORES)
+	if agente != null:
+		agente.set_physics_process(true)
+	if visual != null:
+		visual.revivir()
+	_emitir_estado()
+	Sfx.reproducir(&"victoria", -10.0)
 
 
 func _al_cambiar_atributos() -> void:

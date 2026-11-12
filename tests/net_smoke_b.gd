@@ -76,6 +76,32 @@ func _init() -> void:
 			clases[cuerpo.arma_actual.id_clase()] = true
 	_comprobar(clases.has(&"bastion") and clases.has(&"filo"), "la partida tiene dos clases distintas")
 
+	# El jugador A sigue vivo; B muere y debe revivir conservando su compra.
+	red.enviar_accion(&"comprar", {"id": &"pocion_mana"})
+	var compra := false
+	for i in 300:
+		if jugador.inventario != null and jugador.inventario.tiene(&"pocion_mana"):
+			compra = true
+			break
+		await process_frame
+	_comprobar(compra, "el segundo jugador compra un objeto antes de caer")
+
+	red.enviar_accion(&"debug_morir", {})
+	_comprobar(
+		await _esperar_hasta(func() -> bool: return jugador.esta_muerto and jugador.revive_en > 0.0, 300),
+		"el jugador cae y entra en cuenta atrás de revivir"
+	)
+	await create_timer(12.0).timeout
+	_comprobar(
+		not jugador.esta_muerto,
+		"el jugador revive mientras un compañero sigue vivo"
+	)
+	_comprobar(jugador.salud_actual > 0.0, "revive con vida")
+	_comprobar(
+		jugador.inventario != null and jugador.inventario.tiene(&"pocion_mana"),
+		"conserva el objeto comprado al revivir"
+	)
+
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
 	Sfx.liberar()
 	quit(1 if _fallos > 0 else 0)

@@ -12,13 +12,14 @@ Cliente Web / APK ── WSS ──▶ Servidor Godot headless
         │  acciones (mover,       │  Arena completa: jugadores, oleadas,
         │  Q/W/E/R, objetos,      │  enemigos, jefe, estandarte, economía,
         │  tienda, talentos)      │  inventario y talentos
-        ◀── snapshots 10 Hz ──────┘
+        ◀── snapshots binarios 15 Hz ─┘
 ```
 
-- `scripts/net/NetCoop.gd` — `WebSocketPeer` (compatible con Web/APK), mensajes
-  JSON, lobby y snapshots.
+- `scripts/net/NetCoop.gd` — `WebSocketPeer` (compatible con Web/APK): mensajes
+  de control JSON y snapshots binarios con `var_to_bytes`.
 - `scripts/game/Arena.gd` — modos `--servidor`, `--cliente=…` y partida local.
 - `scripts/ui/MenuRed.gd` — menú de Web/APK: jugar solo o unirse por URL.
+- `scripts/ui/TooltipRico.gd` — tooltip flotante con icono, BBCode y animación.
 - `GladiatorController` tiene un modo espejo (`es_espejo`) que interpola la
   posición del servidor y reenvía los inputs.
 - `ArenaEnemy`, `ArenaBossAI` y el estandarte se replican como proxies de solo
@@ -33,6 +34,10 @@ Cliente Web / APK ── WSS ──▶ Servidor Godot headless
 - El servidor es la autoridad de daño, curación, oro, XP, oleadas y compras.
 - La economía y los puntos de atributo son compartidos por el equipo; cada
   jugador mantiene su inventario, talentos y rangos de habilidad.
+- Si un jugador muere y queda al menos un compañero vivo, entra en cuenta atrás
+  de 10 s (≈4 s si un aliado está a menos de 4 m). Al revivir reaparece junto al
+  aliado más cercano con el 60 % de vida y conserva nivel, talentos e inventario.
+  Si todos caen, la partida termina.
 
 ## Registro de servidores en Supabase
 

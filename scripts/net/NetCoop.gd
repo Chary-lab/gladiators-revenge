@@ -205,11 +205,11 @@ func _enviar(id: int, mensaje: Dictionary) -> void:
 func difundir_snapshot(datos: Dictionary) -> void:
 	if not es_servidor:
 		return
-	var texto := JSON.stringify({"t": "snapshot", "d": _codificar(datos)})
+	var bytes := var_to_bytes(datos)
 	for id in clientes_listos.keys():
 		var ws: WebSocketPeer = _clientes.get(int(id))
 		if ws != null and ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
-			ws.send_text(texto)
+			ws.send(bytes)
 
 
 func difundir_fin(titulo: String, detalle: String) -> void:
@@ -229,7 +229,13 @@ func _poll_cliente() -> void:
 	match _ws.get_ready_state():
 		WebSocketPeer.STATE_OPEN:
 			while _ws.get_available_packet_count() > 0:
-				_procesar_mensaje_cliente(_ws.get_packet().get_string_from_utf8())
+				var paquete := _ws.get_packet()
+				if _ws.was_string_packet():
+					_procesar_mensaje_cliente(paquete.get_string_from_utf8())
+				else:
+					var datos = bytes_to_var(paquete)
+					if datos is Dictionary:
+						snapshot_recibido.emit(datos)
 		WebSocketPeer.STATE_CLOSED:
 			if estado != Estado.DESCONECTADO:
 				estado = Estado.DESCONECTADO

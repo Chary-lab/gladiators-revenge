@@ -26,7 +26,7 @@ godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1
 godot -- --captura-combate                 # windowed screenshot to captura_combate.png
 ```
 
-- Expected baseline: smoke **68/68**, wave sim **3/3**, net smoke A **11/11**, net smoke B **7/7**, clean 600-frame run.
+- Expected baseline: smoke **73/73**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
 - `--script` mode does **not** register autoloads. `Sfx` is a static `RefCounted`; do not convert it to an autoload.
 - There is no unit-test framework. Add checks inside `tests/smoke_test.gd` or create another `SceneTree` script and run it with `--headless --script`.
@@ -43,7 +43,9 @@ godot -- --captura-combate                 # windowed screenshot to captura_comb
 - The chosen champion/class is permanent for the run. Choosing one disables the other armory pedestals (`ArmoryPedestal.desactivar()`), so the choice disappears for that player.
 - Team contract: `gladiadores` = player, `aliados` = summons, `enemigos` = hostile, `banderas` = objectives. `SpiritSummon`/`SpiritBolt` must stay in `aliados` and must never join `enemigos`; enemy AI ignores allies.
 - Item/recipe data lives in `scripts/items/ItemCatalog.gd`; inventory slots and auto-forge in `InventoryComponent.gd`. Purchases/forging are only allowed in the safe zone during preparation.
-- Online co-op is server-authoritative: `scripts/net/NetCoop.gd` uses `WebSocketPeer` with JSON messages and 10 Hz snapshots (browser-compatible; do not switch back to `WebSocketMultiplayerPeer`). Clients are render-only mirrors (`es_espejo`) and forward actions; never apply damage/purchases locally in client mode.
+- Online co-op is server-authoritative: `scripts/net/NetCoop.gd` uses `WebSocketPeer` with JSON control messages and **15 Hz binary snapshots** (`var_to_bytes`; browser-compatible). Clients are render-only mirrors (`es_espejo`) and forward actions; never apply damage/purchases locally in client mode.
+- Revive: a dead player with a living teammate counts down 10 s (2.5× faster within 4 m) and revives next to the nearest ally at 60 % HP, keeping inventory/talents/level. All players dead still ends the run. Server action `debug_morir`/`debug_curar` only works with `--red-rapida` for tests.
+- UI: `TooltipRico` (CanvasLayer 60) renders rich hover cards for commands/abilities/items; `ShopPanel` uses visual cards with rarity/hover/detail. Keep both mouse-transparent and pause-process for the shop.
 - One class per player and match: the server enforces `clases_ocupadas`/`clase_por_peer`; choosing disables the other pedestals for that player. Do not allow class changes after selection.
 - `Arena` supports local, `--servidor` and `--cliente=…` modes. Server runs `Arena` + `WaveManager`; client builds world/UI and applies snapshots in `_aplicar_snapshot`.
 - `Sfx.reproducir` is a no-op in headless to keep the server/tests silent; do not remove that guard.
@@ -81,11 +83,11 @@ playwright-cli.cmd open http://127.0.0.1:8137/ --browser msedge
 ## Verification gate
 
 1. `godot --headless --editor --quit`
-2. `godot --headless --script res://tests/smoke_test.gd` → 68/68
+2. `godot --headless --script res://tests/smoke_test.gd` → 73/73
 3. `godot --headless --script res://tests/wave_sim.gd` → 3/3
 4. `godot --headless --quit-after 600` → no script/parse errors
 5. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`
 6. Web change → export, serve, Edge console 0 errors. The Web menu must connect to a live `--servidor`.
-7. Online change → run server + `net_smoke` + `net_smoke_b`; expect 11/11 and 7/7.
+7. Online change → run server + `net_smoke` + `net_smoke_b`; expect 11/11 and 12/12.
 
 Commits use conventional Spanish messages (`feat(v2): …`, `feat(combate): …`) with no signatures. Do not commit generated builds, captures or `.godot/`.

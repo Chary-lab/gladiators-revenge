@@ -11,6 +11,9 @@ const LARGO := 40.0
 const ALTO_MURO := 1.4
 const RADIO_PUBLICO := 32.0
 const RADIO_INTERACCION := 3.5
+const TIEMPO_REVIVIR := 10.0
+const RADIO_REVIVIR := 4.0
+const FACTOR_REVIVIR_CERCA := 2.5
 const BORDE_ARENA := 10.0
 const CENTRO_ARENA := Vector3(-8.0, 0, 0)
 
@@ -64,6 +67,7 @@ var _terminado_red := false
 var _resultado_red := ""
 var _log_snapshot := false
 var _eventos_red: Array = []
+var _estaba_muerto := false
 var _supabase: Supabase
 var _servidor_publico_url := ""
 var _hora_inicio_partida := 0.0
@@ -159,9 +163,10 @@ func _process(delta: float) -> void:
 	_actualizar_pista()
 	if es_servidor:
 		_tiempo_snapshot += delta
-		if _tiempo_snapshot >= 0.1:
+		if _tiempo_snapshot >= 1.0 / 15.0:
 			_tiempo_snapshot = 0.0
 			_enviar_snapshot()
+		_actualizar_revives(delta)
 		_curar_en_zona_segura(delta)
 	elif es_cliente:
 		pass
@@ -305,6 +310,13 @@ func quitar_jugador_red(peer: int) -> void:
 		_supabase.actualizar_jugadores(jugadores_red.size())
 	if jugadores.is_empty():
 		_reiniciar_servidor()
+		return
+	var vivos := 0
+	for otro in jugadores:
+		if otro != null and is_instance_valid(otro) and not otro.esta_muerto:
+			vivos += 1
+	if vivos == 0:
+		_finalizar("DERROTA", "Todos los gladiadores han caído.")
 
 
 func _reiniciar_servidor() -> void:
@@ -375,6 +387,17 @@ func aplicar_accion_red(peer: int, accion: StringName, datos: Dictionary) -> voi
 			_ciclar_skin()
 		&"bandera":
 			_interactuar_bandera(cuerpo)
+		&"debug_morir":
+			if "--red-rapida" in OS.get_cmdline_user_args():
+				cuerpo.recibir_dano(999999.0, GladiatorStats.TIPO_VERDADERO)
+		&"debug_curar":
+			if "--red-rapida" in OS.get_cmdline_user_args():
+				if cuerpo.esta_muerto:
+					cuerpo.revivir_red(cuerpo.global_position, 1.0)
+				else:
+					cuerpo.salud_actual = cuerpo.estadisticas.salud_maxima
+					cuerpo.mana_actual = cuerpo.estadisticas.mana_maximo
+					cuerpo.escudo_actual = 0.0
 		_:
 			pass
 
@@ -503,6 +526,7 @@ func _datos_jugador(peer: int, cuerpo: GladiatorController) -> Dictionary:
 		"xp": cuerpo.estadisticas.experiencia,
 		"puntos_libres": cuerpo.estadisticas.puntos_libres,
 		"puntos_rojos": cuerpo.puntos_rojos,
+		"revive_en": cuerpo.revive_en,
 		"cooldowns": [
 			cuerpo._cooldowns[0], cuerpo._cooldowns[1],
 			cuerpo._cooldowns[2], cuerpo._cooldowns[3],
@@ -616,6 +640,11 @@ func _aplicar_snapshot(datos: Dictionary) -> void:
 	for evento in datos.get("eventos", []):
 		_aplicar_evento_red(evento)
 
+	if _estaba_muerto and not _jugador.esta_muerto and _jugador.revive_en <= 0.0:
+		if _hud != null:
+			_hud.mostrar_mensaje("¡Has revivido! Sigue peleando.", 2.5)
+	_estaba_muerto = _jugador.esta_muerto
+
 	if _jugador.estadisticas.nivel > nivel_antes and _hud != null:
 		_hud.mostrar_mensaje("¡NIVEL %d!" % _jugador.estadisticas.nivel, 1.6)
 
@@ -695,6 +724,11 @@ func _aplicar_evento_red(evento: Dictionary) -> void:
 	if cuerpo == null:
 		return
 	var tipo := str(evento.get("tipo", ""))
+	if tipo == "revivir":
+		if cuerpo.visual != null:
+			cuerpo.visual.revivir()
+		Sfx.reproducir("victoria", -12.0)
+		return
 	if tipo == "ataque":
 		if cuerpo.visual != null:
 			cuerpo.visual.atacar()
@@ -1402,6 +1436,53 @@ func _al_morir_jugador() -> void:
 			vivos += 1
 	if vivos == 0:
 		_finalizar("DERROTA", "Todos los gladiadores han caído.")
+		return
+	if not es_servidor:
+		return
+	for jugador in jugadores:
+		if jugador != null and is_instance_valid(jugador) and jugador.esta_muerto and jugador.revive_en <= 0.0:
+			jugador.revive_en = TIEMPO_REVIVIR
+
+
+func _actualizar_revives(delta: float) -> void:
+	if not es_servidor:
+		return
+	for peer in jugadores_red.keys():
+		var cuerpo: GladiatorController = jugadores_red[peer]
+		if cuerpo == null or not is_instance_valid(cuerpo):
+			continue
+		if not cuerpo.esta_muerto or cuerpo.revive_en <= 0.0:
+			continue
+		var aliado := _aliado_vivo_mas_cercano(cuerpo)
+		if aliado == null:
+			cuerpo.revive_en = 0.0
+			continue
+		var cerca := cuerpo.global_position.distance_to(aliado.global_position) <= RADIO_REVIVIR
+		var factor := FACTOR_REVIVIR_CERCA if cerca else 1.0
+		cuerpo.revive_en = maxf(0.0, cuerpo.revive_en - delta * factor)
+		if cuerpo.revive_en > 0.0:
+			continue
+		var destino := aliado.global_position + Vector3(1.2, 0.0, 1.2)
+		cuerpo.revivir_red(destino, 0.6)
+		_eventos_red.append({
+			"tipo": "revivir",
+			"peer": peer,
+			"punto": destino,
+		})
+
+
+func _aliado_vivo_mas_cercano(caido: GladiatorController) -> GladiatorController:
+	var mejor: GladiatorController = null
+	var mejor_distancia := INF
+	for otro in jugadores_red.values():
+		var cuerpo := otro as GladiatorController
+		if cuerpo == null or cuerpo == caido or cuerpo.esta_muerto:
+			continue
+		var distancia := caido.global_position.distance_squared_to(cuerpo.global_position)
+		if distancia < mejor_distancia:
+			mejor_distancia = distancia
+			mejor = cuerpo
+	return mejor
 
 
 func _al_destruir_bandera() -> void:
