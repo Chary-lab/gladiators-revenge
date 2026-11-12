@@ -713,6 +713,7 @@ func alternar_tienda() -> void:
 
 func cerrar_tienda() -> void:
 	_tienda.cerrar_panel()
+	forzar_ocultar_tooltip()
 
 
 func tienda_abierta() -> bool:
@@ -1092,6 +1093,10 @@ func mostrar_tooltip_item(item: ItemData, subtitulo := "") -> void:
 func _ocultar_tooltip() -> void:
 	if _tooltip != null:
 		_tooltip.ocultar()
+
+func forzar_ocultar_tooltip() -> void:
+	if _tooltip != null:
+		_tooltip.forzar_ocultar()
 
 
 func _mostrar_tooltip_comando(indice: int) -> void:

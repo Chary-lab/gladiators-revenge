@@ -136,6 +136,13 @@ func ocultar() -> void:
 	var _cb_tooltip := Callable(self, "_on_tooltip_tween_completo")
 	_tween.tween_callback(_cb_tooltip)
 
+func forzar_ocultar() -> void:
+	if not visible:
+		return
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	visible = false
+
 
 func _process(_delta: float) -> void:
 	if not visible:

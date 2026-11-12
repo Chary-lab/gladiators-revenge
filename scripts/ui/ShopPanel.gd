@@ -235,7 +235,7 @@ func cerrar_panel() -> void:
 		return
 	visible = false
 	if _hud != null:
-		_hud.ocultar_tooltip()
+		_hud.forzar_ocultar_tooltip()
 	get_tree().paused = false
 
 
