@@ -27,6 +27,7 @@ signal progreso_cambiado(nivel: int, experiencia: int, requerida: int)
 signal habilidades_cambiadas
 signal nivel_alcanzado(nivel: int)
 signal habilidad_mejorada(slot: int, habilidad: AbilityData, rango: int)
+signal recibio_dano(intensidad: float)
 
 const SLOT_Q := 0
 const SLOT_W := 1
@@ -1293,6 +1294,7 @@ func recibir_dano(
 	mana_actual = combat.mana_actual
 	escudo_actual = combat.escudo_actual
 	esta_muerto = combat.esta_muerto
+	recibio_dano.emit(1.0)
 
 
 func curar(cantidad: float) -> void:

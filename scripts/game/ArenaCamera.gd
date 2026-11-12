@@ -9,6 +9,12 @@ extends Camera3D
 
 var objetivo: Node3D
 
+## Screen shake: sacude la cámara al recibir daño o activar furia del jefe.
+var _shake_timer := 0.0
+var _shake_intensity := 0.0
+var _shake_decay := 8.0
+var _shake_offset := Vector3.ZERO
+
 
 func _ready() -> void:
 	projection = PROJECTION_ORTHOGONAL
@@ -25,4 +31,16 @@ func _physics_process(delta: float) -> void:
 	centro.x = clampf(centro.x, -limites.x, limites.x)
 	centro.z = clampf(centro.z, -limites.y, limites.y)
 	var destino := centro + desplazamiento
+
+	# Aplicar screen shake si está activo
+	if _shake_timer > 0.0:
+		_shake_timer = maxf(0.0, _shake_timer - delta)
+		var shake_x = randf_range(-_shake_intensity, _shake_intensity)
+		var shake_z = randf_range(-_shake_intensity, _shake_intensity)
+		_shake_offset = Vector3(shake_x, 0.0, shake_z)
+		_shake_intensity = maxf(0.0, _shake_intensity - delta * _shake_decay)
+	else:
+		_shake_offset = Vector3.ZERO
+
+	destino += _shake_offset
 	global_position = global_position.lerp(destino, 1.0 - exp(-suavizado * delta))

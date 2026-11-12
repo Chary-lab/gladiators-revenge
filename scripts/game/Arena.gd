@@ -1180,6 +1180,8 @@ func _conectar() -> void:
 	if not _jugador.arma_cambiada.is_connected(_al_cambiar_arma):
 		_jugador.arma_cambiada.connect(_al_cambiar_arma)
 	_publico.furia_iniciada.connect(_al_furia_iniciada)
+	if _jugador != null and _camara != null:
+		_jugador.recibio_dano.connect(_camara.agitar)
 
 
 # --- Economía y armería ---------------------------------------------------
