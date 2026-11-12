@@ -201,12 +201,14 @@ func receta_completada_por(item: ItemData) -> ItemData:
 
 func forjar_con(item_nuevo: ItemData, receta: ItemData) -> ItemData:
 	## Consume los ingredientes que ya estaban en la mochila y crea la receta.
-	## `item_nuevo` se asume ya pagado y no se agrega por separado.
+	## `item_nuevo` se asume ya pagado; se agrega al inventario y luego se
+	## consume junto con los demas ingredientes para forjar el resultado.
 	if receta == null:
 		return null
+	## Agregar el item comprado al inventario para que forme parte de la forja
+	if not agregar(item_nuevo):
+		return null
 	for ingrediente in receta.receta:
-		if ingrediente == item_nuevo.id:
-			continue
 		if not consumir(ingrediente):
 			return null
 	var creado := receta

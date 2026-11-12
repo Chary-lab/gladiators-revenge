@@ -947,9 +947,9 @@ func intentar_habilidad(slot: int, punto_objetivo = null) -> bool:
 		return true
 	if esta_muerto or arma_actual == null:
 		return false
-	if slot < 0 or slot >= _cooldowns.size():
+	if slot < 0 or slot >= combat._cooldowns.size():
 		return false
-	if _cooldowns[slot] > 0.0:
+	if combat._cooldowns[slot] > 0.0:
 		return false
 
 	var habilidad := arma_actual.obtener_habilidad(slot)
@@ -959,7 +959,7 @@ func intentar_habilidad(slot: int, punto_objetivo = null) -> bool:
 		return false
 
 	mana_actual -= habilidad.coste_mana
-	_cooldowns[slot] = cooldown_habilidad(habilidad)
+	combat._cooldowns[slot] = cooldown_habilidad(habilidad)
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
 
 	var punto := _resolver_punto(habilidad, punto_objetivo)

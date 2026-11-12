@@ -42,6 +42,7 @@ var terminado:
 
 var game_state: GameState
 var enemy_tracker: EnemyTracker
+var gladiador_tracker: GladiadorTracker
 
 var _oro_local := 200
 var _puntos_local := 0
@@ -65,6 +66,12 @@ var puntos_atributo:
 var _jugador: GladiatorController
 var _camara: ArenaCamera
 var _bandera: RebellionBanner
+
+## Barra de vida del jefe
+var _jefe_barra: ProgressBar
+var _jefe_label: Label
+var _jefe_actual: ArenaBossAI
+var _jefe_barra_nodo: Control
 var _oleadas: WaveManager
 var _publico: AudienceFury
 var _hud: ArenaHUD
@@ -189,6 +196,11 @@ func _iniciar_local() -> void:
 	add_child(enemy_tracker)
 	enemy_tracker.add_to_group("enemy_tracker")
 
+	gladiador_tracker = GladiadorTracker.new()
+	gladiador_tracker.name = "GladiadorTracker"
+	add_child(gladiador_tracker)
+	gladiador_tracker.add_to_group("gladiador_tracker")
+
 	_crear_jugador_local()
 	_crear_camara()
 	_crear_armeria()
@@ -268,6 +280,13 @@ func _crear_jugador_local() -> void:
 	_jugador = _instanciar_gladiador(Vector3(24.0, 0, 0), 0)
 	jugadores.append(_jugador)
 	_jugador.murio.connect(_al_morir_jugador)
+	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
+	if tracker != null:
+		tracker.registrar(_jugador)
+		_jugador.murio.connect(func():
+			var t = get_tree().get_first_node_in_group("gladiador_tracker")
+			if t != null:
+				t.desregistrar(_jugador))
 
 
 func _instanciar_gladiador(posicion: Vector3, indice: int) -> GladiatorController:
@@ -325,6 +344,13 @@ func agregar_jugador_red(peer: int) -> void:
 	jugadores.append(cuerpo)
 	cuerpo.murio.connect(_al_morir_jugador)
 	cuerpo.ataque_basico.connect(_al_ataque_red.bind(peer))
+	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
+	if tracker != null:
+		tracker.registrar(cuerpo)
+		cuerpo.murio.connect(func():
+			var t = get_tree().get_first_node_in_group("gladiador_tracker")
+			if t != null:
+				t.desregistrar(cuerpo))
 	if _oleadas != null:
 		_oleadas.agregar_jugador(cuerpo)
 	if _supabase != null:
@@ -1167,6 +1193,57 @@ func _crear_hud() -> void:
 	add_child(_hud)
 	_hud.configurar(_jugador, _oleadas, _bandera, self)
 
+	# Barra de vida del jefe (oculta por defecto)
+	_jefe_barra_nodo = Control.new()
+	_jefe_barra_nodo.name = "JefeVida"
+	_jefe_barra_nodo.visible = false
+	_jefe_barra_nodo.anchor_left = 0.5
+	_jefe_barra_nodo.anchor_right = 0.5
+	_jefe_barra_nodo.anchor_top = 0.0
+	_jefe_barra_nodo.anchor_bottom = 0.0
+	_jefe_barra_nodo.offset_left = -250.0
+	_jefe_barra_nodo.offset_right = 250.0
+	_jefe_barra_nodo.offset_top = 40.0
+	_jefe_barra_nodo.offset_bottom = 80.0
+	_jefe_barra_nodo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_jefe_barra_nodo)
+
+	var fondo := ColorRect.new()
+	fondo.name = "Fondo"
+	fondo.size = Vector2(500, 24)
+	fondo.position = Vector2(0, 10)
+	fondo.color = Color(0.2, 0.2, 0.2, 0.8)
+	_jefe_barra_nodo.add_child(fondo)
+
+	_jefe_barra = ProgressBar.new()
+	_jefe_barra.name = "Barra"
+	_jefe_barra.size = Vector2(480, 16)
+	_jefe_barra.position = Vector2(10, 18)
+	_jefe_barra.min_value = 0.0
+	_jefe_barra.max_value = 100.0
+	_jefe_barra.value = 100.0
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0.1, 0.1, 0.1, 0.6)
+	estilo.border_color = Color(0.5, 0.5, 0.5, 1.0)
+	estilo.set_border_width_all(1)
+	estilo.set_corner_radius_all(4)
+	_jefe_barra.add_theme_stylebox_override("bg", estilo)
+	var estilo_progreso := StyleBoxFlat.new()
+	estilo_progreso.bg_color = Color(0.9, 0.3, 0.3, 1.0)
+	estilo_progreso.set_corner_radius_all(3)
+	_jefe_barra.add_theme_stylebox_override("fill", estilo_progreso)
+	_jefe_barra_nodo.add_child(_jefe_barra)
+
+	_jefe_label = Label.new()
+	_jefe_label.name = "Label"
+	_jefe_label.size = Vector2(480, 16)
+	_jefe_label.position = Vector2(10, -4)
+	_jefe_label.horizontal_alignment = 1
+	_jefe_label.add_theme_font_size_override("font_size", 12)
+	_jefe_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.8))
+	_jefe_label.text = "JEFE"
+	_jefe_barra_nodo.add_child(_jefe_label)
+
 
 func _conectar() -> void:
 	_oleadas.entrada_iniciada.connect(_al_entrada_iniciada)
@@ -1182,6 +1259,7 @@ func _conectar() -> void:
 	_publico.furia_iniciada.connect(_al_furia_iniciada)
 	if _jugador != null and _camara != null:
 		_jugador.recibio_dano.connect(_camara.agitar)
+	_oleadas.jefe_invocado.connect(_al_jefe_invocado)
 
 
 # --- Economía y armería ---------------------------------------------------
@@ -1519,6 +1597,53 @@ func _al_cambiar_arma(arma: WeaponItem) -> void:
 
 func _al_furia_iniciada(duracion: float) -> void:
 	_avisar("¡El público se aburre! Muévete. (%.0f s)" % duracion, 2.0)
+
+
+## Barra de vida del jefe --------------------------------------------------
+
+func _al_jefe_invocado(jefe: ArenaBossAI) -> void:
+	if _jefe_actual != null and is_instance_valid(_jefe_actual):
+		_jefe_actual.salud_cambiada.disconnect(_actualizar_barra_jefe)
+		_jefe_actual.furia_activada.disconnect(_al_jefe_furia)
+		_jefe_actual.murio.disconnect(_al_jefe_murio)
+
+	_jefe_actual = jefe
+	_jefe_barra_nodo.visible = true
+	_jefe_barra.max_value = jefe.salud_maxima
+	_jefe_barra.value = jefe.salud_actual
+	_jefe_label.text = "JEFE · FASE 1"
+
+	jefe.salud_cambiada.connect(_actualizar_barra_jefe)
+	jefe.furia_activada.connect(_al_jefe_furia)
+	jefe.murio.connect(_al_jefe_murio)
+
+
+func _actualizar_barra_jefe(actual: float, maxima: float) -> void:
+	if _jefe_barra_nodo == null or not _jefe_barra_nodo.visible:
+		return
+	_jefe_barra.max_value = maxima
+	_jefe_barra.value = actual
+	if actual <= 0.0:
+		_jefe_barra_nodo.visible = false
+
+
+func _al_jefe_furia(nivel: int) -> void:
+	if _jefe_label != null:
+		_jefe_label.text = "JEFE · FURIA %d" % nivel
+	if _jefe_barra != null:
+		var estilo_progreso := StyleBoxFlat.new()
+		if nivel == 1:
+			estilo_progreso.bg_color = Color(1.0, 0.6, 0.0, 1.0)  # naranja
+		else:
+			estilo_progreso.bg_color = Color(1.0, 0.1, 0.1, 1.0)  # rojo
+		estilo_progreso.set_corner_radius_all(3)
+		_jefe_barra.add_theme_stylebox_override("fill", estilo_progreso)
+
+
+func _al_jefe_murio() -> void:
+	if _jefe_barra_nodo != null:
+		_jefe_barra_nodo.visible = false
+	_jefe_actual = null
 
 
 func _al_morir_jugador() -> void:
