@@ -526,7 +526,9 @@ func _actualizar_detalle() -> void:
 	_detalle_stats.text = _bbcode_stats(item)
 	_detalle_receta.text = _bbcode_receta(item)
 
-	var coste := item.precio + _precio_forja(item)
+	# En el recetario se muestra el coste de forja propio; en el mercado, el
+	# precio de compra más la forja que completaría al comprarlo.
+	var coste := item.precio_forja if _modo_recetas else item.precio + _precio_forja(item)
 	var puede := not _modo_recetas and _puede_comprar(item)
 	if _modo_vender:
 		_comprar.disabled = _ranura_seleccionada < 0
@@ -646,6 +648,12 @@ func _mejoras(id: StringName) -> Array[ItemData]:
 
 
 func _tipo_item(item: ItemData) -> String:
+	# La rareza manda: un épico forjable no es "intermedio" para el jugador.
+	match item.rareza:
+		ItemData.Rareza.EPICO:
+			return "Épico"
+		ItemData.Rareza.LEGENDARIO:
+			return "Legendario"
 	match item.tipo:
 		ItemData.Tipo.POCION: return "Poción"
 		ItemData.Tipo.PERGAMINO: return "Pergamino"

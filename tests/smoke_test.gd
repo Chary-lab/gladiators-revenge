@@ -273,6 +273,21 @@ func _ejecutar() -> void:
 	_comprobar(hud.get("_revive_panel") != null, "la consola tiene panel de revivir")
 	_comprobar(hud.get("_tooltip") != null, "la consola tiene tooltip rico")
 
+	# --- Tienda: pestañas y recetario ---
+	hud.alternar_tienda()
+	await process_frame
+	var panel_tienda = hud.get("_tienda")
+	var grid: GridContainer = panel_tienda.get("_lista")
+	var cartas_mercado := grid.get_child_count()
+	panel_tienda._cambiar_tab(1)
+	await process_frame
+	var cartas_recetas := grid.get_child_count()
+	_comprobar(cartas_mercado == ItemCatalog.vendibles().size(), "la pestaña MERCADO lista solo lo vendible")
+	_comprobar(cartas_recetas == ItemCatalog.recetas().size(), "la pestaña RECETARIO lista todas las recetas")
+	_comprobar(cartas_recetas > cartas_mercado, "el recetario muestra los objetos forjables")
+	hud.cerrar_tienda()
+	await process_frame
+
 	# --- Revivir cooperativo conserva el equipo ---------------------------
 	var pociones_antes := jugador.inventario.contar(&"pocion_vida")
 	jugador.esta_muerto = true

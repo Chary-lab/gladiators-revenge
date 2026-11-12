@@ -1152,6 +1152,10 @@ func _ocultar_tooltip() -> void:
 	if _tooltip != null:
 		_tooltip.ocultar()
 
+## API pública para paneles externos (tienda): oculta el tooltip sin forzarlo.
+func ocultar_tooltip() -> void:
+	_ocultar_tooltip()
+
 func forzar_ocultar_tooltip() -> void:
 	if _tooltip != null:
 		_tooltip.forzar_ocultar()
