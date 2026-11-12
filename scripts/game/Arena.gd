@@ -304,7 +304,16 @@ func quitar_jugador_red(peer: int) -> void:
 	if _supabase != null:
 		_supabase.actualizar_jugadores(jugadores_red.size())
 	if jugadores.is_empty():
+		_reiniciar_servidor()
+
+
+func _reiniciar_servidor() -> void:
+	if not es_servidor:
 		_finalizar("DERROTA", "Todos los gladiadores han caído.")
+		return
+	print("[NET] sin jugadores; reiniciando arena del servidor")
+	await get_tree().create_timer(0.5).timeout
+	get_tree().reload_current_scene()
 
 
 func equipar_clase_red(peer: int, clase: StringName) -> void:
@@ -1447,7 +1456,6 @@ func _finalizar(titulo: String, detalle: String) -> void:
 func _exit_tree() -> void:
 	if es_servidor and _supabase != null:
 		_supabase.detener_latido()
-		_supabase.marcar_inactivo()
 
 
 func esta_congelado() -> bool:
