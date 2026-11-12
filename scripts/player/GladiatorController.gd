@@ -957,8 +957,8 @@ func intentar_habilidad(slot: int, punto_objetivo = null) -> bool:
 		return false
 
 	mana_actual -= habilidad.coste_mana
-	combat._cooldowns[slot] = cooldown_habilidad(habilidad)
-	_cooldowns[slot] = combat._cooldowns[slot]
+	combat.set_cooldown(slot, cooldown_habilidad(habilidad))
+	_cooldowns[slot] = combat.cooldown_restante(slot)
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
 
 	var punto := _resolver_punto(habilidad, punto_objetivo)
@@ -1215,7 +1215,7 @@ func cooldown_restante(slot: int) -> float:
 	if slot < 0 or slot >= 4:
 		return 0.0
 	if combat != null:
-		return combat._cooldowns[slot]
+		return combat.cooldown_restante(slot)
 	return _cooldowns[slot]
 
 
@@ -1380,6 +1380,8 @@ func aplicar_estado_red(datos: Dictionary) -> void:
 	var cds: Array = datos.get("cooldowns", [])
 	for i in min(4, cds.size()):
 		_cooldowns[i] = float(cds[i])
+		if combat != null:
+			combat.set_cooldown(i, float(cds[i]))
 
 	var rangos_antes := _rangos_habilidad.duplicate()
 	_rangos_habilidad.clear()

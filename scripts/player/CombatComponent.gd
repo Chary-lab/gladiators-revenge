@@ -69,6 +69,11 @@ func cooldown_restante(slot: int) -> float:
 		return 0.0
 	return _cooldowns[slot]
 
+func set_cooldown(slot: int, valor: float) -> void:
+	if slot < 0 or slot >= _cooldowns.size():
+		return
+	_cooldowns[slot] = clampf(valor, 0.0, 999.0)
+
 func reducir_cooldown(slot: int, fraccion: float) -> void:
 	if slot < 0 or slot >= _cooldowns.size():
 		return
