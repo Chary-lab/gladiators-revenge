@@ -42,6 +42,7 @@ const REGEN_VIDA_POR_FUERZA := 0.06
 const DANO_FISICO_POR_FUERZA := 1.6
 const MITIGACION_FISICA_POR_FUERZA := 0.0035
 const ARMADURA_POR_PUNTO := 0.004
+const AGILIDAD_POR_ARMADURA := 0.002
 const MITIGACION_FISICA_MAXIMA := 0.60
 
 # --- Agilidad -------------------------------------------------------------
@@ -130,7 +131,7 @@ var bono_dano_fisico: float:
 
 var armadura_total: float:
 	get:
-		return maxf(0.0, _bono("armadura"))
+		return maxf(0.0, _bono("armadura") + agilidad_total * AGILIDAD_POR_ARMADURA)
 
 var mitigacion_fisica: float:
 	get:

@@ -18,12 +18,12 @@ signal jefe_invocado(jefe: ArenaBossAI)
 
 enum Estado { ESPERA, ENTRADA, COMBATE, FIN }
 
-@export var total_oleadas := 20
+@export var total_oleadas := 30
 @export var espera_inicial := 30.0
 @export var espera_entre_oleadas := 30.0
 @export var duracion_entrada := 8.0
-@export var intervalo_spawn := 0.45
-@export var oleadas_con_jefe := 5
+@export var intervalo_spawn := 0.55
+@export var oleadas_con_jefe := 4
 
 var oleada_actual := 0
 
@@ -141,7 +141,7 @@ func _iniciar_oleada() -> void:
 
 
 func _comenzar_combate() -> void:
-	_pendientes = 5 + oleada_actual * 2
+	_pendientes = 8 + oleada_actual * 3
 	_estado = Estado.COMBATE
 	_temporizador = 0.0
 

@@ -270,6 +270,8 @@ func _cambiar_tab(modo: int) -> void:
 		return
 	_seleccionado = null
 	_ranura_seleccionada = -1
+	if _hud != null:
+		_hud.ocultar_tooltip()
 	_actualizar_tabs()
 	_reconstruir()
 

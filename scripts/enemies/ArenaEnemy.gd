@@ -140,14 +140,14 @@ func preparar(
 	if es_arquero:
 		salud_maxima *= 0.70
 		velocidad *= 0.85
-	salud_maxima = (26.0 + ronda * 10.0) * factor_elite
-	dano = (4.0 + ronda * 1.5) * (1.5 if elite else 1.0)
+	salud_maxima = (35.0 + ronda * 12.0) * factor_elite
+	dano = (5.0 + ronda * 1.8) * (1.5 if elite else 1.0)
 	velocidad = 2.3 + minf(ronda * 0.04, 0.9)
 	if ligero:
 		salud_maxima *= 0.85
 		velocidad *= 1.12
 	salud_actual = salud_maxima
-	recompensa = (8 + ronda) * (3 if elite else 1)
+	recompensa = (10 + ronda) * (3 if elite else 1)
 	_temporizador = randf_range(0.0, 0.5)
 	_provocado = 0.0
 	_fuente_provocacion = null

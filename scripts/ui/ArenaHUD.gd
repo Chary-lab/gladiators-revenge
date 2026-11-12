@@ -29,6 +29,7 @@ var _aviso: Label
 var _oleada: Label
 var _oro: Label
 var _enemigos: Label
+var _tiempo_oleada: Label
 var _barra_bandera: ProgressBar
 
 var _barra_vida: ProgressBar
@@ -347,6 +348,8 @@ func _crear_barra_superior() -> void:
 	_oleada.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_enemigos = _texto(_hud_arriba, "", Vector2(430, 38), Vector2(420, 18), 13, TEXTO)
 	_enemigos.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tiempo_oleada = _texto(_hud_arriba, "", Vector2(430, 56), Vector2(420, 16), 12, Color(0.9, 0.7, 0.4))
+	_tiempo_oleada.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_oro = _texto(_hud_arriba, "", Vector2(640, 12), Vector2(280, 22), 16, ORO)
 	_oro.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
@@ -617,6 +620,11 @@ func _actualizar_superior() -> void:
 		_enemigos.text = "%d enemigos en la arena   ·   %d restantes" % [
 			_contar_enemigos(), _oleadas.enemigos_restantes()
 		]
+		var tiempo := _oleadas.tiempo_restante()
+		if tiempo > 0.0:
+			_tiempo_oleada.text = "Tiempo: %d s" % int(ceil(tiempo))
+		else:
+			_tiempo_oleada.text = ""
 	_oro.text = "ORO %d   ·   PUNTOS %d" % [_oro_arena(), _puntos_atributo()]
 	if _bandera != null:
 		_barra_bandera.max_value = maxf(1.0, _bandera.salud_maxima)

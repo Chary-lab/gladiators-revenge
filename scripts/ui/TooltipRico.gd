@@ -21,7 +21,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	z_index = 100
-	custom_minimum_size = Vector2(340, 0)
+	custom_minimum_size = Vector2(260, 0)
 
 	_estilo = StyleBoxFlat.new()
 	_estilo.bg_color = Color(0.055, 0.05, 0.045, 0.98)
@@ -86,7 +86,7 @@ func _ready() -> void:
 	_cuerpo.fit_content = true
 	_cuerpo.scroll_active = false
 	_cuerpo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_cuerpo.custom_minimum_size = Vector2(320, 0)
+	_cuerpo.custom_minimum_size = Vector2(240, 0)
 	_cuerpo.add_theme_font_size_override("normal_font_size", 11)
 	_cuerpo.add_theme_color_override("default_color", CUERPO)
 	columna.add_child(_cuerpo)
