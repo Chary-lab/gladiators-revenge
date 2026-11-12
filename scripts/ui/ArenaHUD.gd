@@ -30,6 +30,7 @@ var _oleada: Label
 var _oro: Label
 var _enemigos: Label
 var _tiempo_oleada: Label
+var _texto_puntos: Label
 var _barra_bandera: ProgressBar
 
 var _barra_vida: ProgressBar
@@ -55,6 +56,9 @@ var _habilidad_flashes: Array[ColorRect] = []
 var _inventario_botones: Array[Button] = []
 var _inventario_velos: Array[ColorRect] = []
 var _inventario_cantidad: Array[Label] = []
+var _ranura_seleccionada_swap: int = -1
+var _color_borde_normal: Color = Color(0.45, 0.32, 0.2)
+var _color_borde_seleccionado: Color = Color(0.96, 0.82, 0.48)
 var _comando_botones: Array[Button] = []
 var _contador_atributos: Label
 var _contador_talentos: Label
@@ -252,6 +256,7 @@ func _crear_inventario() -> void:
 		var pos := Vector2(900 + columna * 60, 552 + fila * 57)
 		var boton := _boton(pos, Vector2(54, 54), "")
 		boton.pressed.connect(_usar_ranura.bind(i))
+		boton.gui_input.connect(_evento_raton_inventario.bind(i, boton))
 		boton.mouse_entered.connect(_mostrar_tooltip_inventario.bind(i))
 		boton.mouse_exited.connect(_ocultar_tooltip)
 		_raiz.add_child(boton)
@@ -344,23 +349,39 @@ func _crear_pips(boton: Button) -> Array:
 
 
 func _crear_barra_superior() -> void:
-	_oleada = _texto(_hud_arriba, "", Vector2(430, 12), Vector2(420, 26), 22, ORO)
+	# --- Panel decorativo izquierdo: oleada y tiempo ---
+	var panel_oleada := _panel(Vector2(12, 10), Vector2(420, 74), Color(0.06, 0.04, 0.03, 0.95), Color(0.86, 0.68, 0.32))
+	_hud_arriba.add_child(panel_oleada)
+
+	_oleada = _texto(panel_oleada, "", Vector2(10, 6), Vector2(400, 24), 20, Color(0.96, 0.82, 0.48))
 	_oleada.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_enemigos = _texto(_hud_arriba, "", Vector2(430, 38), Vector2(420, 18), 13, TEXTO)
-	_enemigos.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_tiempo_oleada = _texto(_hud_arriba, "", Vector2(430, 56), Vector2(420, 16), 12, Color(0.9, 0.7, 0.4))
+
+	_tiempo_oleada = _texto(panel_oleada, "", Vector2(10, 32), Vector2(400, 18), 14, Color(0.9, 0.7, 0.4))
 	_tiempo_oleada.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_oro = _texto(_hud_arriba, "", Vector2(640, 12), Vector2(280, 22), 16, ORO)
+
+	_enemigos = _texto(panel_oleada, "", Vector2(10, 52), Vector2(400, 16), 12, Color(0.82, 0.78, 0.7))
+	_enemigos.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	# --- Panel decorativo derecho: oro y puntos ---
+	var panel_economia := _panel(Vector2(440, 10), Vector2(260, 74), Color(0.06, 0.04, 0.03, 0.95), Color(0.86, 0.68, 0.32))
+	_hud_arriba.add_child(panel_economia)
+
+	_oro = _texto(panel_economia, "", Vector2(10, 10), Vector2(240, 22), 16, ORO)
 	_oro.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
-	var marco := _panel(Vector2(455, 62), Vector2(370, 24), Color(0.08, 0.07, 0.06, 0.9), Color(0.45, 0.32, 0.2))
-	_hud_arriba.add_child(marco)
-	_barra_bandera = _barra(marco, Vector2(2, 2), Vector2(366, 20), Color(0.72, 0.18, 0.14))
+	var texto_puntos := _texto(panel_economia, "", Vector2(10, 34), Vector2(240, 20), 13, Color(0.82, 0.78, 0.7))
+	_texto_puntos = texto_puntos
+	_texto_puntos.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+	# --- Barra de vida del estandarte (centro-abajo, independiente) ---
+	var marco_estandarte := _panel(Vector2(460, 94), Vector2(360, 26), Color(0.08, 0.07, 0.06, 0.9), Color(0.45, 0.32, 0.2))
+	_hud_arriba.add_child(marco_estandarte)
+	_barra_bandera = _barra(marco_estandarte, Vector2(2, 2), Vector2(356, 18), Color(0.72, 0.18, 0.14))
 	_barra_bandera.show_percentage = false
-	var etiqueta := _texto(marco, "ESTANDARTE", Vector2(0, 2), Vector2(370, 20), 11, TEXTO)
+	var etiqueta := _texto(marco_estandarte, "ESTANDARTE DE LA REBELIÓN", Vector2(0, 2), Vector2(360, 16), 10, TEXTO)
 	etiqueta.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	_aviso = _texto(_hud_arriba, "", Vector2(330, 96), Vector2(620, 26), 20, Color(1.0, 0.45, 0.25))
+	_aviso = _texto(_hud_arriba, "", Vector2(12, 130), Vector2(688, 24), 18, Color(1.0, 0.45, 0.25))
 	_aviso.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
@@ -604,6 +625,41 @@ func _actualizar_inventario() -> void:
 			cantidad_texto.text = ""
 		boton.disabled = restante > 0.0
 
+		# Borde dorado si está seleccionada para swap
+		if _ranura_seleccionada_swap == i:
+			var borde := StyleBoxFlat.new()
+			borde.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+			borde.border_color = _color_borde_seleccionado
+			borde.set_border_width_all(3)
+			borde.set_corner_radius_all(4)
+			boton.add_theme_stylebox_override("focus", borde)
+		else:
+			boton.add_theme_stylebox_override("focus", null)
+
+
+func _evento_raton_inventario(indice: int, boton: Button, evento: InputEvent) -> void:
+	if evento is InputEventMouseButton:
+		var clic := evento as InputEventMouseButton
+		if clic.button_index == MOUSE_BUTTON_RIGHT and clic.pressed:
+			if _ranura_seleccionada_swap == indice:
+				# Deseleccionar
+				_ranura_seleccionada_swap = -1
+				_actualizar_inventario()
+			elif _ranura_seleccionada_swap >= 0:
+				# Swap entre las dos ranuras
+				if _jugador != null and _jugador.inventario != null:
+					_jugador.inventario.intercambiar(_ranura_seleccionada_swap, indice)
+				_ranura_seleccionada_swap = -1
+				_actualizar_inventario()
+			else:
+				# Seleccionar esta ranura para swap
+				_ranura_seleccionada_swap = indice
+				_actualizar_inventario()
+
+
+func _limpiar_seleccion_swap() -> void:
+	_ranura_seleccionada_swap = -1
+
 
 func _actualizar_overlay() -> void:
 	var salud_max := maxf(1.0, _jugador.estadisticas.salud_maxima)
@@ -625,7 +681,8 @@ func _actualizar_superior() -> void:
 			_tiempo_oleada.text = "Tiempo: %d s" % int(ceil(tiempo))
 		else:
 			_tiempo_oleada.text = ""
-	_oro.text = "ORO %d   ·   PUNTOS %d" % [_oro_arena(), _puntos_atributo()]
+	_oro.text = "ORO %d" % _oro_arena()
+	_texto_puntos.text = "PUNTOS %d" % _puntos_atributo()
 	if _bandera != null:
 		_barra_bandera.max_value = maxf(1.0, _bandera.salud_maxima)
 		_barra_bandera.value = _bandera.salud_actual
@@ -714,6 +771,7 @@ func alternar_tienda() -> void:
 func cerrar_tienda() -> void:
 	_tienda.cerrar_panel()
 	forzar_ocultar_tooltip()
+	_limpiar_seleccion_swap()
 
 
 func tienda_abierta() -> bool:
