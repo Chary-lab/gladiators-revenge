@@ -750,6 +750,12 @@ func equipar_arma(nueva_arma: WeaponItem) -> bool:
 	arma_actual = nueva_arma
 	estadisticas.configurar_clase(nueva_arma.id_clase())
 	estadisticas.aplicar_bonos_equipo(nueva_arma.bonificaciones_atributos)
+	# Un arma que otorga vida máxima también entrega esa vida al campeón.
+	var vida_antes := estadisticas.salud_maxima - float(nueva_arma.bonificaciones_atributos.get("vida", 0))
+	var vida_despues := estadisticas.salud_maxima
+	var ganancia := vida_despues - vida_antes
+	if ganancia > 0.0:
+		curar(ganancia)
 	_cooldowns.fill(0.0)
 	_inicializar_habilidades()
 	if visual != null:

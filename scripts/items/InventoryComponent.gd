@@ -275,4 +275,11 @@ func _recalcular_bonos() -> void:
 		for clave in item.bonificaciones:
 			totales[clave] = float(totales.get(clave, 0.0)) + float(item.bonificaciones[clave])
 	if _jugador != null and _jugador.estadisticas != null:
+		var vida_antes := _jugador.estadisticas.salud_maxima
 		_jugador.estadisticas.aplicar_bonos_inventario(totales)
+		var vida_despues := _jugador.estadisticas.salud_maxima
+		var ganancia := vida_despues - vida_antes
+		if ganancia > 0.0:
+			# Un objeto que da vida máxima también entrega esa vida al campeón:
+			# no se queda "sin llenar" al comprar o forjar.
+			_jugador.curar(ganancia)
