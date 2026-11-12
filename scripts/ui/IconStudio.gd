@@ -34,6 +34,14 @@ static func color_para(categoria: StringName, id: StringName = &"") -> Color:
 		return COLOR_INTELIGENCIA
 	if texto.contains("obsidiana") or texto.contains("eclipse") or texto.contains("cataclismo") or texto.contains("cuerno"):
 		return COLOR_LEGENDARIO
+	if texto == "armadura_brasas":
+		return COLOR_FUERZA
+	if texto == "anillo_vampiro":
+		return Color(0.80, 0.16, 0.22)
+	if texto == "corazon_fenix":
+		return Color(1.0, 0.52, 0.12)
+	if texto == "capa_comandante" or texto == "guadana_verdugo_ancestral":
+		return COLOR_LEGENDARIO
 	if categoria == CATEGORIA_COMANDO:
 		return COLOR_NEUTRO
 	if texto.contains("bastion") or texto.contains("muro") or texto.contains("sismico") or texto.contains("provoca") or texto.contains("brasa") or texto.contains("placa"):

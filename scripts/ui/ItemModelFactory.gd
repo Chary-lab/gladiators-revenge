@@ -65,6 +65,20 @@ static func _objeto(raiz: Node3D, id: StringName) -> void:
 		_orbe(raiz, ZAFIRO, true)
 	elif texto == "cuerno_rebelion":
 		_cuerno(raiz, ORO)
+	elif texto == "armadura_brasas":
+		# Épica: coraza de brasas con ribete dorado.
+		_escudo(raiz, Color(0.88, 0.34, 0.12))
+	elif texto == "anillo_vampiro":
+		_anillo(raiz, 0.30, 0.46, Color(0.55, 0.34, 0.10), Vector3(0, -0.02, 0), 0.5)
+		_gema(raiz, SANGRE, 0.30)
+		_esfera(raiz, 0.10, SANGRE, Vector3(0, 0.26, 0), 0.0, 1.6)
+	elif texto == "corazon_fenix":
+		_corazon(raiz, Color(1.0, 0.46, 0.10), true)
+		_pluma(raiz, Color(1.0, 0.78, 0.30))
+	elif texto == "capa_comandante":
+		_capa(raiz, Color(0.38, 0.16, 0.58))
+	elif texto == "guadana_verdugo_ancestral":
+		_guadana(raiz)
 	else:
 		_gema(raiz, Color(0.78, 0.56, 0.24), 0.42)
 
@@ -391,3 +405,27 @@ static func _cuerno(raiz: Node3D, color: Color) -> void:
 	_anillo(raiz, 0.20, 0.27, color, Vector3(0, -0.28, 0), 1.0)
 	_anillo(raiz, 0.16, 0.22, color, Vector3(0.10, -0.06, 0), 1.0)
 	_caja(raiz, Vector3(0.42, 0.08, 0.08), color, Vector3(0.28, 0.58, 0), 0.6, 0.8)
+
+## Capa de mando: manto de gala, cuello dorado y broches.
+static func _capa(raiz: Node3D, color: Color) -> void:
+	var manto_mesh := PrismMesh.new()
+	manto_mesh.size = Vector3(0.86, 1.15, 0.18)
+	var manto := _malla(raiz, manto_mesh, color, Vector3(0, 0.02, 0), 0.0, 0.15)
+	manto.rotation_degrees = Vector3(180, 0, 0)
+	_caja(raiz, Vector3(0.62, 0.10, 0.20), color.lightened(0.18), Vector3(0, 0.46, 0.02), 0.0, 0.1)
+	_cilindro(raiz, 0.20, 0.10, ORO, Vector3(0, 0.54, 0), 0.9)
+	_esfera(raiz, 0.07, ORO, Vector3(-0.20, 0.44, 0.12), 0.9)
+	_esfera(raiz, 0.07, ORO, Vector3(0.20, 0.44, 0.12), 0.9)
+
+
+## Guadaña del verdugo: asta larga de madera y hoja curva de acero.
+static func _guadana(raiz: Node3D) -> void:
+	var asta := _cilindro(raiz, 0.055, 1.35, MADERA, Vector3(0, 0.02, 0))
+	asta.rotation_degrees = Vector3(0, 0, 6)
+	_esfera(raiz, 0.09, ORO, Vector3(0.02, 0.60, 0), 0.9)
+	var hoja := _caja(raiz, Vector3(0.72, 0.11, 0.05), ACERO, Vector3(0.34, 0.63, 0), 1.0, 0.2)
+	hoja.rotation_degrees = Vector3(0, 0, -16)
+	var punta := _cono(raiz, 0.07, 0.46, ACERO, Vector3(0.70, 0.48, 0), 1.0, 0.2)
+	punta.rotation_degrees = Vector3(0, 0, 104)
+	_caja(raiz, Vector3(0.10, 0.26, 0.10), CUERO, Vector3(0.0, -0.52, 0))
+

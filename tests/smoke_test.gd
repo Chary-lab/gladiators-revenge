@@ -285,6 +285,20 @@ func _ejecutar() -> void:
 	_comprobar(cartas_mercado == ItemCatalog.vendibles().size(), "la pestaña MERCADO lista solo lo vendible")
 	_comprobar(cartas_recetas == ItemCatalog.recetas().size(), "la pestaña RECETARIO lista todas las recetas")
 	_comprobar(cartas_recetas > cartas_mercado, "el recetario muestra los objetos forjables")
+
+	# --- Iconos 3D de los objetos nuevos ---
+	var nuevos := [&"armadura_brasas", &"anillo_vampiro", &"corazon_fenix", &"capa_comandante", &"guadana_verdugo_ancestral"]
+	var modelos_ok := true
+	for id in nuevos:
+		var modelo := ItemModelFactory.crear(id)
+		if _contar_mallas(modelo) < 3:
+			modelos_ok = false
+		modelo.free()
+	_comprobar(modelos_ok, "los objetos nuevos tienen miniatura 3D propia")
+	_comprobar(
+		is_equal_approx(IconStudio.color_para(IconStudio.CATEGORIA_OBJETO, &"capa_comandante").b, IconStudio.COLOR_LEGENDARIO.b),
+		"los legendarios nuevos usan el tinte dorado"
+	)
 	hud.cerrar_tienda()
 	await process_frame
 
@@ -356,3 +370,12 @@ func _ejecutar() -> void:
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
 	Sfx.liberar()
 	quit(1 if _fallos > 0 else 0)
+
+## Cuenta las mallas de una miniatura 3D (para detectar el icono genérico).
+func _contar_mallas(nodo: Node) -> int:
+	var total := 0
+	if nodo is MeshInstance3D:
+		total += 1
+	for hijo in nodo.get_children():
+		total += _contar_mallas(hijo)
+	return total

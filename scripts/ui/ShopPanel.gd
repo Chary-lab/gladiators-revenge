@@ -469,16 +469,13 @@ func _al_entrar_carta(item: ItemData, boton: Button) -> void:
 	var tween := create_tween()
 	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tween.tween_property(boton, "scale", Vector2(1.035, 1.035), 0.12).set_trans(Tween.TRANS_QUAD)
-	if _hud != null:
-		_hud.mostrar_tooltip_item(item)
+	# La ficha lateral ya muestra todos los datos: sin tooltip flotante.
 
 
 func _al_salir_carta(boton: Button) -> void:
 	var tween := create_tween()
 	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tween.tween_property(boton, "scale", Vector2.ONE, 0.12)
-	if _hud != null:
-		_hud.ocultar_tooltip()
 
 
 func _seleccionar(item: ItemData, _boton: Button) -> void:
@@ -733,7 +730,9 @@ func _estilo_tab(activo: bool) -> StyleBoxFlat:
 	return estilo
 
 
-func _icono_listo(textura: Texture2D, destino: TextureRect) -> void:
+func _icono_listo(textura: Texture2D, destino) -> void:
+	# `destino` puede estar liberado si la lista se reconstruyó mientras el
+	# icono se renderizaba: sin anotar el tipo no hay error de conversión.
 	if is_instance_valid(destino):
 		destino.texture = textura
 
