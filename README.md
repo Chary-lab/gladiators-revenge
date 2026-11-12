@@ -9,11 +9,11 @@ de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
 anti-camping, talentos con rangos, skins, HUD con retrato 3D y miniaturas
-renderizadas, inventario de 6 ranuras con forja automática, objetos legendarios,
-arte 3D animado y audio CC0. **Cooperativo online autoritativo** para hasta 3
+renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, épicos y
+legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo** para hasta 3
 gladiadores; sin guardado todavía.
 
-- 73 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 81 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
@@ -154,14 +154,25 @@ pergaminos, componentes y recetas. La mochila tiene 6 ranuras activas.
 - **6 componentes** (100–130 de oro): atributos planos, armadura, crítico,
   regeneración.
 - **6 intermedios** con receta de 2 piezas y forja de 80 de oro.
-- **4 legendarios**: Corazón de Obsidiana (escudo e inmunidad a aturdimientos), Daga del Eclipse
+- **3 épicos** (receta de 2 piezas y forja de 180): Armadura de Brasas, Anillo de
+  Vampirismo y Corazón de Fénix. Además de sus stats irradian aura.
+- **6 legendarios**: Corazón de Obsidiana (escudo e inmunidad a aturdimientos), Daga del Eclipse
   (parpadeo y crítico asegurado), Orbe del Cataclismo (descarga mágica con 3
-  rebotes) y Cuerno de la Rebelión (cura el estandarte y da gritos de guerra).
+  rebotes), Cuerno de la Rebelión (cura el estandarte y da gritos de guerra),
+  Capa del Comandante y Guadaña del Verdugo Ancestral (auras de mando).
 
 La forja es automática: al comprar el ingrediente que completa una receta, se
 consumen los materiales, se cobra la forja y, si el resultado completa otra
 receta, la cadena sigue hasta el legendario. Los objetos equipados aplican sus
 bonos mediante `GladiatorStats.aplicar_bonos_inventario`.
+
+**Rarezas y auras.** `ItemData.rareza` (común, épico, legendario) decide el
+color en la tienda: gris, púrpura y dorado. `ItemData.aura` es un diccionario
+que el portador irradia a sí mismo y a los aliados a 10 m
+(`GladiatorController.auras_cercanas`, acumulado en `InventoryComponent.auras`):
+`dano_aliados`, `velocidad_ataque_aliados`, `robo_vida_aliados` y
+`regeneracion_aliados`. Se aplican al golpe básico, a las invocaciones, a la
+regeneración de `CombatComponent` y al temporizador de ataque.
 
 ## Escalado
 
@@ -234,7 +245,7 @@ scripts/
     ItemModelFactory.gd     modelos de objetos y comandos con primitivas
     GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
-  smoke_test.gd             prueba de humo headless (73 comprobaciones)
+  smoke_test.gd             prueba de humo headless (81 comprobaciones)
   net_smoke.gd              cliente coop: conexión, compra y clase única
   net_smoke_b.gd            segundo cliente: clase única y revivir
   wave_sim.gd               simulación acelerada de las 20 oleadas

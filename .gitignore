@@ -26,5 +26,6 @@ supabase/.env
 .vscode/
 .idea/
 .playwright-cli/
+.commandcode/
 Thumbs.db
 desktop.ini
