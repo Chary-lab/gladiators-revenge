@@ -32,6 +32,14 @@ var es_arquero := false
 var rango_ataque_distancia := 8.0
 var cadencia_disparo := 2.0
 var _tiempo_disparo := 0.0
+
+## Hechicero: lanza proyectiles mágicos con daño en área al impactar.
+var es_hechicero := false
+var rango_ataque_magia := 10.0
+var cadencia_magia := 2.5
+var _tiempo_magia := 0.0
+var dano_magia := 18.0
+var radio_magia := 3.5
 var recompensa := 8
 var xp_recompensa := 0
 var visual: CharacterVisual
@@ -112,6 +120,10 @@ func preparar(
 	var ligero := not elite and randf() < 0.35
 	es_ligero = ligero
 	es_arquero = not elite and not ligero and randf() < 0.18
+	es_hechicero = not elite and not ligero and not es_arquero and randf() < 0.12
+	if es_hechicero:
+		salud_maxima *= 0.60
+		velocidad *= 0.80
 	if es_arquero:
 		salud_maxima *= 0.70
 		velocidad *= 0.85
@@ -136,6 +148,8 @@ func preparar(
 	add_to_group(GRUPO)
 	if es_arquero and visual != null:
 		visual.aplicar_skin(Color(0.95, 0.45, 0.40))
+	if es_hechicero and visual != null:
+		visual.aplicar_skin(Color(0.80, 0.40, 1.00))
 	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
 	if tracker != null:
 		tracker.registrar(self)
@@ -223,6 +237,29 @@ func _physics_process(delta: float) -> void:
 				_disparar_proyectil(objetivo)
 			return
 
+		# Hechicero: mantener distancia y lanzar magia de área
+		if es_hechicero:
+			if distancia > rango_ataque_magia:
+				var direccion := objetivo.global_position - global_position
+				direccion.y = 0.0
+				if direccion.length_squared() > 0.0004:
+					direccion = direccion.normalized()
+					velocity = direccion * velocidad
+					rotation.y = lerp_angle(rotation.y, atan2(direccion.x, direccion.z), 10.0 * delta)
+					move_and_slide()
+					if visual != null:
+						visual.mover(velocity.length())
+			return
+		else:
+			velocity = Vector3.ZERO
+			if visual != null:
+				visual.mover(0.0)
+			_tiempo_magia -= delta
+			if _tiempo_magia <= 0.0:
+				_tiempo_magia = cadencia_magia
+				_disparar_magia(objetivo)
+			return
+
 	if distancia > rango:
 		var direccion := objetivo.global_position - global_position
 		direccion.y = 0.0
@@ -245,6 +282,40 @@ func _physics_process(delta: float) -> void:
 			visual.atacar()
 		if objetivo.has_method("recibir_dano"):
 			objetivo.recibir_dano(dano, &"fisico", self)
+
+
+func _disparar_magia(objetivo: Node3D) -> void:
+	if objetivo == null:
+		return
+	var rayo := MeshInstance3D.new()
+	var caja := BoxMesh.new()
+	caja.size = Vector3(0.12, 0.12, global_position.distance_to(objetivo.global_position))
+	rayo.mesh = caja
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.8, 0.4, 1.0, 0.85)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = Color(0.6, 0.2, 1.0)
+	material.emission_energy_multiplier = 2.0
+	rayo.material_override = material
+	add_child(rayo)
+	var medio := global_position.lerp(objetivo.global_position, 0.5)
+	rayo.global_position = Vector3(medio.x, 1.0, medio.z)
+	rayo.look_at(objetivo.global_position, Vector3.UP)
+	var tween := rayo.create_tween()
+	tween.tween_property(material, "albedo_color:a", 0.0, 0.25)
+	tween.tween_callback(rayo.queue_free)
+
+	# Daño en área mágica alrededor del objetivo
+	for nodo in get_tree().get_nodes_in_group("gladiadores"):
+		var gladiador := nodo as Node3D
+		if gladiador == null or not is_instance_valid(gladiador):
+			continue
+		if gladiador.global_position.distance_to(objetivo.global_position) <= radio_magia:
+			if gladiador.has_method("recibir_dano"):
+				gladiador.recibir_dano(dano_magia, GladiatorStats.TIPO_MAGICO, self)
+	Sfx.reproducir("magia", -10.0)
 
 
 func _disparar_proyectil(objetivo: Node3D) -> void:
