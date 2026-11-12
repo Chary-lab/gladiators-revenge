@@ -598,7 +598,7 @@ func _bbcode_receta(item: ItemData) -> String:
 			var otro := ItemCatalog.obtener(ingrediente)
 			var nombre := otro.nombre if otro != null else String(ingrediente)
 			var tiene := _jugador != null and _jugador.inventario != null and _jugador.inventario.tiene(ingrediente)
-			lineas.append("%s %s" % ["[color=#7dff9a]✔[/color]" if tiene else "[color=#ff8a6a]✘[/color]", nombre])
+			lineas.append("%s %s" % ["[color=#7dff9a]•[/color]" if tiene else "[color=#ff8a6a]×[/color]", nombre])
 		lineas.append("[color=#d8b45a]Forja[/color]  %d oro" % item.precio_forja)
 	var mejoras := _mejoras(item.id)
 	if not mejoras.is_empty():

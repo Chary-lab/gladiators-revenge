@@ -716,7 +716,8 @@ func _actualizar_estadisticas() -> void:
 	for i in 3:
 		var es_principal: bool = claves[i] == principal
 		var color := ORO if es_principal else TEXTO
-		_atributos_nombres[i].text = ("◆ " + nombres[i]) if es_principal else nombres[i]
+		# U+25C6 no existe en la fuente por defecto (sale como caja tofu): usamos un punto.
+		_atributos_nombres[i].text = ("• " + nombres[i]) if es_principal else nombres[i]
 		_atributos_nombres[i].add_theme_color_override("font_color", color)
 		var bono := int(totales[i]) - int(bases[i])
 		_atributos_valores[i].text = "%d%s" % [
@@ -1356,7 +1357,7 @@ func _bbcode_item(item: ItemData) -> String:
 			var otro := ItemCatalog.obtener(ingrediente)
 			var nombre := otro.nombre if otro != null else String(ingrediente)
 			var tiene := _jugador != null and _jugador.inventario != null and _jugador.inventario.tiene(ingrediente)
-			lineas.append(("%s %s" % ["[color=#7dff9a]✔[/color]" if tiene else "[color=#ff8a6a]✘[/color]", nombre]))
+			lineas.append(("%s %s" % ["[color=#7dff9a]•[/color]" if tiene else "[color=#ff8a6a]×[/color]", nombre]))
 		lineas.append("[color=#d8b45a]Forja[/color]  %d oro" % item.precio_forja)
 	else:
 		lineas.append("")

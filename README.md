@@ -13,7 +13,7 @@ renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, é
 legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo** para hasta 3
 gladiadores; sin guardado todavía.
 
-- 86 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 87 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
@@ -245,7 +245,7 @@ scripts/
     ItemModelFactory.gd     modelos de objetos y comandos con primitivas
     GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
-  smoke_test.gd             prueba de humo headless (86 comprobaciones)
+  smoke_test.gd             prueba de humo headless (87 comprobaciones)
   net_smoke.gd              cliente coop: conexión, compra y clase única
   net_smoke_b.gd            segundo cliente: clase única y revivir
   wave_sim.gd               simulación acelerada de las 20 oleadas

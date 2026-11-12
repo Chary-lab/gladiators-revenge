@@ -244,15 +244,15 @@ static func _legendarios() -> Array[ItemData]:
 	comandante.pasiva = "Aura: +15 % daño y +10 % velocidad de ataque a ti y tus aliados."
 	comandante.descripcion = "Tu aura de mando aumenta el daño y la velocidad de ataque de todos los aliados cercanos."
 
-	var guadaña := _base(&"guadaña_verdugo_ancestral", "Guadaña del Verdugo Ancestral", "Cosecha almas con cada tajo.", "✖", ItemData.Tipo.LEGENDARIO, 3, 0)
-	guadaña.rareza = ItemData.Rareza.LEGENDARIO
-	guadaña.receta = [&"ojo_halcon", &"furia_tormenta"]
-	guadaña.precio_forja = 500
-	guadaña.bonificaciones = {&"agilidad": 40, &"critico": 0.10, &"robo_vida": 0.12}
-	guadaña.aura = {&"dano_aliados": 0.20}
-	guadaña.pasiva = "Aura: +20 % daño para ti y todos los aliados cercanos."
-	guadaña.descripcion = "Tu aura de ejecutor potencia el daño de toda la rebelión."
-	return [corazon, daga, orbe, cuerno, comandante, guadaña]
+	var guadana := _base(&"guadana_verdugo_ancestral", "Guadaña del Verdugo Ancestral", "Cosecha almas con cada tajo.", "✖", ItemData.Tipo.LEGENDARIO, 3, 0)
+	guadana.rareza = ItemData.Rareza.LEGENDARIO
+	guadana.receta = [&"ojo_halcon", &"furia_tormenta"]
+	guadana.precio_forja = 500
+	guadana.bonificaciones = {&"agilidad": 40, &"critico": 0.10, &"robo_vida": 0.12}
+	guadana.aura = {&"dano_aliados": 0.20}
+	guadana.pasiva = "Aura: +20 % daño para ti y todos los aliados cercanos."
+	guadana.descripcion = "Tu aura de ejecutor potencia el daño de toda la rebelión."
+	return [corazon, daga, orbe, cuerno, comandante, guadana]
 
 
 static func _base(

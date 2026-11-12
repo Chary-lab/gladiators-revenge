@@ -273,6 +273,17 @@ func _ejecutar() -> void:
 	_comprobar(hud.get("_revive_panel") != null, "la consola tiene panel de revivir")
 	_comprobar(hud.get("_tooltip") != null, "la consola tiene tooltip rico")
 
+	# --- Glifos: la fuente por defecto no dibuja ◆ ✔ ✘ (salen como cajas) ---
+	var fuente: Font = ThemeDB.fallback_font
+	var glifos_ok := true
+	for code in [0x25C6, 0x2714, 0x2718]:
+		if fuente.has_char(code):
+			continue
+		for ruta in ["res://scripts/ui/ShopPanel.gd", "res://scripts/ui/ArenaHUD.gd"]:
+			if FileAccess.get_file_as_string(ruta).contains(String.chr(code)):
+				glifos_ok = false
+	_comprobar(glifos_ok, "la UI no usa glifos que la fuente no dibuja")
+
 	# --- Tienda: pestañas y recetario ---
 	hud.alternar_tienda()
 	await process_frame
@@ -333,7 +344,7 @@ func _ejecutar() -> void:
 	var portador: GladiatorController = escena._instanciar_gladiador(base_aura + Vector3(2.0, 0.0, 0.0), 7)
 	var lejano: GladiatorController = escena._instanciar_gladiador(base_aura + Vector3(60.0, 0.0, 0.0), 8)
 	portador.inventario.agregar(ItemCatalog.obtener(&"anillo_vampiro"))
-	lejano.inventario.agregar(ItemCatalog.obtener(&"guadaña_verdugo_ancestral"))
+	lejano.inventario.agregar(ItemCatalog.obtener(&"guadana_verdugo_ancestral"))
 	await process_frame
 	_comprobar(is_equal_approx(portador.bono_aura(&"robo_vida_aliados"), 0.05), "el portador recibe su propia aura")
 	_comprobar(is_equal_approx(portador.bono_aura(&"dano_aliados"), 0.0), "un aliado lejano no aporta su aura")
