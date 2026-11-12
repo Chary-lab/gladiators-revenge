@@ -40,6 +40,12 @@ var cadencia_magia := 2.5
 var _tiempo_magia := 0.0
 var dano_magia := 18.0
 var radio_magia := 3.5
+
+## Tanque: más vida, escudo que absorbe daño y se recarga, ataque fuerte pero lento.
+var es_tanque := false
+var escudo_tanque_actual := 0.0
+var escudo_tanque_maxima := 0.0
+var _tiempo_recarga_escudo := 0.0
 var recompensa := 8
 var xp_recompensa := 0
 var visual: CharacterVisual
@@ -121,9 +127,16 @@ func preparar(
 	es_ligero = ligero
 	es_arquero = not elite and not ligero and randf() < 0.18
 	es_hechicero = not elite and not ligero and not es_arquero and randf() < 0.12
+	es_tanque = not elite and not ligero and not es_arquero and not es_hechicero and randf() < 0.10
 	if es_hechicero:
 		salud_maxima *= 0.60
 		velocidad *= 0.80
+	if es_tanque:
+		salud_maxima *= 1.8
+		velocidad *= 0.65
+		dano *= 1.5
+		escudo_tanque_maxima = 60.0 + ronda * 5.0
+		escudo_tanque_actual = escudo_tanque_maxima
 	if es_arquero:
 		salud_maxima *= 0.70
 		velocidad *= 0.85
@@ -150,6 +163,8 @@ func preparar(
 		visual.aplicar_skin(Color(0.95, 0.45, 0.40))
 	if es_hechicero and visual != null:
 		visual.aplicar_skin(Color(0.80, 0.40, 1.00))
+	if es_tanque and visual != null:
+		visual.aplicar_skin(Color(0.70, 0.70, 0.80))
 	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
 	if tracker != null:
 		tracker.registrar(self)
@@ -283,6 +298,14 @@ func _physics_process(delta: float) -> void:
 		if objetivo.has_method("recibir_dano"):
 			objetivo.recibir_dano(dano, &"fisico", self)
 
+	# Tanque: recarga de escudo con el tiempo
+	if es_tanque and escudo_tanque_actual < escudo_tanque_maxima:
+		_tiempo_recarga_escudo -= delta
+		if _tiempo_recarga_escudo <= 0.0:
+			escudo_tanque_actual = minf(escudo_tanque_maxima, escudo_tanque_actual + 5.0 * delta)
+			if escudo_tanque_actual >= escudo_tanque_maxima:
+				_tiempo_recarga_escudo = 2.0  # Pausa antes de volver a recargar
+
 
 func _disparar_magia(objetivo: Node3D) -> void:
 	if objetivo == null:
@@ -407,6 +430,19 @@ func recibir_dano(cantidad: float, tipo: StringName = &"fisico", _fuente: Node =
 		return
 	if tipo == GladiatorStats.TIPO_MAGICO and _vulnerable_magico > 0.0:
 		cantidad *= 1.35
+
+	# Tanque: el escudo absorbe daño primero
+	if es_tanque and escudo_tanque_actual > 0.0:
+		var absorbido := minf(escudo_tanque_actual, cantidad)
+		escudo_tanque_actual -= absorbido
+		cantidad -= absorbido
+		NumerosDano.mostrar(global_position + Vector3(0, 1.8, 0), absorbido, GladiatorStats.TIPO_VERDADERO, false, true)
+		if cantidad <= 0.0:
+			_flash = 0.08
+			if visual != null:
+				visual.recibir_golpe()
+			Sfx.reproducir("escudo", -8.0)
+			return
 
 	salud_actual = maxf(0.0, salud_actual - cantidad)
 	_flash = 0.08
