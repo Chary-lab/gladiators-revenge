@@ -13,7 +13,7 @@ renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, é
 legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo** para hasta 3
 gladiadores; sin guardado todavía.
 
-- 87 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 98 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
@@ -115,7 +115,9 @@ flechas, botas y demás piezas con primitivas propias.
 4. Al superar una oleada: oro, puntos de atributo, punto rojo de talento y 25 %
    de curación; cada nivel sube automáticamente los atributos de la clase y una
    habilidad aleatoria (Q/W/E/R) que no esté al máximo.
-5. Cada 5 oleadas aparece un **jefe**; la oleada 20 cierra la partida.
+5. Cada oleada tiene un **tema** con arquetipos propios (esqueletos, espectros,
+   arqueros, magos, bárbaros tanque y caballeros de élite) según
+   `BalanceOlas.PERFILES`; la 5, 10, 15 y 20 traen jefe y la 20 cierra la partida.
 6. Si el jugador permanece 14 s en un radio de 5 m, el público activa la
    **Furia del Público**: congela la ganancia de oro y lanza bolas de fuego
    durante 9 s. Moverse reinicia el contador.
@@ -123,6 +125,29 @@ flechas, botas y demás piezas con primitivas propias.
 La clase se escoge una sola vez por partida: al elegir un campeón, los otros
 pedestales se apagan y desaparecen como opción. Los rangos de habilidad ya no
 se compran; el panel **T** solo invierte puntos rojos en talentos.
+
+## Balance
+
+Todo el balance vive en tres sitios y ninguna fórmula se replica fuera de ellos.
+
+| Pieza | Dónde | Qué controla |
+| --- | --- | --- |
+| Daño mín-máx | `GladiatorStats.rango_dano_ataque()` | Banda del golpe básico (±20 %) |
+| Ritmo de ataque | `GladiatorStats.velocidad_ataque` | Base 0,15/s + 0,04 por AGI + 0,02 por nivel |
+| Clase | `MULT_DANO_POR_CLASE` | Prisionero 0,80 · Bastión 1,00 · Filo 1,12 · Cetro 0,92 |
+| Enemigos | `ArenaEnemy.ARQUETIPOS` | Vida, daño, velocidad y cadencia por arquetipo |
+| Oleadas | `BalanceOlas.PERFILES` | Mezcla de arquetipos, vida/daño extra y jefe |
+
+El ataque básico tira `randf_range(min, max)`; la media es
+`(daño del arma + atributo principal × 0,75) × (1 + 0,05 por nivel) × mult de clase`.
+Un gladiador de nivel 1 pega poco a propósito: el daño llega con niveles, equipo
+y auras, no con la estadística base.
+
+Los atributos alimentan las estadísticas base: Fuerza → vida y mitigación,
+Agilidad → armadura, velocidad de ataque y crítico, Inteligencia → maná y daño
+mágico. `tests/balance_report.gd` imprime la curva (HP, DPS, TTK y
+supervivencia) de las cuatro clases en los niveles 1, 5, 10, 15 y 20 para afinar
+constantes sin abrir el editor.
 
 ## Armas
 
@@ -206,6 +231,7 @@ assets/audio/               efectos CC0 de Kenney
 scripts/
   core/
     GladiatorStats.gd       atributos y escalado
+    BalanceOlas.gd          perfiles de oleada (arquetipos, vida y jefe)
     AbilityData.gd          datos de habilidad
     TalentData.gd           ranuras de talento
     ObjectPool.gd           pool genérico (enemigos, proyectiles)
@@ -245,10 +271,11 @@ scripts/
     ItemModelFactory.gd     modelos de objetos y comandos con primitivas
     GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
-  smoke_test.gd             prueba de humo headless (87 comprobaciones)
+  smoke_test.gd             prueba de humo headless (98 comprobaciones)
   net_smoke.gd              cliente coop: conexión, compra y clase única
   net_smoke_b.gd            segundo cliente: clase única y revivir
   wave_sim.gd               simulación acelerada de las 20 oleadas
+  balance_report.gd         informe de DPS, TTK y supervivencia por clase
 Dockerfile                  servidor cooperativo headless
 fly.toml / render.yaml      despliegue del servidor
 supabase/migrations/        esquema de servidores y partidas

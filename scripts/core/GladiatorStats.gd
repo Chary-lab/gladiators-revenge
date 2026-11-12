@@ -23,7 +23,20 @@ const TIPO_VERDADERO := &"verdadero"
 
 ## Daño de ataque básico que aporta cada punto del atributo principal de la
 ## clase equipada (Bastión: FUE, Filo: AGI, Cetro: INT, Prisionero: FUE).
-const DANO_ATAQUE_POR_ATRIBUTO := 1.0
+## Es deliberadamente bajo: un gladiador sin experiencia pega poco y su daño
+## crece sobre todo con el nivel y el equipo.
+const DANO_ATAQUE_POR_ATRIBUTO := 0.75
+## Crecimiento del daño por nivel (3,5 % por nivel sobre el daño base).
+const DANO_ESCALA_POR_NIVEL := 0.050
+## Variación aleatoria del golpe: el daño real cae en [min, max].
+const DANO_VARIANZA := 0.20
+## Multiplicador de daño según la clase equipada (identidad de combate).
+const MULT_DANO_POR_CLASE := {
+	&"prisionero": 0.80,
+	&"bastion": 1.00,
+	&"filo": 1.12,
+	&"cetro": 0.92,
+}
 
 ## Crecimiento automático por nivel según la clase (FUE, AGI, INT). Los
 ## decimales se acumulan para no perder fracciones entre niveles.
@@ -35,21 +48,24 @@ const CRECIMIENTO_POR_CLASE := {
 }
 
 # --- Fuerza ---------------------------------------------------------------
-const VIDA_BASE := 120.0
-const VIDA_POR_FUERZA := 11.0
+const VIDA_BASE := 100.0
+const VIDA_POR_FUERZA := 9.0
 const REGEN_VIDA_BASE := 0.4
 const REGEN_VIDA_POR_FUERZA := 0.06
-const DANO_FISICO_POR_FUERZA := 1.6
-const MITIGACION_FISICA_POR_FUERZA := 0.0035
+const DANO_FISICO_POR_FUERZA := 1.2
+const MITIGACION_FISICA_POR_FUERZA := 0.0030
 const ARMADURA_POR_PUNTO := 0.01
-const AGILIDAD_POR_ARMADURA := 0.05
+const AGILIDAD_POR_ARMADURA := 0.12
 const MITIGACION_FISICA_MAXIMA := 0.60
 
 # --- Agilidad -------------------------------------------------------------
-const VEL_ATAQUE_BASE := 0.85
-const VEL_ATAQUE_POR_AGI := 0.012
-const VEL_ATAQUE_MIN := 0.60
-const VEL_ATAQUE_MAX := 2.50
+## Ataques por segundo. La base es el suelo de un novato: casi todo el ritmo
+## lo aportan la Agilidad y el nivel.
+const VEL_ATAQUE_BASE := 0.15
+const VEL_ATAQUE_POR_AGI := 0.040
+const VEL_ATAQUE_POR_NIVEL := 0.020
+const VEL_ATAQUE_MIN := 0.15
+const VEL_ATAQUE_MAX := 2.20
 const CRITICO_BASE := 0.05
 const CRITICO_POR_AGI := 0.0035
 const CRITICO_MAXIMO := 0.75
@@ -61,11 +77,11 @@ const VEL_MOV_MIN := 3.0
 const VEL_MOV_MAX := 9.0
 
 # --- Inteligencia ---------------------------------------------------------
-const MANA_BASE := 80.0
-const MANA_POR_INT := 9.0
+const MANA_BASE := 60.0
+const MANA_POR_INT := 7.0
 const REGEN_MANA_BASE := 1.2
 const REGEN_MANA_POR_INT := 0.09
-const DANO_MAGICO_POR_INT := 1.8
+const DANO_MAGICO_POR_INT := 1.4
 const MITIGACION_MAGICA_POR_INT := 0.0015
 const MITIGACION_MAGICA_MAXIMA := 0.40
 const HERENCIA_INVOCACION_BASE := 0.05
@@ -148,7 +164,10 @@ var mitigacion_fisica: float:
 var velocidad_ataque: float:
 	get:
 		return clampf(
-			VEL_ATAQUE_BASE + agilidad_total * VEL_ATAQUE_POR_AGI + _bono("velocidad_ataque"),
+			VEL_ATAQUE_BASE
+			+ agilidad_total * VEL_ATAQUE_POR_AGI
+			+ float(nivel - 1) * VEL_ATAQUE_POR_NIVEL
+			+ _bono("velocidad_ataque"),
 			VEL_ATAQUE_MIN,
 			VEL_ATAQUE_MAX
 		)
@@ -221,10 +240,23 @@ func atributo_total(atributo: StringName) -> int:
 			return fuerza_total
 
 
-## Daño del ataque automático: base del arma + 1 por punto de su atributo
-## principal. Única fórmula del ataque básico; el controlador no la replica.
+## Daño medio del ataque automático: base del arma + atributo principal,
+## escalado por nivel y por la clase equipada. Única fórmula del ataque básico.
 func escalar_ataque_principal(dano_base: float, atributo: StringName) -> float:
-	return dano_base + float(atributo_total(atributo)) * DANO_ATAQUE_POR_ATRIBUTO
+	var base := dano_base + float(atributo_total(atributo)) * DANO_ATAQUE_POR_ATRIBUTO
+	base *= 1.0 + float(nivel - 1) * DANO_ESCALA_POR_NIVEL
+	base *= float(MULT_DANO_POR_CLASE.get(clase, 1.0))
+	return base
+
+
+## Rango de daño del golpe básico (mínimo y máximo) alrededor de la media.
+## El controlador tira `randf_range(x, y)` en cada ataque.
+func rango_dano_ataque(dano_base: float, atributo: StringName) -> Vector2:
+	var medio := escalar_ataque_principal(dano_base, atributo)
+	return Vector2(
+		maxf(1.0, round(medio * (1.0 - DANO_VARIANZA))),
+		maxf(2.0, round(medio * (1.0 + DANO_VARIANZA)))
+	)
 
 
 ## Fija la curva de crecimiento de la clase equipada. Se llama al equipar.

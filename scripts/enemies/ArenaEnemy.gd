@@ -17,6 +17,8 @@ const GRUPO := &"enemigos"
 const RUTA_ESQUELETO := "res://assets/kaykit/skeletons/Skeleton_Warrior.glb"
 const RUTA_ESPECTRO := "res://assets/kaykit/skeletons/Skeleton_Rogue.glb"
 const RUTA_CABALLERO := "res://assets/kaykit/adventurers/Knight.glb"
+const RUTA_MAGO := "res://assets/kaykit/skeletons/Skeleton_Mage.glb"
+const RUTA_BARBARO := "res://assets/kaykit/adventurers/Barbarian.glb"
 
 var es_elite := false
 var es_ligero := false
@@ -84,15 +86,25 @@ func _construir() -> void:
 	add_child(forma)
 
 
-## Construye o reutiliza el modelo animado según el tipo de enemigo.
-func _configurar_visual(elite: bool, ligero: bool = false) -> void:
-	var tipo := &"caballero" if elite else (&"espectro" if ligero else &"esqueleto")
-	var ruta := RUTA_CABALLERO if elite else (RUTA_ESPECTRO if ligero else RUTA_ESQUELETO)
-	var tinte := Color(1.0, 0.72, 0.66) if elite else Color(0.82, 0.95, 0.90)
-	if ligero:
-		tinte = Color(0.74, 0.86, 1.0)
+## Ruta, tinte y perfil de animación de cada arquetipo de enemigo.
+const VISUALES := {
+	&"esqueleto": {"ruta": RUTA_ESQUELETO, "tinte": Color(0.82, 0.95, 0.90), "perfil": "esqueleto"},
+	&"espectro": {"ruta": RUTA_ESPECTRO, "tinte": Color(0.74, 0.86, 1.0), "perfil": "esqueleto"},
+	&"arquero": {"ruta": RUTA_ESPECTRO, "tinte": Color(0.95, 0.45, 0.40), "perfil": "esqueleto"},
+	&"hechicero": {"ruta": RUTA_MAGO, "tinte": Color(0.80, 0.40, 1.00), "perfil": "esqueleto"},
+	&"tanque": {"ruta": RUTA_BARBARO, "tinte": Color(0.70, 0.70, 0.80), "perfil": "barbaro"},
+	&"elite": {"ruta": RUTA_CABALLERO, "tinte": Color(1.0, 0.72, 0.66), "perfil": "caballero"},
+}
 
-	if visual != null and _tipo_visual == tipo:
+
+## Construye o reutiliza el modelo animado según el arquetipo.
+func _configurar_visual(tipo: StringName) -> void:
+	var datos: Dictionary = VISUALES.get(tipo, VISUALES[&"esqueleto"])
+	var clave := String(tipo)
+	var ruta: String = datos["ruta"]
+	var tinte: Color = datos["tinte"]
+
+	if visual != null and _tipo_visual == clave:
 		visual.aplicar_skin(tinte)
 		return
 	if visual != null:
@@ -101,8 +113,26 @@ func _configurar_visual(elite: bool, ligero: bool = false) -> void:
 	visual = CharacterVisual.new()
 	visual.name = "Visual"
 	add_child(visual)
-	visual.configurar(ruta, tinte, "caballero" if elite else "esqueleto")
-	_tipo_visual = tipo
+	visual.configurar(ruta, tinte, str(datos["perfil"]))
+	_tipo_visual = clave
+
+
+## Estadísticas base de un enemigo de oleada. El arquetipo y el perfil de la
+## oleada (`BalanceOlas`) multiplican estos valores.
+const VIDA_BASE := 90.0
+const VIDA_POR_RONDA := 34.0
+const DANO_BASE := 10.0
+const DANO_POR_RONDA := 3.4
+
+## Modificadores por arquetipo: vida, daño, movimiento y cadencia.
+const ARQUETIPOS := {
+	&"esqueleto": {"vida": 1.00, "dano": 1.00, "vel": 1.00, "cadencia": 1.00, "escudo": false},
+	&"espectro": {"vida": 0.75, "dano": 0.90, "vel": 1.30, "cadencia": 0.85, "escudo": false},
+	&"arquero": {"vida": 0.70, "dano": 0.95, "vel": 0.90, "cadencia": 1.00, "escudo": false},
+	&"hechicero": {"vida": 0.65, "dano": 1.25, "vel": 0.85, "cadencia": 1.10, "escudo": false},
+	&"tanque": {"vida": 2.00, "dano": 1.40, "vel": 0.65, "cadencia": 1.35, "escudo": true},
+	&"elite": {"vida": 2.40, "dano": 1.50, "vel": 1.00, "cadencia": 1.00, "escudo": false},
+}
 
 
 func preparar(
@@ -112,7 +142,10 @@ func preparar(
 	bandera: Node3D,
 	gestor: Node,
 	pool: ObjectPool,
-	xp: int = 0
+	xp: int = 0,
+	tipo: StringName = &"",
+	vida_mult: float = 1.0,
+	dano_mult: float = 1.0
 ) -> void:
 	es_elite = elite
 	xp_recompensa = xp
@@ -122,31 +155,43 @@ func preparar(
 	_gestor = gestor
 	_pool = pool
 
+	# Arquetipo: si no llega uno (red/legado) se sortea como antes.
+	var arquetipo := tipo
+	if arquetipo == &"" or not ARQUETIPOS.has(arquetipo):
+		arquetipo = &"esqueleto"
+	if tipo == &"":
+		var tirada := randf()
+		if tirada < 0.10:
+			arquetipo = &"tanque"
+		elif tirada < 0.22:
+			arquetipo = &"hechicero"
+		elif tirada < 0.40:
+			arquetipo = &"arquero"
+		elif tirada < 0.75:
+			arquetipo = &"espectro"
+	if elite:
+		arquetipo = &"elite"
+
+	var mods: Dictionary = ARQUETIPOS[arquetipo]
+	es_ligero = arquetipo == &"espectro"
+	es_arquero = arquetipo == &"arquero"
+	es_hechicero = arquetipo == &"hechicero"
+	es_tanque = arquetipo == &"tanque"
+
 	var factor_elite := 2.4 if elite else 1.0
-	var ligero := not elite and randf() < 0.35
-	es_ligero = ligero
-	es_arquero = not elite and not ligero and randf() < 0.18
-	es_hechicero = not elite and not ligero and not es_arquero and randf() < 0.12
-	es_tanque = not elite and not ligero and not es_arquero and not es_hechicero and randf() < 0.10
-	if es_hechicero:
-		salud_maxima *= 0.60
-		velocidad *= 0.80
-	if es_tanque:
-		salud_maxima *= 1.8
-		velocidad *= 0.65
-		dano *= 1.5
-		escudo_tanque_maxima = 60.0 + ronda * 5.0
-		escudo_tanque_actual = escudo_tanque_maxima
-	if es_arquero:
-		salud_maxima *= 0.70
-		velocidad *= 0.85
-	salud_maxima = (70.0 + ronda * 28.0) * factor_elite
-	dano = (9.0 + ronda * 4.0) * (1.5 if elite else 1.0)
-	velocidad = 2.3 + minf(ronda * 0.04, 0.9)
-	if ligero:
-		salud_maxima *= 0.85
-		velocidad *= 1.12
+	salud_maxima = (VIDA_BASE + ronda * VIDA_POR_RONDA) * factor_elite * vida_mult * float(mods["vida"])
+	dano = (DANO_BASE + ronda * DANO_POR_RONDA) * (1.5 if elite else 1.0) * dano_mult * float(mods["dano"])
+	velocidad = (2.3 + minf(ronda * 0.04, 0.9)) * float(mods["vel"])
+	cadencia = cadencia * float(mods["cadencia"])
 	salud_actual = salud_maxima
+	# La magia usa el daño del arquetipo como base (golpe en área más fuerte).
+	dano_magia = dano * 1.15
+	if mods["escudo"]:
+		escudo_tanque_maxima = 60.0 + ronda * 6.0
+		escudo_tanque_actual = escudo_tanque_maxima
+	else:
+		escudo_tanque_maxima = 0.0
+		escudo_tanque_actual = 0.0
 	recompensa = (12 + ronda) * (3 if elite else 1)
 	_temporizador = randf_range(0.0, 0.5)
 	_provocado = 0.0
@@ -156,15 +201,9 @@ func preparar(
 	_marca_verdugo = 0.0
 	_vulnerable_magico = 0.0
 	_aturdido = 0.0
-	_configurar_visual(elite, ligero)
+	_configurar_visual(arquetipo)
 	scale = Vector3.ONE * (1.25 if elite else 1.0)
 	add_to_group(GRUPO)
-	if es_arquero and visual != null:
-		visual.aplicar_skin(Color(0.95, 0.45, 0.40))
-	if es_hechicero and visual != null:
-		visual.aplicar_skin(Color(0.80, 0.40, 1.00))
-	if es_tanque and visual != null:
-		visual.aplicar_skin(Color(0.70, 0.70, 0.80))
 	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
 	if tracker != null:
 		tracker.registrar(self)
@@ -188,7 +227,8 @@ func configurar_remoto(elite: bool, ligero := false) -> void:
 	es_elite = elite
 	es_ligero = ligero
 	activo = true
-	_configurar_visual(elite, ligero)
+	# Los espejos de red no traen arquetipo: el legado usa esqueleto/espectro.
+	_configurar_visual(&"elite" if elite else (&"espectro" if ligero else &"esqueleto"))
 	add_to_group(GRUPO)
 	set_physics_process(false)
 

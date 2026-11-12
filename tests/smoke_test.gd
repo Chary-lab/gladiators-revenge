@@ -154,8 +154,11 @@ func _ejecutar() -> void:
 	var dano_ataque_cetro_mas := jugador.estadisticas.escalar_ataque_principal(
 		cetro.dano_ataque_base, cetro.atributo_principal
 	)
+	var incremento_esperado := 4.0 * GladiatorStats.DANO_ATAQUE_POR_ATRIBUTO \
+		* float(GladiatorStats.MULT_DANO_POR_CLASE[&"cetro"]) \
+		* (1.0 + float(jugador.estadisticas.nivel - 1) * GladiatorStats.DANO_ESCALA_POR_NIVEL)
 	_comprobar(
-		is_equal_approx(dano_ataque_cetro_mas, dano_ataque_cetro + 4.0),
+		is_equal_approx(dano_ataque_cetro_mas - dano_ataque_cetro, incremento_esperado),
 		"subir Inteligencia aumenta el daño de ataque básico del Cetro"
 	)
 	jugador.otorgar_puntos_rojos(6)
@@ -372,6 +375,63 @@ func _ejecutar() -> void:
 	fabricante.queue_free()
 	await process_frame
 
+
+	# --- Balance: daño mín-máx, ritmo de ataque y arquetipos ---
+	var stats := GladiatorStats.new()
+	stats.configurar_clase(&"bastion")
+	var rango_base := stats.rango_dano_ataque(20.0, &"fuerza")
+	_comprobar(rango_base.x < rango_base.y, "el ataque básico tiene daño mínimo y máximo")
+	_comprobar(
+		is_equal_approx(rango_base.x, round(rango_base.y / (1.0 + GladiatorStats.DANO_VARIANZA) * (1.0 - GladiatorStats.DANO_VARIANZA)))
+		or rango_base.x < stats.escalar_ataque_principal(20.0, &"fuerza"),
+		"el mínimo queda por debajo de la media del golpe"
+	)
+	stats.fuerza += 10
+	var rango_fuerte := stats.rango_dano_ataque(20.0, &"fuerza")
+	_comprobar(rango_fuerte.x > rango_base.x and rango_fuerte.y > rango_base.y, "subir Fuerza sube el daño mínimo y el máximo")
+	stats.agilidad = 0
+	stats.nivel = 1
+	_comprobar(
+		is_equal_approx(stats.velocidad_ataque, GladiatorStats.VEL_ATAQUE_BASE),
+		"sin Agilidad ni niveles el campeón ataca al ritmo base (0.15/s)",
+	)
+	var vel_antes := stats.velocidad_ataque
+	stats.agilidad = 40
+	_comprobar(stats.velocidad_ataque > vel_antes, "la Agilidad sube la velocidad de ataque")
+	_comprobar(
+		is_equal_approx(GladiatorStats.new().salud_maxima, GladiatorStats.VIDA_BASE + 10.0 * GladiatorStats.VIDA_POR_FUERZA),
+		"la vida base sale solo de Fuerza y de la constante VIDA_BASE",
+	)
+
+	# --- Oleadas: 20 perfiles distintos y jefes en 5/10/15/20 ---
+	var perfiles_ok := BalanceOlas.PERFILES.size() == 20
+	for indice in BalanceOlas.PERFILES.size():
+		var perfil: Dictionary = BalanceOlas.perfil(indice + 1)
+		if perfil["tipos"].is_empty():
+			perfiles_ok = false
+		for tipo in perfil["tipos"]:
+			if not BalanceOlas.TIPOS_VALIDOS.has(tipo):
+				perfiles_ok = false
+	_comprobar(perfiles_ok, "las 20 oleadas tienen perfil con arquetipos válidos")
+	_comprobar(
+		BalanceOlas.perfil(5)["jefe"] == "caballero" and BalanceOlas.perfil(10)["jefe"] == "liche" and BalanceOlas.perfil(20)["jefe"] == "liche",
+		"los jefes 5/10/20 salen del perfil de la oleada"
+	)
+	_comprobar(
+		BalanceOlas.cantidad(20) > BalanceOlas.cantidad(1) and BalanceOlas.cantidad(1) >= 16,
+		"la cantidad de enemigos crece con la oleada"
+	)
+	var tipos_vistos: Array = []
+	for i in 40:
+		var elegido := BalanceOlas.elegir_tipo(BalanceOlas.perfil(9))
+		if not tipos_vistos.has(elegido):
+			tipos_vistos.append(elegido)
+	_comprobar(not tipos_vistos.is_empty() and tipos_vistos.all(func(t): return BalanceOlas.TIPOS_VALIDOS.has(t)), "el perfil de una oleada mixta reparte arquetipos válidos")
+	var arquetipos_ok := true
+	for tipo in BalanceOlas.TIPOS_VALIDOS:
+		if not ArenaEnemy.ARQUETIPOS.has(tipo) or not ArenaEnemy.VISUALES.has(tipo):
+			arquetipos_ok = false
+	_comprobar(arquetipos_ok, "cada arquetipo tiene estadísticas y modelo visual")
 	# --- Fin de partida ----------------------------------------------------
 	escena._finalizar("DERROTA", "prueba de cierre")
 	_comprobar(escena.terminado, "terminar cierra la partida")

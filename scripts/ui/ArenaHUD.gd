@@ -700,13 +700,16 @@ func _actualizar_estadisticas() -> void:
 		return
 	var e := _jugador.estadisticas
 	var arma := _jugador.arma_actual
-	var dano := 0.0
+	var dano_min := 0
+	var dano_max := 0
 	if arma != null:
-		dano = e.escalar_ataque_principal(arma.dano_ataque_base, arma.atributo_principal)
-	_stats.text = "Daño        %d\nArmadura    %d (%.1f%% red.)\nVel. ataque %.2f/s\nCrítico     %d %%" % [
-			int(round(dano)), int(round(e.armadura_total)), e.mitigacion_fisica * 100.0,
-			e.velocidad_ataque, int(round(e.probabilidad_critico * 100.0))
-		]
+		var rango := e.rango_dano_ataque(arma.dano_ataque_base, arma.atributo_principal)
+		dano_min = int(rango.x)
+		dano_max = int(rango.y)
+	_stats.text = "Daño        %d-%d\nArmadura    %d (%.1f%% red.)\nVel. ataque %.2f/s\nCrítico     %d %%" % [
+		dano_min, dano_max, int(round(e.armadura_total)), e.mitigacion_fisica * 100.0,
+		e.velocidad_ataque, int(round(e.probabilidad_critico * 100.0))
+	]
 
 	var principal := _atributo_principal()
 	var claves := [&"fuerza", &"agilidad", &"inteligencia"]

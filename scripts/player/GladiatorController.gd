@@ -1200,9 +1200,11 @@ func _atacar_basico() -> void:
 	var auras := auras_cercanas()
 	var vatq_aura := 1.0 + float(auras.get(&"velocidad_ataque_aliados", 0.0))
 	_temporizador_ataque = 1.0 / maxf(0.2, estadisticas.velocidad_ataque * (1.0 + _buff_ataque) * vatq_aura)
-	var dano := estadisticas.escalar_ataque_principal(
+	# Daño mín-máx: el golpe tira dentro de la banda del atributo y la clase.
+	var rango := estadisticas.rango_dano_ataque(
 		arma_actual.dano_ataque_base, arma_actual.atributo_principal
 	)
+	var dano := randf_range(rango.x, rango.y)
 	dano *= 1.0 + _buff_dano
 	# Aura de daño: bonos de objetos épicos/legendarios de ti y aliados cercanos.
 	dano *= 1.0 + float(auras.get(&"dano_aliados", 0.0))

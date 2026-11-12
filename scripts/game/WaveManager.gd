@@ -22,8 +22,7 @@ enum Estado { ESPERA, ENTRADA, COMBATE, FIN }
 @export var espera_inicial := 30.0
 @export var espera_entre_oleadas := 30.0
 @export var duracion_entrada := 8.0
-@export var intervalo_spawn := 0.55
-@export var oleadas_con_jefe := 5
+@export var intervalo_spawn := 0.80
 
 var oleada_actual := 0
 
@@ -39,6 +38,8 @@ var _puntos_spawn: Array[Vector3] = []
 var _xp_presupuesto := 0
 var _xp_peso_total := 0.0
 var _xp_jefe := 0
+## Perfil de la oleada en curso (BalanceOlas).
+var _perfil_actual: Dictionary = {}
 
 
 func _ready() -> void:
@@ -141,12 +142,13 @@ func _iniciar_oleada() -> void:
 
 
 func _comenzar_combate() -> void:
-	_pendientes = 16 + oleada_actual * 5
+	_perfil_actual = BalanceOlas.perfil(oleada_actual)
+	_pendientes = int(_perfil_actual.get("cantidad", 16 + oleada_actual * 5))
 	_estado = Estado.COMBATE
 	_temporizador = 0.0
 
 	_xp_presupuesto = CurvaNivel.xp_oleada(oleada_actual)
-	var jefe := oleada_actual % oleadas_con_jefe == 0
+	var jefe := not String(_perfil_actual.get("jefe", "")).is_empty()
 	var elite_estimados := int(round(float(_pendientes) * _probabilidad_elite()))
 	var normales := _pendientes - elite_estimados
 	_xp_peso_total = float(normales) + float(elite_estimados) * CurvaNivel.PESO_ELITE
@@ -156,9 +158,9 @@ func _comenzar_combate() -> void:
 
 	entrada_terminada.emit()
 	oleada_iniciada.emit(oleada_actual, total_oleadas)
-	mensaje.emit("Oleada %d / %d" % [oleada_actual, total_oleadas], 2.5)
+	mensaje.emit("Oleada %d / %d · %s" % [oleada_actual, total_oleadas, str(_perfil_actual.get("titulo", ""))], 3.0)
 
-	if oleada_actual % oleadas_con_jefe == 0:
+	if jefe:
 		_invocar_jefe()
 
 
@@ -187,7 +189,8 @@ func _invocar_enemigo() -> void:
 	var punto := _puntos_spawn[randi() % _puntos_spawn.size()]
 	punto += Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
 	enemigo.global_position = punto
-	var elite := randf() < _probabilidad_elite()
+	var tipo := BalanceOlas.elegir_tipo(_perfil_actual)
+	var elite := tipo == BalanceOlas.ELITE or (tipo != BalanceOlas.TANQUE and randf() < _probabilidad_elite() * 0.5)
 	var peso := CurvaNivel.PESO_ELITE if elite else CurvaNivel.PESO_NORMAL
 	var xp := CurvaNivel.xp_enemigo(_xp_presupuesto, peso, _xp_peso_total)
 	enemigo.preparar(
@@ -197,12 +200,15 @@ func _invocar_enemigo() -> void:
 		_bandera,
 		self,
 		_pool,
-		xp
+		xp,
+		tipo,
+		float(_perfil_actual.get("vida", 1.0)),
+		float(_perfil_actual.get("dano", 1.0))
 	)
 
 
 func _invocar_jefe() -> void:
-	var lich := oleada_actual % 10 == 0
+	var lich := String(_perfil_actual.get("jefe", "")) == "liche"
 	var jefe := ArenaBossAI.crear(
 		"res://assets/kaykit/skeletons/Skeleton_Mage.glb" if lich else "",
 		Color(0.55, 0.95, 0.72) if lich else Color.TRANSPARENT,

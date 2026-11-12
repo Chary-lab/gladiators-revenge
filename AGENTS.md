@@ -18,6 +18,7 @@ godot --version
 godot --headless --editor --quit           # import after new assets/scripts
 godot --headless --script res://tests/smoke_test.gd
 godot --headless --script res://tests/wave_sim.gd
+godot --headless --script res://tests/balance_report.gd   # tabla de balance (no es prueba)
 godot --headless --quit-after 600          # normal boot smoke run
 godot --headless -- --servidor --puerto=9080 [--red-rapida]
 godot -- --cliente=ws://127.0.0.1:9080
@@ -26,7 +27,7 @@ godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1
 godot -- --captura-combate                 # windowed screenshot to captura_combate.png
 ```
 
-- Expected baseline: smoke **87/87**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **98/98**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
 - `--script` mode does **not** register autoloads. `Sfx` is a static `RefCounted`; do not convert it to an autoload.
 - There is no unit-test framework. Add checks inside `tests/smoke_test.gd` or create another `SceneTree` script and run it with `--headless --script`.
@@ -83,7 +84,7 @@ playwright-cli.cmd open http://127.0.0.1:8137/ --browser msedge
 ## Verification gate
 
 1. `godot --headless --editor --quit`
-2. `godot --headless --script res://tests/smoke_test.gd` → 87/87
+2. `godot --headless --script res://tests/smoke_test.gd` → 98/98
 3. `godot --headless --script res://tests/wave_sim.gd` → 3/3
 4. `godot --headless --quit-after 600` → no script/parse errors
 5. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`
