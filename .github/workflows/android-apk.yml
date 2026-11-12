@@ -95,6 +95,9 @@ jobs:
             tail -n 150 /tmp/export-android.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" -ne 0 ]; then
+            echo "::error title=Android export::$(tail -n 12 /tmp/export-android.log | tr '\n' ' ' | cut -c1-1200)"
+          fi
           exit $code
 
       - name: Subir APK como artefacto
