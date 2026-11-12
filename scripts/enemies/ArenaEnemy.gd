@@ -28,11 +28,11 @@ var salud_actual := 0.0
 var dano := 5.0
 var velocidad := 2.5
 var rango := 2.2
-var cadencia := 1.5
+var cadencia := 1.7
 ## Arquero: se mantiene a distancia y dispara proyectiles en lugar de cuerpo a cuerpo.
 var es_arquero := false
 var rango_ataque_distancia := 8.0
-var cadencia_disparo := 2.0
+var cadencia_disparo := 2.4
 var _tiempo_disparo := 0.0
 
 ## Hechicero: lanza proyectiles mágicos con daño en área al impactar.
@@ -119,16 +119,16 @@ func _configurar_visual(tipo: StringName) -> void:
 
 ## Estadísticas base de un enemigo de oleada. El arquetipo y el perfil de la
 ## oleada (`BalanceOlas`) multiplican estos valores.
-const VIDA_BASE := 90.0
-const VIDA_POR_RONDA := 34.0
-const DANO_BASE := 10.0
-const DANO_POR_RONDA := 3.4
+const VIDA_BASE := 80.0
+const VIDA_POR_RONDA := 30.0
+const DANO_BASE := 6.0
+const DANO_POR_RONDA := 2.2
 
 ## Modificadores por arquetipo: vida, daño, movimiento y cadencia.
 const ARQUETIPOS := {
 	&"esqueleto": {"vida": 1.00, "dano": 1.00, "vel": 1.00, "cadencia": 1.00, "escudo": false},
 	&"espectro": {"vida": 0.75, "dano": 0.90, "vel": 1.30, "cadencia": 0.85, "escudo": false},
-	&"arquero": {"vida": 0.70, "dano": 0.95, "vel": 0.90, "cadencia": 1.00, "escudo": false},
+	&"arquero": {"vida": 0.70, "dano": 0.80, "vel": 0.90, "cadencia": 1.41, "escudo": false},
 	&"hechicero": {"vida": 0.65, "dano": 1.25, "vel": 0.85, "cadencia": 1.10, "escudo": false},
 	&"tanque": {"vida": 2.00, "dano": 1.40, "vel": 0.65, "cadencia": 1.35, "escudo": true},
 	&"elite": {"vida": 2.40, "dano": 1.50, "vel": 1.00, "cadencia": 1.00, "escudo": false},
@@ -181,7 +181,9 @@ func preparar(
 	var factor_elite := 2.4 if elite else 1.0
 	salud_maxima = (VIDA_BASE + ronda * VIDA_POR_RONDA) * factor_elite * vida_mult * float(mods["vida"])
 	dano = (DANO_BASE + ronda * DANO_POR_RONDA) * (1.5 if elite else 1.0) * dano_mult * float(mods["dano"])
-	velocidad = (2.3 + minf(ronda * 0.04, 0.9)) * float(mods["vel"])
+	# Los enemigos deben poder alcanzar a un gladiador que kitea: la base
+	# queda por debajo de la velocidad del jugador y los espectros la superan.
+	velocidad = (3.2 + minf(ronda * 0.05, 1.2)) * float(mods["vel"])
 	cadencia = cadencia * float(mods["cadencia"])
 	salud_actual = salud_maxima
 	# La magia usa el daño del arquetipo como base (golpe en área más fuerte).

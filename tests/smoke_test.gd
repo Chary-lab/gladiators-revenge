@@ -418,7 +418,7 @@ func _ejecutar() -> void:
 		"los jefes 5/10/20 salen del perfil de la oleada"
 	)
 	_comprobar(
-		BalanceOlas.cantidad(20) > BalanceOlas.cantidad(1) and BalanceOlas.cantidad(1) >= 16,
+		BalanceOlas.cantidad(20) > BalanceOlas.cantidad(1) * 3 and BalanceOlas.cantidad(1) >= 8,
 		"la cantidad de enemigos crece con la oleada"
 	)
 	var tipos_vistos: Array = []

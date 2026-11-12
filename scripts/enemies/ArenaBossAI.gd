@@ -25,8 +25,8 @@ enum Estado {
 }
 
 @export_group("Combate")
-@export var salud_maxima := 1200.0
-@export var dano_ataque := 35.0
+@export var salud_maxima := 900.0
+@export var dano_ataque := 26.0
 @export var cadencia_ataque := 1.6
 @export var rango_ataque := 2.4
 @export var velocidad_base := 3.2
@@ -40,7 +40,7 @@ enum Estado {
 
 @export_group("Ataque en área (Furia 2)")
 @export var radio_ataque_area := 6.0
-@export var dano_area := 55.0
+@export var dano_area := 40.0
 @export var cooldown_ataque_area := 8.0
 
 @export_group("Objetivo")
@@ -297,7 +297,7 @@ func _morir() -> void:
 
 ## Escala el jefe para una oleada del 1 al 20. Llama antes de mostrarlo.
 func configurar_para_ronda(ronda: int) -> void:
-	var factor := 1.0 + 0.18 * maxf(0.0, float(ronda - 1))
+	var factor := 1.0 + 0.15 * maxf(0.0, float(ronda - 1))
 	salud_maxima *= factor
 	dano_ataque *= factor
 	dano_area *= factor

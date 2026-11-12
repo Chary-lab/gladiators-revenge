@@ -22,7 +22,7 @@ const TIPOS_VALIDOS: Array[StringName] = [ESQUELETO, ESPECTRO, ARQUERO, HECHICER
 const PERFILES := [
 	{"titulo": "Esqueletos", "tipos": {ESQUELETO: 1.0}, "vida": 1.0, "dano": 1.0, "jefe": &""},
 	{"titulo": "Espectros", "tipos": {ESPECTRO: 1.0}, "vida": 1.0, "dano": 1.0, "jefe": &""},
-	{"titulo": "Lluvia de flechas", "tipos": {ARQUERO: 0.6, ESQUELETO: 0.4}, "vida": 1.0, "dano": 1.0, "jefe": &""},
+	{"titulo": "Lluvia de flechas", "tipos": {ARQUERO: 0.3, ESQUELETO: 0.7}, "vida": 1.0, "dano": 1.0, "jefe": &""},
 	{"titulo": "Círculo de magos", "tipos": {HECHICERO: 0.7, ESQUELETO: 0.3}, "vida": 1.0, "dano": 1.0, "jefe": &""},
 	{"titulo": "El Campeón del Imperio", "tipos": {ESQUELETO: 1.0}, "vida": 1.05, "dano": 1.0, "jefe": &"caballero"},
 	{"titulo": "Muro de bárbaros", "tipos": {TANQUE: 0.6, ESQUELETO: 0.4}, "vida": 1.05, "dano": 1.0, "jefe": &""},
@@ -57,7 +57,7 @@ static func perfil(oleada: int) -> Dictionary:
 ## Enemigos que salen en la oleada. Crece de 16 a 88 enemigos: con arquetipos
 ## más duros no hace falta inundar la arena.
 static func cantidad(oleada: int) -> int:
-	return 14 + int(round(float(oleada) * 3.0))
+	return 8 + int(round(float(oleada) * 2.5))
 
 
 ## Elige un arquetipo según los pesos del perfil.

@@ -1199,7 +1199,10 @@ func _atacar_basico() -> void:
 	# Auras de objetos épicos/legendarios: se suman una vez por ataque.
 	var auras := auras_cercanas()
 	var vatq_aura := 1.0 + float(auras.get(&"velocidad_ataque_aliados", 0.0))
+	# La recarga la descuenta CombatComponent: aquí solo se arma. Sin esto el
+	# temporizador volvía a 0 cada frame y el campeón atacaba sin parar.
 	_temporizador_ataque = 1.0 / maxf(0.2, estadisticas.velocidad_ataque * (1.0 + _buff_ataque) * vatq_aura)
+	combat.iniciar_recarga_ataque(_temporizador_ataque)
 	# Daño mín-máx: el golpe tira dentro de la banda del atributo y la clase.
 	var rango := estadisticas.rango_dano_ataque(
 		arma_actual.dano_ataque_base, arma_actual.atributo_principal

@@ -54,6 +54,9 @@ func _physics_process(delta: float) -> void:
 	if esta_muerto:
 		return
 
+	# El enfriamiento del golpe básico lo descuenta este componente: el
+	# controlador solo pregunta cuándo puede volver a atacar.
+	_temporizador_ataque = maxf(0.0, _temporizador_ataque - delta)
 	_actualizar_cooldowns(delta)
 	_actualizar_estados(delta)
 	_regenerar(delta)
@@ -63,6 +66,10 @@ func _physics_process(delta: float) -> void:
 func _actualizar_cooldowns(delta: float) -> void:
 	for i in _cooldowns.size():
 		_cooldowns[i] = maxf(0.0, _cooldowns[i] - delta)
+
+## Arma la recarga del ataque básico (segundos).
+func iniciar_recarga_ataque(segundos: float) -> void:
+	_temporizador_ataque = maxf(0.0, segundos)
 
 func cooldown_restante(slot: int) -> float:
 	if slot < 0 or slot >= _cooldowns.size():
