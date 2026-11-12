@@ -27,6 +27,11 @@ var dano := 5.0
 var velocidad := 2.5
 var rango := 2.2
 var cadencia := 1.5
+## Arquero: se mantiene a distancia y dispara proyectiles en lugar de cuerpo a cuerpo.
+var es_arquero := false
+var rango_ataque_distancia := 8.0
+var cadencia_disparo := 2.0
+var _tiempo_disparo := 0.0
 var recompensa := 8
 var xp_recompensa := 0
 var visual: CharacterVisual
@@ -106,6 +111,10 @@ func preparar(
 	var factor_elite := 2.4 if elite else 1.0
 	var ligero := not elite and randf() < 0.35
 	es_ligero = ligero
+	es_arquero = not elite and not ligero and randf() < 0.18
+	if es_arquero:
+		salud_maxima *= 0.70
+		velocidad *= 0.85
 	salud_maxima = (26.0 + ronda * 10.0) * factor_elite
 	dano = (4.0 + ronda * 1.5) * (1.5 if elite else 1.0)
 	velocidad = 2.3 + minf(ronda * 0.04, 0.9)
@@ -125,6 +134,11 @@ func preparar(
 	_configurar_visual(elite, ligero)
 	scale = Vector3.ONE * (1.25 if elite else 1.0)
 	add_to_group(GRUPO)
+	if es_arquero and visual != null:
+		visual.aplicar_skin(Color(0.95, 0.45, 0.40))
+	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
+	if tracker != null:
+		tracker.registrar(self)
 
 
 func al_obtener() -> void:
@@ -185,6 +199,30 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var distancia := global_position.distance_to(objetivo.global_position)
+
+	# Arquero: mantener distancia y disparar proyectiles
+	if es_arquero:
+		if distancia > rango_ataque_distancia:
+			var direccion := objetivo.global_position - global_position
+			direccion.y = 0.0
+			if direccion.length_squared() > 0.0004:
+				direccion = direccion.normalized()
+				velocity = direccion * velocidad
+				rotation.y = lerp_angle(rotation.y, atan2(direccion.x, direccion.z), 10.0 * delta)
+				move_and_slide()
+				if visual != null:
+					visual.mover(velocity.length())
+			return
+		else:
+			velocity = Vector3.ZERO
+			if visual != null:
+				visual.mover(0.0)
+			_tiempo_disparo -= delta
+			if _tiempo_disparo <= 0.0:
+				_tiempo_disparo = cadencia_disparo
+				_disparar_proyectil(objetivo)
+			return
+
 	if distancia > rango:
 		var direccion := objetivo.global_position - global_position
 		direccion.y = 0.0
@@ -207,6 +245,33 @@ func _physics_process(delta: float) -> void:
 			visual.atacar()
 		if objetivo.has_method("recibir_dano"):
 			objetivo.recibir_dano(dano, &"fisico", self)
+
+
+func _disparar_proyectil(objetivo: Node3D) -> void:
+	if objetivo == null:
+		return
+	var rayo := MeshInstance3D.new()
+	var caja := BoxMesh.new()
+	caja.size = Vector3(0.12, 0.12, global_position.distance_to(objetivo.global_position))
+	rayo.mesh = caja
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.9, 0.6, 0.1, 0.85)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = Color(1.0, 0.4, 0.0)
+	material.emission_energy_multiplier = 2.0
+	rayo.material_override = material
+	add_child(rayo)
+	var medio := global_position.lerp(objetivo.global_position, 0.5)
+	rayo.global_position = Vector3(medio.x, 1.0, medio.z)
+	rayo.look_at(objetivo.global_position, Vector3.UP)
+	var tween := rayo.create_tween()
+	tween.tween_property(material, "albedo_color:a", 0.0, 0.25)
+	tween.tween_callback(rayo.queue_free)
+	if objetivo.has_method("recibir_dano"):
+		objetivo.recibir_dano(dano * 0.9, &"fisico", self)
+	Sfx.reproducir("golpe", -10.0)
 
 
 func _elegir_objetivo() -> Node3D:
@@ -286,6 +351,9 @@ func _morir() -> void:
 	if not activo:
 		return
 	activo = false
+	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
+	if tracker != null:
+		tracker.desregistrar(self)
 	remove_from_group(GRUPO)
 	if visual != null:
 		visual.morir()

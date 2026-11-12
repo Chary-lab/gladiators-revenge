@@ -140,6 +140,44 @@ func consumir(id: StringName, cantidad := 1) -> bool:
 	return true
 
 
+## Intercambia el contenido de dos ranuras (para reordenar el inventario).
+func intercambiar(i: int, j: int) -> bool:
+	if i < 0 or i >= ranuras.size() or j < 0 or j >= ranuras.size():
+		return false
+	if i == j:
+		return true
+	var tmp := ranuras[i].duplicate()
+	ranuras[i] = ranuras[j].duplicate()
+	ranuras[j] = tmp
+	var cd_tmp := _cooldowns[i]
+	_cooldowns[i] = _cooldowns[j]
+	_cooldowns[j] = cd_tmp
+	_recalcular_bonos()
+	cambiado.emit()
+	return true
+
+## Quita el objeto de una ranura y lo devuelve (para vender o mover).
+func extraer(indice: int) -> ItemData:
+	if indice < 0 or indice >= ranuras.size():
+		return null
+	var ranura := ranuras[indice]
+	var item: ItemData = ranura.get("item")
+	ranuras[indice] = {"item": null, "cantidad": 0}
+	_cooldowns[indice] = 0.0
+	_recalcular_bonos()
+	cambiado.emit()
+	return item
+
+## Precio de venta: mitad del precio de compra, mínimo 1 de oro.
+func precio_venta(indice: int) -> int:
+	if indice < 0 or indice >= ranuras.size():
+		return 0
+	var item: ItemData = ranuras[indice].get("item")
+	if item == null:
+		return 0
+	return maxi(1, int(item.precio / 2.0))
+
+
 ## Devuelve la receta que se completaría comprando `item` (el ingrediente que
 ## falta), o null si no hay ninguna.
 func receta_completada_por(item: ItemData) -> ItemData:

@@ -29,10 +29,38 @@ const SKINS := [
 	{"nombre": "Hielo", "tinte": SKIN_HIELO},
 ]
 
-var oro := 200
-var puntos_atributo := 0
-var terminado := false
+var _terminado_local := false
 var _skin_actual := 0
+
+var terminado:
+	get:
+		return game_state.esta_terminado() if game_state != null else _terminado_local
+	set(value):
+		_terminado_local = value
+		if game_state != null and value:
+			game_state.finalizar("DERROTA", "Partida terminada")
+
+var game_state: GameState
+var enemy_tracker: EnemyTracker
+
+var _oro_local := 200
+var _puntos_local := 0
+
+var oro:
+	get:
+		return game_state.oro if game_state != null else _oro_local
+	set(value):
+		_oro_local = value
+		if game_state != null:
+			game_state.oro = value
+
+var puntos_atributo:
+	get:
+		return game_state.puntos_atributo if game_state != null else _puntos_local
+	set(value):
+		_puntos_local = value
+		if game_state != null:
+			game_state.puntos_atributo = value
 
 var _jugador: GladiatorController
 var _camara: ArenaCamera
@@ -149,6 +177,18 @@ func _iniciar_cliente_con_url(direccion: String) -> void:
 
 
 func _iniciar_local() -> void:
+	game_state = GameState.new()
+	game_state.name = "GameState"
+	add_child(game_state)
+	game_state.oro_cambiado.connect(func(cantidad: int): _oro_local = cantidad)
+	game_state.puntos_cambiados.connect(func(cantidad: int): _puntos_local = cantidad)
+	game_state.partida_terminada.connect(_finalizar)
+
+	enemy_tracker = EnemyTracker.new()
+	enemy_tracker.name = "EnemyTracker"
+	add_child(enemy_tracker)
+	enemy_tracker.add_to_group("enemy_tracker")
+
 	_crear_jugador_local()
 	_crear_camara()
 	_crear_armeria()
@@ -1182,8 +1222,8 @@ func _al_terminar_oleada(numero: int) -> void:
 		_publico.establecer_combate(false)
 	if terminado:
 		return
-	oro += 60 + numero * 15
-	puntos_atributo += 2
+	game_state.agregar_oro(60 + numero * 15)
+	game_state.otorgar_puntos_atributo(2)
 	for jugador in jugadores:
 		if jugador == null or not is_instance_valid(jugador):
 			continue
@@ -1195,11 +1235,12 @@ func _al_terminar_oleada(numero: int) -> void:
 
 
 func _al_ganar_oro(cantidad: int) -> void:
-	if terminado:
+	if game_state.esta_terminado():
 		return
 	if _publico != null and _publico.congelando:
 		return
-	oro += cantidad
+	game_state.agregar_oro(cantidad)
+	revisar_forjas_automaticas()
 
 
 func _gastar_punto(atributo: StringName) -> void:
@@ -1209,10 +1250,10 @@ func _gastar_punto(atributo: StringName) -> void:
 		if _jugador != null:
 			_jugador.gastar_punto_atributo(atributo)
 		return
-	if puntos_atributo <= 0:
+	if game_state.puntos_atributo <= 0:
 		return
 	if _jugador.gastar_punto_atributo(atributo):
-		puntos_atributo -= 1
+		game_state.gastar_punto_atributo()
 
 
 ## Rota entre las skins cosméticas del orco (K).
@@ -1323,7 +1364,7 @@ func puede_comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 	var inventario := jugador.inventario
 	var receta := inventario.receta_completada_por(item)
 	var coste := item.precio + (receta.precio_forja if receta != null else 0)
-	if oro < coste:
+	if game_state.oro < coste:
 		return false
 	if receta != null:
 		return true
@@ -1344,7 +1385,7 @@ func comprar_objeto(item: ItemData) -> bool:
 
 func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 	if not puede_comprar_para(jugador, item):
-		if jugador != null and oro < item.precio:
+		if jugador != null and game_state.oro < item.precio:
 			_avisar("Necesitas %d de oro" % item.precio, 2.0)
 		else:
 			_avisar("La mochila está llena y no completa ninguna receta", 2.5)
@@ -1364,12 +1405,12 @@ func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 		var actual := creado
 		for i in 4:
 			var siguiente := inventario.receta_completada_por(actual)
-			if siguiente == null or oro < siguiente.precio_forja:
+			if siguiente == null or game_state.oro < siguiente.precio_forja:
 				break
-			oro -= siguiente.precio_forja
+			game_state.gastar_oro(siguiente.precio_forja)
 			var encadenado := inventario.forjar_con(actual, siguiente)
 			if encadenado == null:
-				oro += siguiente.precio_forja
+				game_state.agregar_oro(siguiente.precio_forja)
 				break
 			forjados.append(encadenado.nombre)
 			actual = encadenado
@@ -1378,12 +1419,58 @@ func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 		if not inventario.agregar(item):
 			_avisar("La mochila está llena", 2.0)
 			return false
-		oro -= item.precio
+		game_state.gastar_oro(item.precio)
 		_avisar("Comprado: %s" % item.nombre, 2.0)
 
 	if not es_servidor:
 		Sfx.reproducir("compra", -3.0)
 	return true
+
+
+## Vende un objeto del inventario del jugador y suma su precio de venta al oro.
+func vender_objeto(jugador: GladiatorController, indice: int) -> bool:
+		if jugador == null or jugador.inventario == null:
+			return false
+		var item := jugador.inventario.extraer(indice)
+		if item == null:
+			return false
+		var ganancia := maxi(1, int(item.precio / 2.0))
+		oro += ganancia
+		_avisar("Vendido: %s  ·  +%d oro" % [item.nombre, ganancia], 2.0)
+		Sfx.reproducir("venta", -3.0)
+		return true
+
+## Revisa si algún objeto del inventario completa una receta y hay oro para forjar.
+## Se llama al ganar oro y al entrar a la tienda. Forja en cadena hasta que no sea posible.
+func revisar_forjas_automaticas() -> void:
+		var jugador := _jugador
+		if jugador == null or jugador.inventario == null:
+			return
+		var inventario := jugador.inventario
+		var hizo_algo := true
+		var iteraciones := 0
+		while hizo_algo and iteraciones < 10:
+			hizo_algo = false
+			iteraciones += 1
+			for i in inventario.ranuras.size():
+				var ranura := inventario.ranuras[i]
+				var item: ItemData = ranura.get("item")
+				if item == null:
+					continue
+				var receta := inventario.receta_completada_por(item)
+				if receta == null:
+					continue
+				var coste := receta.precio_forja
+				if oro < coste:
+					continue
+				oro -= coste
+				var creado := inventario.forjar_con(item, receta)
+				if creado == null:
+					oro += coste
+					continue
+				hizo_algo = true
+				_avisar("Forjado automático: %s" % creado.nombre, 2.5)
+				break
 
 
 func _actualizar_pista() -> void:
@@ -1494,10 +1581,9 @@ func _al_victoria() -> void:
 
 
 func _finalizar(titulo: String, detalle: String) -> void:
-	if terminado:
+	if game_state.esta_terminado():
 		return
-	terminado = true
-	_resultado_red = "%s\n%s" % [titulo, detalle]
+	game_state.finalizar(titulo, detalle)
 	for jugador in jugadores:
 		if jugador != null and is_instance_valid(jugador):
 			jugador.puede_moverse = false

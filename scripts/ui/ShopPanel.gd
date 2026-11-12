@@ -21,8 +21,11 @@ var _oro: Label
 var _comprar: Button
 var _tab_mercado: Button
 var _tab_recetas: Button
+var _tab_vender: Button
 var _seleccionado: ItemData
 var _modo_recetas := false
+var _modo_vender := false
+var _ranura_seleccionada: int = -1
 var _botones: Dictionary = {}
 var _detalle_tween: Tween
 
@@ -89,11 +92,14 @@ func _ready() -> void:
 	tabs.add_theme_constant_override("separation", 8)
 	columna.add_child(tabs)
 	_tab_mercado = _boton_tab("MERCADO")
-	_tab_mercado.pressed.connect(_cambiar_tab.bind(false))
+	_tab_mercado.pressed.connect(_cambiar_tab.bind(0))
 	tabs.add_child(_tab_mercado)
 	_tab_recetas = _boton_tab("RECETARIO")
-	_tab_recetas.pressed.connect(_cambiar_tab.bind(true))
+	_tab_recetas.pressed.connect(_cambiar_tab.bind(1))
 	tabs.add_child(_tab_recetas)
+	_tab_vender = _boton_tab("VENDER")
+	_tab_vender.pressed.connect(_cambiar_tab.bind(2))
+	tabs.add_child(_tab_vender)
 
 	var cuerpo := HBoxContainer.new()
 	cuerpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -236,6 +242,10 @@ func cerrar_panel() -> void:
 func modo_abierto() -> void:
 	_seleccionado = null
 	_modo_recetas = false
+	_modo_vender = false
+	_ranura_seleccionada = -1
+	if _arena != null and _arena.has_method("revisar_forjas_automaticas"):
+		_arena.revisar_forjas_automaticas()
 	if _tab_mercado != null:
 		_actualizar_tabs()
 
@@ -251,24 +261,32 @@ func _unhandled_input(evento: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func _cambiar_tab(recetas: bool) -> void:
-	if _modo_recetas == recetas:
+func _cambiar_tab(modo: int) -> void:
+	var era_recetas := _modo_recetas
+	var era_vender := _modo_vender
+	_modo_recetas = modo == 1
+	_modo_vender = modo == 2
+	if _modo_recetas == era_recetas and _modo_vender == era_vender:
 		return
-	_modo_recetas = recetas
 	_seleccionado = null
+	_ranura_seleccionada = -1
 	_actualizar_tabs()
 	_reconstruir()
 
 
 func _actualizar_tabs() -> void:
-	if _tab_mercado == null or _tab_recetas == null:
+	if _tab_mercado == null or _tab_recetas == null or _tab_vender == null:
 		return
-	_tab_mercado.add_theme_stylebox_override("normal", _estilo_tab(not _modo_recetas))
+	var activo_mercado := not _modo_recetas and not _modo_vender
+	_tab_mercado.add_theme_stylebox_override("normal", _estilo_tab(activo_mercado))
 	_tab_recetas.add_theme_stylebox_override("normal", _estilo_tab(_modo_recetas))
-	_tab_mercado.add_theme_stylebox_override("hover", _estilo_tab(not _modo_recetas))
+	_tab_vender.add_theme_stylebox_override("normal", _estilo_tab(_modo_vender))
+	_tab_mercado.add_theme_stylebox_override("hover", _estilo_tab(activo_mercado))
 	_tab_recetas.add_theme_stylebox_override("hover", _estilo_tab(_modo_recetas))
-	_tab_mercado.add_theme_color_override("font_color", Color(0.08, 0.07, 0.06) if not _modo_recetas else Color(0.75, 0.70, 0.62))
+	_tab_vender.add_theme_stylebox_override("hover", _estilo_tab(_modo_vender))
+	_tab_mercado.add_theme_color_override("font_color", Color(0.08, 0.07, 0.06) if activo_mercado else Color(0.75, 0.70, 0.62))
 	_tab_recetas.add_theme_color_override("font_color", Color(0.08, 0.07, 0.06) if _modo_recetas else Color(0.75, 0.70, 0.62))
+	_tab_vender.add_theme_color_override("font_color", Color(0.08, 0.07, 0.06) if _modo_vender else Color(0.75, 0.70, 0.62))
 
 
 func _reconstruir() -> void:
@@ -279,11 +297,26 @@ func _reconstruir() -> void:
 	_botones.clear()
 	_oro.text = "ORO  %d" % _oro_actual()
 
-	var items: Array[ItemData] = ItemCatalog.recetas() if _modo_recetas else ItemCatalog.vendibles()
+	var items: Array[ItemData] = []
+	if _modo_recetas:
+		items = ItemCatalog.recetas()
+	elif _modo_vender:
+		items = []  # modo vender: se construye desde las ranuras abajo
+	else:
+		items = ItemCatalog.vendibles()
 	for item in items:
 		_crear_carta(item)
 
-	if _seleccionado == null or not items.has(_seleccionado):
+	# Modo vender: mostrar ranuras del inventario del jugador
+	if _modo_vender and _jugador != null and _jugador.inventario != null:
+		for i in _jugador.inventario.ranuras.size():
+			var ranura := _jugador.inventario.ranuras[i]
+			var item: ItemData = ranura.get("item")
+			if item == null:
+				continue
+			_crear_carta_venta(item, i)
+
+	if not _modo_vender and (_seleccionado == null or not items.has(_seleccionado)):
 		_seleccionado = items[0] if not items.is_empty() else null
 	for item in items:
 		if _botones.has(item.id):
@@ -346,6 +379,88 @@ func _crear_carta(item: ItemData) -> void:
 	_lista.add_child(boton)
 	_botones[item.id] = boton
 
+
+func _crear_carta_venta(item: ItemData, indice: int) -> void:
+	var boton := Button.new()
+	boton.custom_minimum_size = Vector2(188, 98)
+	boton.size = Vector2(188, 98)
+	boton.focus_mode = Control.FOCUS_NONE
+	boton.text = ""
+	boton.clip_contents = true
+	_aplicar_estilo_carta(boton, item)
+
+	var icono := TextureRect.new()
+	icono.position = Vector2(8, 8)
+	icono.size = Vector2(42, 42)
+	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icono.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	icono.texture = IconStudio.obtener(item.id, IconStudio.CATEGORIA_OBJETO)
+	IconStudio.escuchar(item.id, Callable(self, "_icono_listo").bind(icono))
+	boton.add_child(icono)
+
+	var nombre := Label.new()
+	nombre.position = Vector2(56, 5)
+	nombre.size = Vector2(124, 18)
+	nombre.text = item.nombre
+	nombre.add_theme_font_size_override("font_size", 11)
+	nombre.add_theme_color_override("font_color", _rareza_color(item))
+	nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nombre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boton.add_child(nombre)
+
+	var precio := Label.new()
+	precio.position = Vector2(56, 24)
+	precio.size = Vector2(124, 15)
+	precio.text = "Vende %d" % _jugador.inventario.precio_venta(indice)
+	precio.add_theme_font_size_override("font_size", 10)
+	precio.add_theme_color_override("font_color", Color(0.72, 0.76, 0.66))
+	precio.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boton.add_child(precio)
+
+	var btn_vender := Button.new()
+	btn_vender.text = "VENDER"
+	btn_vender.position = Vector2(56, 50)
+	btn_vender.size = Vector2(124, 32)
+	btn_vender.focus_mode = Control.FOCUS_NONE
+	btn_vender.add_theme_font_size_override("font_size", 11)
+	btn_vender.pressed.connect(_vender_ranura.bind(indice))
+	boton.add_child(btn_vender)
+
+	boton.pressed.connect(_seleccionar_ranura.bind(indice))
+	boton.mouse_entered.connect(_al_entrar_carta.bind(item, boton))
+	boton.mouse_exited.connect(_al_salir_carta.bind(boton))
+	_lista.add_child(boton)
+
+	# Resaltar si esta ranura esta seleccionada
+	if _ranura_seleccionada == indice:
+		var estilo := StyleBoxFlat.new()
+		estilo.bg_color = Color(0.96, 0.78, 0.30)
+		estilo.border_color = Color(1.0, 0.9, 0.6)
+		estilo.set_border_width_all(3)
+		estilo.set_corner_radius_all(6)
+		boton.add_theme_stylebox_override("normal", estilo)
+
+func _seleccionar_ranura(indice: int) -> void:
+	if _jugador == null or _jugador.inventario == null:
+		return
+	if _ranura_seleccionada == indice:
+		_ranura_seleccionada = -1
+	elif _ranura_seleccionada >= 0:
+		_jugador.inventario.intercambiar(_ranura_seleccionada, indice)
+		_ranura_seleccionada = -1
+	else:
+		_ranura_seleccionada = indice
+	_reconstruir()
+
+func _vender_ranura(indice: int) -> void:
+	if _jugador == null or _jugador.inventario == null or _arena == null:
+		return
+	if _arena.has_method("vender_objeto"):
+		_arena.vender_objeto(_jugador, indice)
+	_ranura_seleccionada = -1
+	_reconstruir()
 
 func _al_entrar_carta(item: ItemData, boton: Button) -> void:
 	boton.pivot_offset = boton.size * 0.5
@@ -411,8 +526,12 @@ func _actualizar_detalle() -> void:
 
 	var coste := item.precio + _precio_forja(item)
 	var puede := not _modo_recetas and _puede_comprar(item)
-	_comprar.disabled = not puede
-	_comprar.text = ("FORJAR · %d ORO" if _modo_recetas else "COMPRAR · %d ORO") % coste
+	if _modo_vender:
+		_comprar.disabled = _ranura_seleccionada < 0
+		_comprar.text = "VENDER SELECCIONADO"
+	else:
+		_comprar.disabled = not puede
+		_comprar.text = ("FORJAR · %d ORO" if _modo_recetas else "COMPRAR · %d ORO") % coste
 	_comprar.add_theme_color_override("font_color", Color(0.05, 0.06, 0.04) if puede else Color(0.55, 0.52, 0.46))
 	var estilo := _estilo_compra(puede)
 	_comprar.add_theme_stylebox_override("normal", estilo)
@@ -422,9 +541,12 @@ func _actualizar_detalle() -> void:
 
 
 func _comprar_seleccionado() -> void:
-	if _seleccionado == null or _arena == null:
+	if _arena == null:
 		return
-	if _arena.has_method("comprar_objeto"):
+	if _modo_vender and _ranura_seleccionada >= 0:
+		_arena.vender_objeto(_jugador, _ranura_seleccionada)
+		_ranura_seleccionada = -1
+	elif _seleccionado != null and _arena.has_method("comprar_objeto"):
 		_arena.comprar_objeto(_seleccionado)
 	_reconstruir()
 

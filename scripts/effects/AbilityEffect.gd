@@ -248,27 +248,23 @@ func _bono_fuego() -> float:
 
 
 func _hay_elite_en_radio() -> bool:
-	for nodo in get_tree().get_nodes_in_group("enemigos"):
-		var enemigo := nodo as Node3D
-		if enemigo == null:
-			continue
-		if enemigo.get("es_elite") != true:
-			continue
-		if enemigo.global_position.distance_to(global_position) <= _radio:
-			return true
+	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
+	if tracker != null:
+		return tracker.hay_alguno_en_radio(global_position, _radio, Callable(self, "_es_elite"))
 	return false
+
+func _es_elite(enemigo: Node3D) -> bool:
+	return enemigo.get("es_elite") == true
 
 
 func _hay_provocado_en_radio() -> bool:
-	for nodo in get_tree().get_nodes_in_group("enemigos"):
-		var enemigo := nodo as Node3D
-		if enemigo == null:
-			continue
-		if enemigo.global_position.distance_to(global_position) > _radio:
-			continue
-		if enemigo.has_method("esta_provocado") and enemigo.esta_provocado():
-			return true
+	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
+	if tracker != null:
+		return tracker.hay_alguno_en_radio(global_position, _radio, Callable(self, "_esta_provocado"))
 	return false
+
+func _esta_provocado(enemigo: Node3D) -> bool:
+	return enemigo.has_method("esta_provocado") and enemigo.esta_provocado()
 
 
 func _construir_visual() -> void:

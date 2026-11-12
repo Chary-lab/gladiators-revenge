@@ -104,6 +104,7 @@ var _tiempo_recalculo := 0.0
 var _tiempo_escudo := 0.0
 var _escudo_maximo := 0.0
 var _inmunidad_aturdimiento := 0.0
+var _inmunidad_daño := 0.0
 var _buff_ataque := 0.0
 var _buff_robo := 0.0
 var _buff_dano := 0.0
@@ -576,7 +577,7 @@ func _actualizar_estados(delta: float) -> void:
 	_tiempo_reduccion = maxf(0.0, _tiempo_reduccion - delta)
 	if _tiempo_reduccion <= 0.0:
 		_reduccion_temporal = 0.0
-	_critico_asegurado = maxf(0.0, _critico_asegurado - delta)
+	_inmunidad_daño = maxf(0.0, _inmunidad_daño - delta)
 	_inmunidad_aturdimiento = maxf(0.0, _inmunidad_aturdimiento - delta)
 
 	if _tiempo_escudo > 0.0:
@@ -658,6 +659,9 @@ func _objetivo_vivo(nodo: Node3D) -> bool:
 
 
 func _enemigo_mas_cercano(radio: float) -> Node3D:
+	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
+	if tracker != null:
+		return tracker.buscar_mas_cercano(global_position, radio)
 	var mejor: Node3D = null
 	var mejor_distancia := radio
 	for nodo in get_tree().get_nodes_in_group(GRUPO_ENEMIGOS):
@@ -795,9 +799,20 @@ func rango_habilidad(habilidad_id: StringName) -> int:
 
 ## Sube al azar una habilidad desbloqueada que no esté en su rango máximo.
 ## Se invoca automáticamente en cada subida de nivel; el jugador no elige.
-func _subir_habilidad_aleatoria() -> AbilityData:
+func _subir_habilidad_aleatoria(slot_forzado: int = -1) -> AbilityData:
 	if arma_actual == null:
 		return null
+
+	# Si se fuerza un slot específico, intentar subir ese primero
+	if slot_forzado >= 0:
+		var habilidad := arma_actual.obtener_habilidad(slot_forzado)
+		if habilidad != null and habilidad_desbloqueada(slot_forzado):
+			if rango_habilidad(habilidad.id) < maxi(1, habilidad.rango_maximo):
+				_rangos_habilidad[habilidad.id] = rango_habilidad(habilidad.id) + 1
+				return habilidad
+		return null
+
+	# Caso normal: elegir al azar entre candidatos desbloqueados
 	var candidatos: Array[int] = []
 	for slot in 4:
 		var habilidad := arma_actual.obtener_habilidad(slot)
@@ -859,7 +874,18 @@ func otorgar_experiencia(cantidad: int) -> void:
 
 func _al_subir_nivel(nivel: int) -> void:
 	_sincronizar_desbloqueos()
-	var mejorada := _subir_habilidad_aleatoria()
+
+	# En niveles 1, 2 y 3 solo se desbloquea una QWE nueva; no se sube de nivel
+	# ninguna habilidad todavía. En el 6 solo se desbloquea R (la definitiva).
+	# En los demas niveles se sube al azar una habilidad desbloqueada.
+	var subir_habilidad := true
+	if nivel <= 3 or nivel == 6:
+		subir_habilidad = false
+
+	var mejorada: AbilityData = null
+	if subir_habilidad:
+		mejorada = _subir_habilidad_aleatoria()
+
 	curar(estadisticas.salud_maxima * 0.15)
 	restaurar_mana(estadisticas.mana_maximo * 0.15)
 	habilidades_cambiadas.emit()
@@ -1013,6 +1039,7 @@ func _ejecutar_dash(habilidad: AbilityData, punto: Vector3) -> void:
 	_tiene_orden_movimiento = false
 	if arma_actual != null and arma_actual.clase == WeaponItem.Clase.FILO:
 		_critico_asegurado = 3.0
+		_otorgar_inmunidad_daño(0.4)  # i-frames durante el parpadeo
 	if habilidad.efecto_especial == &"parpadeo":
 		_critico_asegurado = 3.0
 	if arma_actual != null and arma_actual.clase == WeaponItem.Clase.FILO:
@@ -1209,6 +1236,9 @@ func otorgar_escudo(cantidad: float, duracion: float) -> void:
 func otorgar_inmunidad_aturdimiento(duracion: float) -> void:
 	_inmunidad_aturdimiento = maxf(_inmunidad_aturdimiento, duracion)
 
+func _otorgar_inmunidad_daño(duracion: float) -> void:
+	_inmunidad_daño = maxf(_inmunidad_daño, duracion)
+
 
 func aplicar_grito_guerra(duracion: float, bonus_ataque: float, robo: float) -> void:
 	_buff_ataque = maxf(_buff_ataque, bonus_ataque)
@@ -1241,6 +1271,8 @@ func recibir_dano(
 	fuente: Node = null
 ) -> void:
 	if esta_muerto or cantidad <= 0.0:
+		return
+	if _inmunidad_daño > 0.0:
 		return
 
 	var mitigacion := 0.0

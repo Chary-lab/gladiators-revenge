@@ -270,12 +270,17 @@ static func _kit_prisionero() -> Array[AbilityData]:
 	var grito := AbilityData.new()
 	grito.id = &"prisionero_grito"
 	grito.nombre = "Grito de Libertad"
-	grito.descripcion = "Recupera el aliento. Sin efecto de combate todavía."
+	grito.descripcion = "Grito de guerra: cura al gladiador, otorga +25 % velocidad de ataque y +12 % robo de vida durante 3 s, y cura al estandarte y a los aliados cercanos."
 	grito.tipo = AbilityData.Tipo.APOYO
 	grito.objetivo = AbilityData.Objetivo.PROPIO
 	grito.coste_mana = 0.0
 	grito.cooldown = 20.0
 	grito.duracion = 3.0
+	grito.curacion_base = 40.0
+	grito.efecto_especial = &"grito"
+	grito.atributo_escalado = &"fuerza"
+	grito.talentos.append(_talento(&"grito_cura", "Grito curativo", "Aumenta la curación en 15 por rango.", 2, &"", {&"curacion": 15.0}, 2))
+	grito.talentos.append(_talento(&"grito_duracion", "Eco del grito", "La duración aumenta 1 s por rango.", 3, &"grito_cura", {&"duracion": 1.0}, 2))
 	kit.append(grito)
 
 	return kit
