@@ -21,6 +21,11 @@ const RUTAS := {
 	&"victoria": "res://assets/audio/victoria.ogg",
 	&"derrota": "res://assets/audio/derrota.ogg",
 	&"click": "res://assets/audio/click.ogg",
+	&"golpe_espada": "res://assets/audio/golpe_espada.ogg",
+	&"paso_hierba": "res://assets/audio/paso_hierba.ogg",
+	&"paso_piedra": "res://assets/audio/paso_piedra.ogg",
+	&"paso_tela": "res://assets/audio/paso_tela.ogg",
+	&"libro_abrir": "res://assets/audio/libro_abrir.ogg",
 }
 
 static var _streams: Dictionary = {}
