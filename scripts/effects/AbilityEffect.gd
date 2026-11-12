@@ -1,25 +1,94 @@
 class_name AbilityEffect
 extends Node3D
 ## Ejecutor genérico de habilidades y objetos activos.
-##
-## Lee AbilityData, los talentos del portador y sus sinergias de clase. No hay
-## lógica duplicada de escalado: todo daño/curación pasa por GladiatorStats.
+## Lee AbilityData, los talentos del portador y sus sinergias de clase.
 ## Los indicadores son mallas geométricas temporales animadas con Tween.
+## Ahora con partículas de Kenney para impacto visual épico.
 
 var _datos: AbilityData
 var _portador: GladiatorController
-var _radio := 2.5
-var _duracion := 0.0
-var _dano := 0.0
-var _cura := 0.0
-var _restante := 0.0
-var _tick := 0.0
-var _color := Color(0.95, 0.65, 0.20)
-var _golpe_provocado := false
-var _ya_vinculo := false
+var _radio = 2.5
+var _duracion = 0.0
+var _dano = 0.0
+var _cura = 0.0
+var _restante = 0.0
+var _tick = 0.0
+var _color = Color(0.95, 0.65, 0.20)
+var _golpe_provocado = false
+var _ya_vinculo = false
 ## En clientes de red: dibuja el efecto pero no aplica daño ni curación.
-var solo_visual := false
+var solo_visual = false
 
+## Partículas de Kenney para efectos visuales de habilidad
+var _particulas_activas = []
+
+## Carga una textura de partícula de Kenney según el tipo.
+func _cargar_textura_particula(tipo: StringName) -> Texture2D:
+	var rutas = {
+		&"fuego": "res://assets/kenney/particles/fire_01.png",
+		&"magia": "res://assets/kenney/particles/magic_01.png",
+		&"humo": "res://assets/kenney/particles/smoke_01.png",
+		&"chispas": "res://assets/kenney/particles/spark_01.png",
+		&"impacto": "res://assets/kenney/particles/flare_01.png",
+		&"luz": "res://assets/kenney/particles/light_01.png",
+		&"estrella": "res://assets/kenney/particles/star_01.png",
+	}
+	var ruta_textura = rutas.get(tipo, "res://assets/kenney/particles/flare_01.png") as String
+	if ResourceLoader.exists(ruta_textura):
+		return load(ruta_textura) as Texture2D
+	return null
+
+## Crea una partícula individual que se desplaza y se desvanece.
+func _crear_particula(posicion: Vector3, direccion: Vector3, velocidad: float, duracion: float, textura: Texture2D, escala: float, color: Color) -> void:
+	var particula = Sprite3D.new()
+	particula.texture = textura
+	particula.position = posicion
+	particula.scale = Vector3.ONE * escala
+	particula.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	var material = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = 2.0
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	particula.material_override = material
+	add_child(particula)
+	var t = particula.create_tween()
+	t.tween_property(particula, "modulate:a", 0.0, duracion)
+	t.tween_property(particula, "scale", Vector3.ONE * (escala * 1.5), duracion)
+	t.tween_property(particula, "position", posicion + direccion * velocidad * duracion, duracion).set_ease(Tween.EASE_OUT)
+	t.chain().tween_callback(particula.queue_free)
+
+## Explosión de partículas radiales desde un punto.
+func _explosion_particulas(posicion: Vector3, cantidad: int, color: Color, tipo: StringName = &"impacto", escala: float = 0.5, velocidad: float = 3.0) -> void:
+	var textura = _cargar_textura_particula(tipo)
+	if textura == null:
+		return
+	for i in range(cantidad):
+		var angulo = float(i) * TAU / cantidad
+		var elevacion = randf_range(-0.3, 0.3)
+		var dir = Vector3(cos(angulo) * cos(elevacion), sin(elevacion), sin(angulo) * cos(elevacion))
+		var desvio = Vector3(randf_range(-0.5, 0.5), randf_range(-0.5, 0.5), randf_range(-0.5, 0.5))
+		_crear_particula(posicion + desvio, dir, velocidad, randf_range(0.4, 0.8), textura, escala, color)
+
+## Rastro de partículas ascendentes.
+func _rastro_particulas(posicion: Vector3, color: Color, tipo: StringName = &"humo", cuenta: int = 5) -> void:
+	var textura = _cargar_textura_particula(tipo)
+	if textura == null:
+		return
+	for i in range(cuenta):
+		var desvio = Vector3(randf_range(-0.3, 0.3), randf_range(0.0, 0.5), randf_range(-0.3, 0.3))
+		var dir = Vector3(0.0, 1.0, 0.0)
+		_crear_particula(posicion + desvio, dir, randf_range(1.0, 2.0), randf_range(0.6, 1.2), textura, 0.4, color)
+
+## Elimina todas las partículas activas.
+func _limpiar_particulas() -> void:
+	for p: Sprite3D in _particulas_activas:
+		if is_instance_valid(p):
+			p.queue_free()
+	_particulas_activas.clear()
 
 func configurar(datos: AbilityData, portador: GladiatorController) -> void:
 	_datos = datos
@@ -33,7 +102,7 @@ func configurar(datos: AbilityData, portador: GladiatorController) -> void:
 	for talento in datos.talentos:
 		if talento == null:
 			continue
-		var rango := portador.rango_talento(talento.id)
+		var rango = portador.rango_talento(talento.id)
 		if rango <= 0:
 			continue
 		if talento.modificadores.has(&"radio"):
@@ -50,7 +119,7 @@ func configurar(datos: AbilityData, portador: GladiatorController) -> void:
 	for talento in datos.talentos:
 		if talento == null:
 			continue
-		var rango := portador.rango_talento(talento.id)
+		var rango = portador.rango_talento(talento.id)
 		if rango > 0 and talento.modificadores.has(&"dano"):
 			_dano += float(talento.modificadores[&"dano"]) * rango
 
@@ -89,7 +158,7 @@ func _aplicar_efectos_al_portador() -> void:
 	if _portador == null or _datos == null:
 		return
 	if _datos.escudo_por_atributo > 0.0:
-		var atributo := _portador.estadisticas.fuerza_total
+		var atributo = _portador.estadisticas.fuerza_total
 		if _datos.atributo_escalado == &"inteligencia":
 			atributo = _portador.estadisticas.inteligencia_total
 		elif _datos.atributo_escalado == &"agilidad":
@@ -116,6 +185,7 @@ func _process(delta: float) -> void:
 		_aplicar_pulso()
 
 	if _restante <= 0.0:
+		_limpiar_particulas()
 		queue_free()
 
 
@@ -123,9 +193,9 @@ func _aplicar_pulso() -> void:
 	if _datos == null:
 		return
 
-	var enemigos := get_tree().get_nodes_in_group("enemigos")
+	var enemigos = get_tree().get_nodes_in_group("enemigos")
 	for nodo in enemigos:
-		var enemigo := nodo as Node3D
+		var enemigo = nodo as Node3D
 		if enemigo == null:
 			continue
 		if enemigo.global_position.distance_to(global_position) > _radio:
@@ -134,13 +204,13 @@ func _aplicar_pulso() -> void:
 		if _datos.efecto_especial == &"marca_verdugo" and enemigo.has_method("aplicar_marca"):
 			enemigo.aplicar_marca(maxf(_duracion, 4.0))
 
-		var dano := _dano
+		var dano = _dano
 		if _datos.efecto_especial == &"ejecucion" and enemigo.has_method("esta_marcado") and enemigo.esta_marcado():
 			dano *= 1.25
 		if dano > 0.0 and enemigo.has_method("recibir_dano"):
 			enemigo.recibir_dano(dano, _datos.tipo_dano, _portador)
 			_portador.registrar_dano(dano)
-			var vida_despues: float = enemigo.get("salud_actual") if enemigo.get("salud_actual") != null else 1.0
+			var vida_despues = enemigo.get("salud_actual") if enemigo.get("salud_actual") != null else 1.0
 			if _datos.efecto_especial == &"ejecucion":
 				if vida_despues <= 0.0 or (enemigo.has_method("esta_marcado") and enemigo.esta_marcado()):
 					_portador.reducir_cooldown(GladiatorController.SLOT_R, 0.70)
@@ -155,6 +225,14 @@ func _aplicar_pulso() -> void:
 		if _datos.efecto_especial == &"raices" and enemigo.has_method("aplicar_aturdimiento"):
 			enemigo.aplicar_aturdimiento(maxf(_duracion, 1.8))
 
+		# Partículas de impacto en el enemigo
+		var color_impacto = _color
+		if _datos.tipo_dano == GladiatorStats.TIPO_MAGICO:
+			color_impacto = Color(0.45, 0.55, 1.0)
+		elif _cura > 0.0:
+			color_impacto = Color(0.35, 1.0, 0.45)
+		_explosion_particulas(enemigo.global_position + Vector3(0, 1.0, 0), 6, color_impacto, &"impacto", 0.4, 2.5)
+
 	if _cura > 0.0 and _portador != null and is_instance_valid(_portador):
 		if _portador.global_position.distance_to(global_position) <= _radio:
 			_portador.curar(_cura)
@@ -167,44 +245,44 @@ func _aplicar_pulso() -> void:
 
 
 func _curar_aliado_cercano() -> void:
-	var mejor: Node3D = null
-	var mejor_distancia := 10.0
+	var mejor = null
+	var mejor_distancia = 10.0
 	for grupo in [&"aliados", &"banderas"]:
 		for nodo in get_tree().get_nodes_in_group(grupo):
-			var aliado := nodo as Node3D
+			var aliado = nodo as Node3D
 			if aliado == null or not aliado.has_method("curar"):
 				continue
-			var distancia := aliado.global_position.distance_to(global_position)
+			var distancia = aliado.global_position.distance_to(global_position)
 			if distancia < mejor_distancia:
 				mejor_distancia = distancia
 				mejor = aliado
 	if mejor == null:
 		return
-	var cantidad := _portador.estadisticas.escalar_invocacion(18.0 + _portador.estadisticas.inteligencia_total * 0.4)
+	var cantidad = _portador.estadisticas.escalar_invocacion(18.0 + _portador.estadisticas.inteligencia_total * 0.4)
 	mejor.curar(cantidad)
 	NumerosDano.mostrar(mejor.global_position + Vector3(0, 1.6, 0), cantidad, GladiatorStats.TIPO_VERDADERO, false, true)
 
 
 func _descarga_encadenada() -> void:
-	var candidatos: Array[Node3D] = []
-	var distancias: Array[float] = []
+	var candidatos = []
+	var distancias = []
 	for nodo in get_tree().get_nodes_in_group("enemigos"):
-		var enemigo := nodo as Node3D
+		var enemigo = nodo as Node3D
 		if enemigo == null:
 			continue
-		var distancia := global_position.distance_to(enemigo.global_position)
+		var distancia = global_position.distance_to(enemigo.global_position)
 		if distancia > 12.0:
 			continue
 		candidatos.append(enemigo)
 		distancias.append(distancia)
-	var golpeados := 0
-	var maximo := 1 + _datos.rebotes
+	var golpeados = 0
+	var maximo = 1 + _datos.rebotes
 	while golpeados < maximo and not candidatos.is_empty():
-		var indice := 0
+		var indice = 0
 		for i in candidatos.size():
 			if distancias[i] < distancias[indice]:
 				indice = i
-		var objetivo := candidatos[indice]
+		var objetivo = candidatos[indice]
 		candidatos.remove_at(indice)
 		distancias.remove_at(indice)
 		_crear_rayo(objetivo.global_position)
@@ -214,11 +292,11 @@ func _descarga_encadenada() -> void:
 
 
 func _crear_rayo(destino: Vector3) -> void:
-	var rayo := MeshInstance3D.new()
-	var caja := BoxMesh.new()
+	var rayo = MeshInstance3D.new()
+	var caja = BoxMesh.new()
 	caja.size = Vector3(0.09, 0.09, global_position.distance_to(destino))
 	rayo.mesh = caja
-	var material := StandardMaterial3D.new()
+	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(0.45, 0.75, 1.0, 0.85)
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -227,10 +305,10 @@ func _crear_rayo(destino: Vector3) -> void:
 	material.emission_energy_multiplier = 2.5
 	rayo.material_override = material
 	add_child(rayo)
-	var medio := global_position.lerp(destino, 0.5)
+	var medio = global_position.lerp(destino, 0.5)
 	rayo.global_position = Vector3(medio.x, 0.75, medio.z)
 	rayo.look_at(destino, Vector3.UP)
-	var tween := rayo.create_tween()
+	var tween = rayo.create_tween()
 	tween.tween_property(material, "albedo_color:a", 0.0, 0.32)
 	tween.tween_callback(rayo.queue_free)
 
@@ -238,10 +316,10 @@ func _crear_rayo(destino: Vector3) -> void:
 func _bono_fuego() -> float:
 	if _portador == null or _datos == null:
 		return 0.0
-	var total := 0.0
+	var total = 0.0
 	for talento in _datos.talentos:
 		if talento != null:
-			var rango := _portador.rango_talento(talento.id)
+			var rango = _portador.rango_talento(talento.id)
 			if rango > 0 and talento.modificadores.has(&"dano_fuego"):
 				total += float(talento.modificadores[&"dano_fuego"]) * rango
 	return total
@@ -268,7 +346,7 @@ func _esta_provocado(enemigo: Node3D) -> bool:
 
 
 func _construir_visual() -> void:
-	var material := StandardMaterial3D.new()
+	var material = StandardMaterial3D.new()
 	material.albedo_color = Color(_color.r, _color.g, _color.b, 0.32)
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -277,8 +355,8 @@ func _construir_visual() -> void:
 	material.emission_energy_multiplier = 2.0
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 
-	var disco := MeshInstance3D.new()
-	var malla := CylinderMesh.new()
+	var disco = MeshInstance3D.new()
+	var malla = CylinderMesh.new()
 	malla.top_radius = _radio
 	malla.bottom_radius = _radio
 	malla.height = 0.05
@@ -289,8 +367,8 @@ func _construir_visual() -> void:
 	add_child(disco)
 
 	# Anillo nítido que marca el radio exacto.
-	var anillo := MeshInstance3D.new()
-	var toro := TorusMesh.new()
+	var anillo = MeshInstance3D.new()
+	var toro = TorusMesh.new()
 	toro.inner_radius = maxf(0.05, _radio - 0.12)
 	toro.outer_radius = _radio
 	toro.rings = 40
@@ -301,8 +379,8 @@ func _construir_visual() -> void:
 	add_child(anillo)
 
 	# Onda de expansión al lanzar.
-	var onda := MeshInstance3D.new()
-	var toro_onda := TorusMesh.new()
+	var onda = MeshInstance3D.new()
+	var toro_onda = TorusMesh.new()
 	toro_onda.inner_radius = 0.82
 	toro_onda.outer_radius = 1.0
 	toro_onda.rings = 32
@@ -310,11 +388,11 @@ func _construir_visual() -> void:
 	onda.mesh = toro_onda
 	onda.position.y = 0.12
 	onda.scale = Vector3.ONE * 0.25
-	var material_onda := material.duplicate() as StandardMaterial3D
+	var material_onda = material.duplicate() as StandardMaterial3D
 	material_onda.albedo_color = Color(_color.r, _color.g, _color.b, 0.75)
 	onda.material_override = material_onda
 	add_child(onda)
-	var tween := onda.create_tween()
+	var tween = onda.create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(onda, "scale", Vector3.ONE * _radio, 0.55).set_ease(Tween.EASE_OUT)
 	tween.tween_property(material_onda, "albedo_color:a", 0.0, 0.55)
@@ -322,8 +400,8 @@ func _construir_visual() -> void:
 
 	# Domo translúcido para zonas persistentes (estandarte, raíces).
 	if _duracion > 0.0:
-		var domo := MeshInstance3D.new()
-		var esfera := SphereMesh.new()
+		var domo = MeshInstance3D.new()
+		var esfera = SphereMesh.new()
 		esfera.radius = _radio
 		esfera.height = _radio
 		esfera.is_hemisphere = true
@@ -331,21 +409,21 @@ func _construir_visual() -> void:
 		esfera.rings = 12
 		domo.mesh = esfera
 		domo.position.y = 0.02
-		var material_domo := material.duplicate() as StandardMaterial3D
+		var material_domo = material.duplicate() as StandardMaterial3D
 		material_domo.albedo_color = Color(_color.r, _color.g, _color.b, 0.10)
 		material_domo.emission_energy_multiplier = 1.0
 		domo.material_override = material_domo
 		add_child(domo)
 
 	# Destello central al lanzar la habilidad.
-	var destello := MeshInstance3D.new()
-	var esfera_destello := SphereMesh.new()
+	var destello = MeshInstance3D.new()
+	var esfera_destello = SphereMesh.new()
 	esfera_destello.radius = _radio * 0.15
 	esfera_destello.radial_segments = 16
 	esfera_destello.rings = 8
 	destello.mesh = esfera_destello
 	destello.position.y = 0.08
-	var material_destello := StandardMaterial3D.new()
+	var material_destello = StandardMaterial3D.new()
 	material_destello.albedo_color = _color
 	material_destello.emission_enabled = true
 	material_destello.emission = _color
@@ -354,22 +432,22 @@ func _construir_visual() -> void:
 	material_destello.cull_mode = BaseMaterial3D.CULL_DISABLED
 	destello.material_override = material_destello
 	add_child(destello)
-	var tween_d := destello.create_tween()
+	var tween_d = destello.create_tween()
 	tween_d.set_parallel(true)
 	tween_d.tween_property(destello, "scale", Vector3.ONE * 3.0, 0.25).set_ease(Tween.EASE_OUT)
 	tween_d.tween_property(material_destello, "emission_energy_multiplier", 0.0, 0.25)
 	tween_d.chain().tween_callback(destello.queue_free)
 
-	# Partículas de impacto: cubos pequeños que salen disparados desde el centro.
+	# Partículas de impacto al lanzar la habilidad.
 	if _duracion <= 0.0:
 		for i in range(6):
-			var particula := MeshInstance3D.new()
-			var cubo := BoxMesh.new()
+			var particula = MeshInstance3D.new()
+			var cubo = BoxMesh.new()
 			cubo.size = Vector3(0.12, 0.12, 0.12)
 			particula.mesh = cubo
-			var angulo := float(i) * TAU / 6.0
-			var dir := Vector3(cos(angulo), 0.4, sin(angulo))
-			var material_p := StandardMaterial3D.new()
+			var angulo = float(i) * TAU / 6.0
+			var dir = Vector3(cos(angulo), 0.4, sin(angulo))
+			var material_p = StandardMaterial3D.new()
 			material_p.albedo_color = _color
 			material_p.emission_enabled = true
 			material_p.emission = _color
@@ -377,8 +455,15 @@ func _construir_visual() -> void:
 			material_p.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			particula.material_override = material_p
 			add_child(particula)
-			var tween_p := particula.create_tween()
-			var destino_p := global_position + dir * _radio
+			var tween_p = particula.create_tween()
+			var destino_p = global_position + dir * _radio
 			tween_p.tween_property(particula, "global_position", destino_p, 0.4).set_ease(Tween.EASE_OUT)
 			tween_p.tween_property(material_p, "emission_energy_multiplier", 0.0, 0.4)
 			tween_p.chain().tween_callback(particula.queue_free)
+
+		# Explosión de partículas de Kenney al lanzar
+		_explosion_particulas(global_position, 12, _color, &"fuego", 0.6, 4.0)
+
+
+func _exit_tree() -> void:
+	_limpiar_particulas()
