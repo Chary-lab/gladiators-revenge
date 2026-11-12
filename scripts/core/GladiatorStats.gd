@@ -25,9 +25,9 @@ const TIPO_VERDADERO := &"verdadero"
 ## clase equipada (Bastión: FUE, Filo: AGI, Cetro: INT, Prisionero: FUE).
 ## Es deliberadamente bajo: un gladiador sin experiencia pega poco y su daño
 ## crece sobre todo con el nivel y el equipo.
-const DANO_ATAQUE_POR_ATRIBUTO := 0.85
+const DANO_ATAQUE_POR_ATRIBUTO := 0.45
 ## Crecimiento del daño por nivel (3,5 % por nivel sobre el daño base).
-const DANO_ESCALA_POR_NIVEL := 0.050
+const DANO_ESCALA_POR_NIVEL := 0.090
 ## Variación aleatoria del golpe: el daño real cae en [min, max].
 const DANO_VARIANZA := 0.20
 ## Multiplicador de daño según la clase equipada (identidad de combate).
@@ -49,7 +49,7 @@ const CRECIMIENTO_POR_CLASE := {
 
 # --- Fuerza ---------------------------------------------------------------
 const VIDA_BASE := 100.0
-const VIDA_POR_FUERZA := 10.0
+const VIDA_POR_FUERZA := 11.0
 const REGEN_VIDA_BASE := 0.8
 const REGEN_VIDA_POR_FUERZA := 0.08
 const DANO_FISICO_POR_FUERZA := 1.2
@@ -62,8 +62,8 @@ const MITIGACION_FISICA_MAXIMA := 0.60
 ## Ataques por segundo. La base es el suelo de un novato: casi todo el ritmo
 ## lo aportan la Agilidad y el nivel.
 const VEL_ATAQUE_BASE := 0.15
-const VEL_ATAQUE_POR_AGI := 0.090
-const VEL_ATAQUE_POR_NIVEL := 0.020
+const VEL_ATAQUE_POR_AGI := 0.050
+const VEL_ATAQUE_POR_NIVEL := 0.025
 const VEL_ATAQUE_MIN := 0.15
 const VEL_ATAQUE_MAX := 2.20
 const CRITICO_BASE := 0.05

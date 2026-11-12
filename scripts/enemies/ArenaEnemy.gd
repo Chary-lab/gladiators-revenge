@@ -119,10 +119,10 @@ func _configurar_visual(tipo: StringName) -> void:
 
 ## Estadísticas base de un enemigo de oleada. El arquetipo y el perfil de la
 ## oleada (`BalanceOlas`) multiplican estos valores.
-const VIDA_BASE := 80.0
-const VIDA_POR_RONDA := 30.0
+const VIDA_BASE := 66.0
+const VIDA_POR_RONDA := 24.0
 const DANO_BASE := 6.0
-const DANO_POR_RONDA := 2.2
+const DANO_POR_RONDA := 2.0
 
 ## Modificadores por arquetipo: vida, daño, movimiento y cadencia.
 const ARQUETIPOS := {

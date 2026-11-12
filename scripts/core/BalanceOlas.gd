@@ -57,7 +57,7 @@ static func perfil(oleada: int) -> Dictionary:
 ## Enemigos que salen en la oleada. Crece de 16 a 88 enemigos: con arquetipos
 ## más duros no hace falta inundar la arena.
 static func cantidad(oleada: int) -> int:
-	return 8 + int(round(float(oleada) * 2.5))
+	return 7 + int(round(float(oleada) * 2.2))
 
 
 ## Elige un arquetipo según los pesos del perfil.

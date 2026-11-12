@@ -706,9 +706,10 @@ func _actualizar_estadisticas() -> void:
 		var rango := e.rango_dano_ataque(arma.dano_ataque_base, arma.atributo_principal)
 		dano_min = int(rango.x)
 		dano_max = int(rango.y)
-	_stats.text = "Daño        %d-%d\nArmadura    %d (%.1f%% red.)\nVel. ataque %.2f/s\nCrítico     %d %%" % [
+	var aps := maxf(0.01, e.velocidad_ataque)
+	_stats.text = "Daño        %d-%d\nArmadura    %d (%.1f%% red.)\nVel. ataque %.2f golpes/s (%.2f s)\nCrítico     %d %%" % [
 		dano_min, dano_max, int(round(e.armadura_total)), e.mitigacion_fisica * 100.0,
-		e.velocidad_ataque, int(round(e.probabilidad_critico * 100.0))
+		aps, 1.0 / aps, int(round(e.probabilidad_critico * 100.0))
 	]
 
 	var principal := _atributo_principal()

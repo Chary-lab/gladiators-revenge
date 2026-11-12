@@ -119,6 +119,33 @@ func _medir_vida() -> void:
 	_hp_previo = hp
 
 
+## Compra objetos entre oleadas como haría un jugador (dispara la forja en cadena).
+func _gestionar_compras() -> void:
+	if _escena == null or not _escena.has_method("comprar_para"):
+		return
+	var inventario := _jugador.inventario
+	var completan: Array[ItemData] = []
+	var resto: Array[ItemData] = []
+	for item in ItemCatalog.vendibles():
+		if inventario.receta_completada_por(item) != null:
+			completan.append(item)
+		else:
+			resto.append(item)
+	completan.sort_custom(func(a: ItemData, b: ItemData) -> bool: return a.precio < b.precio)
+	resto.sort_custom(func(a: ItemData, b: ItemData) -> bool: return a.precio < b.precio)
+	var vendibles: Array[ItemData] = completan + resto
+	for i in 6:
+		var comprado := false
+		for item in vendibles:
+			if _escena.game_state.oro < item.precio + 80:
+				continue
+			if _escena.comprar_para(_jugador, item):
+				comprado = true
+				break
+		if not comprado:
+			break
+
+
 ## Gasta puntos de atributo y de talento como haría un jugador.
 func _gestionar_progresion() -> void:
 	var e := _jugador.estadisticas
@@ -223,6 +250,7 @@ func _al_terminar_oleada(numero: int) -> void:
 		"golpes": _golpes_oleada,
 	})
 	_ttks.clear()
+	_gestionar_compras()
 	if numero >= _max_oleadas:
 		_terminado = true
 

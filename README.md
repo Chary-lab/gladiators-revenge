@@ -133,20 +133,20 @@ Todo el balance vive en tres sitios y ninguna fórmula se replica fuera de ellos
 | Pieza | Dónde | Qué controla |
 | --- | --- | --- |
 | Daño mín-máx | `GladiatorStats.rango_dano_ataque()` | Banda del golpe básico (±20 %) |
-| Ritmo de ataque | `GladiatorStats.velocidad_ataque` | Base 0,15/s + 0,09 por AGI + 0,02 por nivel |
+| Ritmo de ataque | `GladiatorStats.velocidad_ataque` | Base 0,15 + 0,05 por AGI + 0,025 por nivel (golpes/s) |
 | Clase | `MULT_DANO_POR_CLASE` | Prisionero 0,80 · Bastión 1,00 · Filo 1,12 · Cetro 0,92 |
 | Enemigos | `ArenaEnemy.ARQUETIPOS` | Vida, daño, velocidad y cadencia por arquetipo |
 | Oleadas | `BalanceOlas.PERFILES` | Mezcla de arquetipos, vida/daño extra y jefe |
 
 El ataque básico tira `randf_range(min, max)`; la media es
-`(daño del arma + atributo principal × 0,85) × (1 + 0,05 por nivel) × mult de clase`.
+`(daño del arma + atributo principal × 0,45) × (1 + 0,09 por nivel) × mult de clase`.
 Un gladiador de nivel 1 pega poco a propósito: el daño llega con niveles, equipo
 y auras, no con la estadística base. La recarga del golpe la descuenta
 `CombatComponent.iniciar_recarga_ataque()`: si se escribe solo en el controlador,
 el temporizador se reinicia cada frame y el campeón ataca sin parar.
 
-Enemigos: vida `80 + 30 × oleada` y daño `6 + 2,2 × oleada`, con multiplicadores
-por arquetipo. Cantidad: `8 + 2,5 × oleada` (11 enemigos en la oleada 1, 58 en la 20).
+Enemigos: vida `66 + 24 × oleada` y daño `6 + 2,0 × oleada`, con multiplicadores
+por arquetipo. Cantidad: `7 + 2,2 × oleada` (9 enemigos en la oleada 1, 51 en la 20).
 `tests/playtest.gd` juega solo: elige campeón, gasta puntos y talentos, usa
 habilidades y mide por oleada duración, TTK, bajas/s y daño recibido.
 
