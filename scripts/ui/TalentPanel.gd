@@ -169,7 +169,8 @@ func _reconstruir() -> void:
 func _fila_rango(habilidad: AbilityData, indice: int) -> Control:
 	var tecla: String = ["Q", "W", "E", "R"][indice]
 	var rango := _jugador.rango_habilidad(habilidad.id)
-	var maximo := maxi(1, habilidad.rango_maximo)
+	var maximo: int
+	maximo = max(1, habilidad.rango_maximo)
 	var desbloqueada := _jugador.habilidad_desbloqueada(indice)
 
 	var etiqueta := _texto("", 14)
@@ -193,9 +194,11 @@ func _fila_rango(habilidad: AbilityData, indice: int) -> Control:
 
 func _fila_talento(talento: TalentData) -> Control:
 	var rango := _jugador.rango_talento(talento.id)
-	var maximo := maxi(1, talento.rango_maximo)
+	var maximo: int
+	maximo = max(1, talento.rango_maximo)
 	var requisito_ok := talento.talento_requerido == &"" or _jugador.tiene_talento(talento.talento_requerido)
-	var comprable := rango < maximo and requisito_ok and _jugador.puntos_rojos >= talento.coste_puntos_rojos
+	var comprable: bool
+	comprable = rango < maximo and requisito_ok and _jugador.puntos_rojos >= talento.coste_puntos_rojos
 
 	var boton := Button.new()
 	boton.alignment = HORIZONTAL_ALIGNMENT_LEFT

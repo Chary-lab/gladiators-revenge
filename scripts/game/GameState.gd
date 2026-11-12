@@ -50,7 +50,8 @@ func otorgar_puntos_atributo(cantidad: int) -> void:
 
 ## Vende un objeto del inventario y suma el precio de venta al oro.
 func vender_objeto(item_precio: int) -> int:
-	var ganancia := maxi(1, int(item_precio / 2.0))
+	var ganancia: int
+	ganancia = int(max(1, int(item_precio / 2.0)))
 	agregar_oro(ganancia)
 	return ganancia
 

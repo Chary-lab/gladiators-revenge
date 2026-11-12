@@ -194,7 +194,7 @@ static func _espiritu(t: float, duracion: float) -> float:
 
 static func _victoria(t: float, duracion: float) -> float:
 	var notas := [523.25, 659.25, 783.99, 1046.5]
-	var indice := mini(int(t / (duracion / notas.size())), notas.size() - 1)
+	var indice := int(min(int(t / (duracion / notas.size())), notas.size() - 1))
 	return sin(TAU * float(notas[indice]) * t) * 0.3 * _envolvente(t, duracion)
 
 

@@ -93,7 +93,7 @@ func agregar(item: ItemData, cantidad := 1) -> bool:
 		for ranura in ranuras:
 			if ranura["item"] != null and ranura["item"].id == item.id and ranura["cantidad"] < item.maximo_pila:
 				var espacio: int = item.maximo_pila - int(ranura["cantidad"])
-				var meter: int = mini(espacio, cantidad)
+				var meter: int = min(espacio, cantidad)
 				ranura["cantidad"] = int(ranura["cantidad"]) + meter
 				_recalcular_bonos()
 				cambiado.emit()
@@ -127,7 +127,7 @@ func consumir(id: StringName, cantidad := 1) -> bool:
 		var ranura: Dictionary = ranuras[i]
 		if ranura["item"] == null or ranura["item"].id != id:
 			continue
-		var quitar: int = mini(resto, int(ranura["cantidad"]))
+		var quitar: int = min(resto, int(ranura["cantidad"]))
 		ranura["cantidad"] = int(ranura["cantidad"]) - quitar
 		resto -= quitar
 		if int(ranura["cantidad"]) <= 0:
@@ -175,7 +175,7 @@ func precio_venta(indice: int) -> int:
 	var item: ItemData = ranuras[indice].get("item")
 	if item == null:
 		return 0
-	return maxi(1, int(item.precio / 2.0))
+	return max(1, int(item.precio / 2.0))
 
 
 ## Devuelve la receta que se completaría comprando `item` (el ingrediente que

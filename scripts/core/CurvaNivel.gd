@@ -31,13 +31,13 @@ static func xp_oleada(oleada: int) -> int:
 static func xp_enemigo(presupuesto: int, peso: float, peso_total: float) -> int:
 	if presupuesto <= 0 or peso <= 0.0 or peso_total <= 0.0:
 		return 0
-	return maxi(1, int(round(float(presupuesto) * peso / peso_total)))
+	return max(1, int(round(float(presupuesto) * peso / peso_total)))
 
 
 ## Nivel que se alcanza al acumular `experiencia` partiendo de nivel 1.
 static func nivel_por_experiencia(experiencia: int) -> int:
 	var nivel := 1
-	var resto := maxi(0, experiencia)
+	var resto := int(max(0, experiencia))
 	while nivel < NIVEL_MAXIMO:
 		var necesaria := xp_requerida(nivel)
 		if necesaria <= 0 or resto < necesaria:

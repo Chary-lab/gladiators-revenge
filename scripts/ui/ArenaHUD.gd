@@ -553,7 +553,7 @@ func _actualizar_habilidades() -> void:
 		var rango := _jugador.rango_habilidad(habilidad.id)
 		cd.text = ("%ds" % int(ceil(restante))) if restante > 0.0 else ""
 		_actualizar_velo(_habilidad_velos[i], restante / maxf(0.01, _jugador.cooldown_habilidad(habilidad)))
-		_actualizar_pips(pips, rango, maxi(1, habilidad.rango_maximo), true)
+		_actualizar_pips(pips, rango, max(1, habilidad.rango_maximo), true)
 		if _cd_antes[i] > 0.0 and restante <= 0.0:
 			_destello_habilidad(i)
 		_cd_antes[i] = restante
@@ -1011,7 +1011,7 @@ func _icono_estatico(
 func _actualizar_iconos_habilidades() -> void:
 	if _jugador == null or _jugador.arma_actual == null:
 		return
-	for i in mini(4, _habilidad_botones.size()):
+	for i in min(4, _habilidad_botones.size()):
 		var habilidad := _jugador.arma_actual.obtener_habilidad(i)
 		if habilidad != null:
 			_boton_icono(_habilidad_botones[i], habilidad.id, IconStudio.CATEGORIA_HABILIDAD)
@@ -1133,7 +1133,7 @@ func _mostrar_tooltip_habilidad(indice: int) -> void:
 		)
 		return
 	var rango := _jugador.rango_habilidad(habilidad.id)
-	var maximo := maxi(1, habilidad.rango_maximo)
+	var maximo := int(max(1, habilidad.rango_maximo))
 	var acento := ORO
 	match _jugador.arma_actual.clase:
 		WeaponItem.Clase.FILO:

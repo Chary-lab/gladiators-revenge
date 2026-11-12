@@ -66,7 +66,8 @@ static func mostrar(
 	tween.tween_property(etiqueta, "global_position", etiqueta.global_position + Vector3(0, 1.7, 0), DURACION)
 	tween.tween_property(etiqueta, "modulate:a", 0.0, DURACION)
 	tween.tween_property(etiqueta, "scale", Vector3.ONE * 0.7, DURACION)
-	tween.chain().tween_callback(func() -> void: etiqueta.visible = false)
+	var _cb_etiqueta := Callable(NumerosDano, "_on_etiqueta_tween_completo").bind(etiqueta)
+	tween.chain().tween_callback(_cb_etiqueta)
 
 
 static func _obtener(arbol: SceneTree) -> Label3D:
@@ -92,3 +93,6 @@ static func _limpiar() -> void:
 	_etiquetas.clear()
 	_siguiente = 0
 	_conectado = false
+
+static func _on_etiqueta_tween_completo(etiqueta: Label3D) -> void:
+	etiqueta.visible = false

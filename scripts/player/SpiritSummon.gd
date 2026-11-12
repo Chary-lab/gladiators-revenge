@@ -467,7 +467,9 @@ func _disipar() -> void:
 	tween.set_parallel(true)
 	tween.tween_property(self, "scale", scale * 0.15, 0.35)
 	tween.tween_property(self, "rotation:y", rotation.y + 1.8, 0.35)
-	tween.chain().tween_callback(func() -> void:
-		disipado.emit()
-		queue_free()
-	)
+	var _cb_disipar := Callable(self, "_on_disipado_tween_completo")
+	tween.chain().tween_callback(_cb_disipar)
+
+func _on_disipado_tween_completo() -> void:
+	disipado.emit()
+	queue_free()

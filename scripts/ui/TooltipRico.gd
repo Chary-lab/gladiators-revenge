@@ -133,7 +133,8 @@ func ocultar() -> void:
 	_tween = create_tween()
 	_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_tween.tween_property(self, "modulate:a", 0.0, 0.09)
-	_tween.tween_callback(func() -> void: visible = false)
+	var _cb_tooltip := Callable(self, "_on_tooltip_tween_completo")
+	_tween.tween_callback(_cb_tooltip)
 
 
 func _process(_delta: float) -> void:
@@ -156,3 +157,6 @@ func _process(_delta: float) -> void:
 func _icono_listo(textura: Texture2D, id: StringName) -> void:
 	if id == _id_icono:
 		_icono.texture = textura
+
+func _on_tooltip_tween_completo() -> void:
+	visible = false

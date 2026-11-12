@@ -216,7 +216,7 @@ func _invocar_jefe() -> void:
 	jefe.global_position = punto + Vector3(0, 0, 2.5)
 	jefe.objetivo = _jugador
 	jefe.murio.connect(_al_morir_jefe)
-	jefe.salud_cambiada.connect(func(actual: float, maxima: float): jefe_invocado.emit(jefe))
+	jefe.salud_cambiada.connect(_cb_jefe_salud_cambiada.bind(jefe))
 	jefe_invocado.emit(jefe)
 
 	mensaje.emit("¡El Liche de la Arena despierta!" if lich else "¡Un campeón del Imperio entra en la arena!", 3.0)
@@ -247,7 +247,7 @@ func _otorgar_xp(cantidad: int) -> void:
 		jugador.otorgar_experiencia(cantidad)
 		excedente_total += jugador.estadisticas.reclamar_excedente()
 	if excedente_total > 0:
-		oro_ganado.emit(maxi(1, excedente_total / 4))
+		oro_ganado.emit(max(1, excedente_total / 4))
 		mensaje.emit("Nivel máximo: %d XP convertida en oro." % excedente_total, 2.0)
 
 
@@ -256,6 +256,9 @@ func aplicar_estado_red(numero: int, pendientes: int, estado: int, tiempo: float
 	_pendientes = pendientes
 	_estado = estado as Estado
 	_temporizador = tiempo
+
+func _cb_jefe_salud_cambiada(actual: float, maxima: float, jefe: ArenaBossAI) -> void:
+	jefe_invocado.emit(jefe)
 
 
 func tiempo_preparacion() -> float:

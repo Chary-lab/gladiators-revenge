@@ -72,7 +72,7 @@ func iniciar_latido(nombre: String, url_publica: String, max_jugadores := 3) -> 
 
 
 func actualizar_jugadores(cantidad: int) -> void:
-	_jugadores = maxi(0, cantidad)
+	_jugadores = max(0, cantidad)
 	if configurado_servidor() and not _url_publica.is_empty():
 		_latir()
 
@@ -107,7 +107,7 @@ func registrar_partida(
 		"servidor_url": _url_publica,
 		"resultado": resultado,
 		"oleada": oleada,
-		"duracion_s": maxi(0, duracion_s),
+		"duracion_s": max(0, duracion_s),
 		"jugadores": jugadores,
 	})
 	_peticion(HTTPClient.METHOD_POST, "/rest/v1/%s" % TABLA_PARTIDAS, cuerpo, true, Callable())

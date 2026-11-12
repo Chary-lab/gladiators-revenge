@@ -278,7 +278,7 @@ func aplicar_estado_red(datos: Dictionary) -> void:
 	dano_recibido = float(datos.get("recibido", dano_recibido))
 
 	var cds: Array = datos.get("cooldowns", [])
-	for i in mini(4, cds.size()):
+	for i in min(4, cds.size()):
 		_cooldowns[i] = float(cds[i])
 
 	if salud_actual <= 0.0:

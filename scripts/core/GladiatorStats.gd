@@ -302,7 +302,7 @@ var experiencia_faltante: int:
 	get:
 		if nivel >= CurvaNivel.NIVEL_MAXIMO:
 			return 0
-		return maxi(0, experiencia_requerida - experiencia)
+		return max(0, experiencia_requerida - experiencia)
 
 
 ## Añade XP y devuelve cuántos niveles se ganaron. El controlador se encarga

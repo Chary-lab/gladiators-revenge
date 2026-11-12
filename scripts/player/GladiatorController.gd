@@ -220,10 +220,10 @@ func _combat_setup() -> void:
 	combat.controlador = self
 
 	# Conectar señales
-	combat.salud_cambiada.connect(func(actual: float, maxima: float): salud_cambiada.emit(actual, maxima))
-	combat.mana_cambiada.connect(func(actual: float, maximo: float): mana_cambiada.emit(actual, maximo))
-	combat.escudo_cambiado.connect(func(actual: float, maximo: float): escudo_cambiado.emit(actual, maximo))
-	combat.ataque_basico.connect(func(objetivo: Node3D, dano: float, critico: bool): ataque_basico.emit(objetivo, dano, critico))
+	combat.salud_cambiada.connect(_cb_salud_cambiada)
+	combat.mana_cambiada.connect(_cb_mana_cambiada)
+	combat.escudo_cambiado.connect(_cb_escudo_cambiado)
+	combat.ataque_basico.connect(_cb_ataque_basico)
 	combat.murio.connect(murio.emit)
 	combat.estadisticas_combate_cambiadas.connect(estadisticas_combate_cambiadas.emit)
 
@@ -556,10 +556,8 @@ func _animar_destino(destino: Vector3, marcador: MeshInstance3D, radio: float) -
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(marcador, "scale", Vector3(radio * 0.55, 1.0, radio * 0.55), 0.55)
-	tween.chain().tween_callback(func() -> void:
-		if marcador == _marcador_movimiento and not modo_ataque_movimiento:
-			marcador.visible = false
-	)
+	var _tween_cb := Callable(self, "_on_tween_animar_destino_completo").bind(marcador)
+	tween.chain().tween_callback(_tween_cb)
 
 
 func _mover(delta: float) -> void:
@@ -792,20 +790,20 @@ func _inicializar_habilidades() -> void:
 func _sincronizar_desbloqueos() -> void:
 	if arma_actual == null:
 		return
-	var cantidad_qwe := mini(3, maxi(1, estadisticas.nivel))
+	var cantidad_qwe := int(min(3, max(1, estadisticas.nivel)))
 	for i in cantidad_qwe:
 		if i >= _orden_desbloqueo.size():
 			break
 		var id := _orden_desbloqueo[i]
 		if not _habilidades_desbloqueadas.has(id):
 			_habilidades_desbloqueadas[id] = true
-			_rangos_habilidad[id] = maxi(1, int(_rangos_habilidad.get(id, 1)))
+			_rangos_habilidad[id] = max(1, int(_rangos_habilidad.get(id, 1)))
 
 	var definitiva := arma_actual.obtener_habilidad(SLOT_R)
 	if definitiva != null and estadisticas.nivel >= 6:
 		if not _habilidades_desbloqueadas.has(definitiva.id):
 			_habilidades_desbloqueadas[definitiva.id] = true
-			_rangos_habilidad[definitiva.id] = maxi(1, int(_rangos_habilidad.get(definitiva.id, 1)))
+			_rangos_habilidad[definitiva.id] = max(1, int(_rangos_habilidad.get(definitiva.id, 1)))
 
 
 func habilidad_desbloqueada(slot: int) -> bool:
@@ -824,11 +822,11 @@ func nivel_desbloqueo_habilidad(slot: int) -> int:
 	if habilidad == null:
 		return 1
 	var indice := _orden_desbloqueo.find(habilidad.id)
-	return maxi(1, indice + 1)
+	return max(1, indice + 1)
 
 
 func rango_habilidad(habilidad_id: StringName) -> int:
-	return maxi(1, int(_rangos_habilidad.get(habilidad_id, 1)))
+	return max(1, int(_rangos_habilidad.get(habilidad_id, 1)))
 
 
 ## Sube al azar una habilidad desbloqueada que no esté en su rango máximo.
@@ -841,7 +839,7 @@ func _subir_habilidad_aleatoria(slot_forzado: int = -1) -> AbilityData:
 	if slot_forzado >= 0:
 		var habilidad := arma_actual.obtener_habilidad(slot_forzado)
 		if habilidad != null and habilidad_desbloqueada(slot_forzado):
-			if rango_habilidad(habilidad.id) < maxi(1, habilidad.rango_maximo):
+			if rango_habilidad(habilidad.id) < max(1, habilidad.rango_maximo):
 				_rangos_habilidad[habilidad.id] = rango_habilidad(habilidad.id) + 1
 				return habilidad
 		return null
@@ -852,7 +850,7 @@ func _subir_habilidad_aleatoria(slot_forzado: int = -1) -> AbilityData:
 		var habilidad := arma_actual.obtener_habilidad(slot)
 		if habilidad == null or not habilidad_desbloqueada(slot):
 			continue
-		if rango_habilidad(habilidad.id) < maxi(1, habilidad.rango_maximo):
+		if rango_habilidad(habilidad.id) < max(1, habilidad.rango_maximo):
 			candidatos.append(slot)
 	if candidatos.is_empty():
 		return null
@@ -960,6 +958,7 @@ func intentar_habilidad(slot: int, punto_objetivo = null) -> bool:
 
 	mana_actual -= habilidad.coste_mana
 	combat._cooldowns[slot] = cooldown_habilidad(habilidad)
+	_cooldowns[slot] = combat._cooldowns[slot]
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
 
 	var punto := _resolver_punto(habilidad, punto_objetivo)
@@ -1213,8 +1212,10 @@ func _atacar_basico() -> void:
 
 
 func cooldown_restante(slot: int) -> float:
-	if slot < 0 or slot >= _cooldowns.size():
+	if slot < 0 or slot >= 4:
 		return 0.0
+	if combat != null:
+		return combat._cooldowns[slot]
 	return _cooldowns[slot]
 
 
@@ -1242,7 +1243,7 @@ func desbloquear_talento(talento: TalentData) -> bool:
 	if talento == null or arma_actual == null:
 		return false
 	var rango := rango_talento(talento.id)
-	if rango >= maxi(1, talento.rango_maximo):
+	if rango >= max(1, talento.rango_maximo):
 		return false
 	if talento.coste_puntos_rojos > puntos_rojos:
 		return false
@@ -1377,7 +1378,7 @@ func aplicar_estado_red(datos: Dictionary) -> void:
 	dano_recibido = float(datos.get("recibido", dano_recibido))
 
 	var cds: Array = datos.get("cooldowns", [])
-	for i in mini(4, cds.size()):
+	for i in min(4, cds.size()):
 		_cooldowns[i] = float(cds[i])
 
 	var rangos_antes := _rangos_habilidad.duplicate()
@@ -1462,3 +1463,15 @@ func _al_cambiar_atributos() -> void:
 func _emitir_estado() -> void:
 	salud_cambiada.emit(salud_actual, estadisticas.salud_maxima)
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
+
+func _cb_salud_cambiada(actual: float, maxima: float) -> void:
+	salud_cambiada.emit(actual, maxima)
+
+func _cb_mana_cambiada(actual: float, maximo: float) -> void:
+	mana_cambiada.emit(actual, maximo)
+
+func _cb_escudo_cambiado(actual: float, maximo: float) -> void:
+	escudo_cambiado.emit(actual, maximo)
+
+func _cb_ataque_basico(objetivo: Node3D, dano: float, critico: bool) -> void:
+	ataque_basico.emit(objetivo, dano, critico)

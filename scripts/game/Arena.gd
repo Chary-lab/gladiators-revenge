@@ -187,8 +187,8 @@ func _iniciar_local() -> void:
 	game_state = GameState.new()
 	game_state.name = "GameState"
 	add_child(game_state)
-	game_state.oro_cambiado.connect(func(cantidad: int): _oro_local = cantidad)
-	game_state.puntos_cambiados.connect(func(cantidad: int): _puntos_local = cantidad)
+	game_state.oro_cambiado.connect(_al_oro_local)
+	game_state.puntos_cambiados.connect(_al_puntos_local)
 	game_state.partida_terminada.connect(_finalizar)
 
 	enemy_tracker = EnemyTracker.new()
@@ -283,10 +283,7 @@ func _crear_jugador_local() -> void:
 	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
 	if tracker != null:
 		tracker.registrar(_jugador)
-		_jugador.murio.connect(func():
-			var t = get_tree().get_first_node_in_group("gladiador_tracker")
-			if t != null:
-				t.desregistrar(_jugador))
+		_jugador.murio.connect(_al_morir_desregistrar_local)
 
 
 func _instanciar_gladiador(posicion: Vector3, indice: int) -> GladiatorController:
@@ -343,14 +340,12 @@ func agregar_jugador_red(peer: int) -> void:
 	jugadores_red[peer] = cuerpo
 	jugadores.append(cuerpo)
 	cuerpo.murio.connect(_al_morir_jugador)
-	cuerpo.ataque_basico.connect(_al_ataque_red.bind(peer))
+	var _cb_ataque_red := _al_ataque_red.bind(peer)
+	cuerpo.ataque_basico.connect(_cb_ataque_red)
 	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
 	if tracker != null:
 		tracker.registrar(cuerpo)
-		cuerpo.murio.connect(func():
-			var t = get_tree().get_first_node_in_group("gladiador_tracker")
-			if t != null:
-				t.desregistrar(cuerpo))
+		cuerpo.murio.connect(_al_morir_desregistrar_remoto.bind(cuerpo))
 	if _oleadas != null:
 		_oleadas.agregar_jugador(cuerpo)
 	if _supabase != null:
@@ -1512,6 +1507,7 @@ func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 			return false
 		game_state.gastar_oro(item.precio)
 		_avisar("Comprado: %s" % item.nombre, 2.0)
+		revisar_forjas_automaticas()
 
 	if not es_servidor:
 		Sfx.reproducir("compra", -3.0)
@@ -1768,6 +1764,22 @@ func _exit_tree() -> void:
 
 func esta_congelado() -> bool:
 	return _publico != null and _publico.congelando
+
+func _al_oro_local(cantidad: int) -> void:
+	_oro_local = cantidad
+
+func _al_puntos_local(cantidad: int) -> void:
+	_puntos_local = cantidad
+
+func _al_morir_desregistrar_local() -> void:
+	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
+	if tracker != null:
+		tracker.desregistrar(_jugador)
+
+func _al_morir_desregistrar_remoto(cuerpo: GladiatorController) -> void:
+	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
+	if tracker != null:
+		tracker.desregistrar(cuerpo)
 
 
 # --- Utilidades -----------------------------------------------------------
