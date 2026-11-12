@@ -69,10 +69,33 @@ jobs:
       - name: Importar proyecto
         run: godot --headless --editor --quit
 
+      - name: Diagnóstico Android
+        if: always()
+        run: |
+          {
+            echo "### Diagnóstico Android"
+            echo "- Godot: $(godot --version 2>&1 | head -1)"
+            echo "- SDK: $ANDROID_SDK_ROOT"
+            echo '```'
+            ls -la "$ANDROID_SDK_ROOT/platforms" 2>/dev/null || true
+            ls -la "$ANDROID_SDK_ROOT/build-tools" 2>/dev/null || true
+            ls -la "$HOME/.local/share/godot/export_templates/4.7.2.stable" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Exportar APK de depuración
         run: |
           mkdir -p build/android
-          godot --headless --export-debug "Android" "$PWD/build/android/gladiators-revenge.apk"
+          set +e
+          godot --headless --export-debug "Android" "$PWD/build/android/gladiators-revenge.apk" 2>&1 | tee /tmp/export-android.log
+          code=${PIPESTATUS[0]}
+          {
+            echo "### Export Android (código $code)"
+            echo '```'
+            tail -n 150 /tmp/export-android.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
 
       - name: Subir APK como artefacto
         uses: actions/upload-artifact@v4
