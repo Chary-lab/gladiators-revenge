@@ -113,10 +113,14 @@ func _regenerar(delta: float) -> void:
 	var paso := _acumulador_regeneracion
 	_acumulador_regeneracion = 0.0
 
+	# Aura de regeneración: la suma de uno mismo y los aliados cercanos.
+	var regen_aura := 0.0
+	if controlador != null and is_instance_valid(controlador) and controlador.has_method(&"bono_aura"):
+		regen_aura = float(controlador.call(&"bono_aura", &"regeneracion_aliados"))
 	if salud_actual < estadisticas.salud_maxima:
 		salud_actual = minf(
 			estadisticas.salud_maxima,
-			salud_actual + estadisticas.regeneracion_salud * paso
+			salud_actual + (estadisticas.regeneracion_salud + regen_aura) * paso
 		)
 		salud_cambiada.emit(salud_actual, estadisticas.salud_maxima)
 

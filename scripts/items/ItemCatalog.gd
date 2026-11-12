@@ -14,6 +14,7 @@ static func crear_catalogo() -> Array[ItemData]:
 	items.append_array(_pociones())
 	items.append_array(_pergaminos())
 	items.append_array(_componentes())
+	items.append_array(_epicos())
 	items.append_array(_intermedios())
 	items.append_array(_legendarios())
 	_cache = items
@@ -150,8 +151,40 @@ static func _intermedios() -> Array[ItemData]:
 	return [nucleo, tormenta, halcon, corona, piel, sello]
 
 
+static func _epicos() -> Array[ItemData]:
+	var armadura := _base(&"armadura_brasas", "Armadura de Brasas", "Forjada en el fuego de la rebelión, protege y fortalece.", "🛡️", ItemData.Tipo.INTERMEDIO, 2, 0)
+	armadura.rareza = ItemData.Rareza.EPICO
+	armadura.receta = [&"nucleo_ferreo", &"raiz_savia"]
+	armadura.precio_forja = 180
+	armadura.bonificaciones = {&"armadura": 40, &"vida": 60}
+	armadura.aura = {&"dano_aliados": 0.10}
+	armadura.pasiva = "Aura: +10 % daño para ti y aliados cercanos."
+	armadura.descripcion = "Épica: +40 armadura, +60 vida. Irradia una aura de combate que potencia a la rebelión."
+
+	var anillo := _base(&"anillo_vampiro", "Anillo de Vampirismo", "La sangre de los caídos te fortalece a ti y a los tuyos.", "💍", ItemData.Tipo.INTERMEDIO, 2, 0)
+	anillo.rareza = ItemData.Rareza.EPICO
+	anillo.receta = [&"ojo_halcon", &"raiz_savia"]
+	anillo.precio_forja = 180
+	anillo.bonificaciones = {&"robo_vida": 0.08, &"agilidad": 15}
+	anillo.aura = {&"robo_vida_aliados": 0.05}
+	anillo.pasiva = "Aura: +5 % robo de vida para ti y aliados cercanos."
+	anillo.descripcion = "Épica: +8 % robo de vida, +15 Agilidad. Los aliados cercanos también sanan al golpear."
+
+	var fenix := _base(&"corazon_fenix", "Corazón de Fénix", "Arde con vida eterna, curando a quienes lo rodean.", "🔥", ItemData.Tipo.INTERMEDIO, 2, 0)
+	fenix.rareza = ItemData.Rareza.EPICO
+	fenix.receta = [&"corona_runica", &"raiz_savia"]
+	fenix.precio_forja = 180
+	fenix.bonificaciones = {&"vida": 100, &"regeneracion": 1.5}
+	fenix.aura = {&"regeneracion_aliados": 0.5}
+	fenix.pasiva = "Aura: +0,5 regeneración de vida por segundo para ti y aliados cercanos."
+	fenix.descripcion = "Épica: +100 vida máxima, +1,5 regeneración. Su aura reaviva la vida de la rebelión."
+
+	return [armadura, anillo, fenix]
+
+
 static func _legendarios() -> Array[ItemData]:
 	var corazon := _base(&"corazon_obsidiana", "Corazón de Obsidiana", "Nada quebranta a quien ya fue roto.", "♥", ItemData.Tipo.LEGENDARIO, 3, 0)
+	corazon.rareza = ItemData.Rareza.LEGENDARIO
 	corazon.receta = [&"nucleo_ferreo", &"piel_basalto"]
 	corazon.precio_forja = 350
 	corazon.bonificaciones = {&"fuerza": 45, &"vida": 280, &"armadura": 90}
@@ -165,6 +198,7 @@ static func _legendarios() -> Array[ItemData]:
 	corazon.descripcion = "ACTIVO: escudo de 115 % de tu Fuerza e inmunidad a aturdimiento 3,5 s. Refleja daño físico."
 
 	var daga := _base(&"daga_eclipse", "Daga del Eclipse", "La sombra llega antes que el filo.", "†", ItemData.Tipo.LEGENDARIO, 3, 0)
+	daga.rareza = ItemData.Rareza.LEGENDARIO
 	daga.receta = [&"ojo_halcon", &"sello_arcano"]
 	daga.precio_forja = 350
 	daga.bonificaciones = {&"agilidad": 45, &"critico": 0.08, &"velocidad_movimiento": 0.8}
@@ -176,6 +210,7 @@ static func _legendarios() -> Array[ItemData]:
 	daga.descripcion = "ACTIVO: teleporta hasta 9 m al cursor y garantiza crítico 3 s."
 
 	var orbe := _base(&"orbe_cataclismo", "Orbe del Cataclismo", "El cielo de las Tierras Baldías responde.", "◍", ItemData.Tipo.LEGENDARIO, 3, 0)
+	orbe.rareza = ItemData.Rareza.LEGENDARIO
 	orbe.receta = [&"corona_runica", &"sello_arcano"]
 	orbe.precio_forja = 420
 	orbe.bonificaciones = {&"inteligencia": 50, &"mana": 80, &"dano_magico": 25}
@@ -189,6 +224,7 @@ static func _legendarios() -> Array[ItemData]:
 	orbe.descripcion = "ACTIVO: rayo arcano que rebota a 4 enemigos infligiendo 55 + escalado mágico de INT."
 
 	var cuerno := _base(&"cuerno_rebelion", "Cuerno de la Rebelión", "Su eco levanta hasta a los caídos.", "♪", ItemData.Tipo.LEGENDARIO, 3, 0)
+	cuerno.rareza = ItemData.Rareza.LEGENDARIO
 	cuerno.receta = [&"furia_tormenta", &"corona_runica"]
 	cuerno.precio_forja = 380
 	cuerno.bonificaciones = {&"fuerza": 25, &"inteligencia": 25, &"regeneracion": 2.0}
@@ -198,7 +234,25 @@ static func _legendarios() -> Array[ItemData]:
 	cuerno.habilidad.duracion = 6.0
 	cuerno.habilidad.efecto_especial = &"grito"
 	cuerno.descripcion = "ACTIVO: cura al estandarte y otorga +25 % ataque y +12 % robo de vida 6 s."
-	return [corazon, daga, orbe, cuerno]
+
+	var comandante := _base(&"capa_comandante", "Capa del Comandante", "Su manto inspira a toda la rebelión.", "🧥", ItemData.Tipo.LEGENDARIO, 3, 0)
+	comandante.rareza = ItemData.Rareza.LEGENDARIO
+	comandante.receta = [&"sello_arcano", &"piel_basalto"]
+	comandante.precio_forja = 500
+	comandante.bonificaciones = {&"fuerza": 20, &"agilidad": 15, &"inteligencia": 15}
+	comandante.aura = {&"dano_aliados": 0.15, &"velocidad_ataque_aliados": 0.10}
+	comandante.pasiva = "Aura: +15 % daño y +10 % velocidad de ataque a ti y tus aliados."
+	comandante.descripcion = "Tu aura de mando aumenta el daño y la velocidad de ataque de todos los aliados cercanos."
+
+	var guadaña := _base(&"guadaña_verdugo_ancestral", "Guadaña del Verdugo Ancestral", "Cosecha almas con cada tajo.", "✖", ItemData.Tipo.LEGENDARIO, 3, 0)
+	guadaña.rareza = ItemData.Rareza.LEGENDARIO
+	guadaña.receta = [&"ojo_halcon", &"furia_tormenta"]
+	guadaña.precio_forja = 500
+	guadaña.bonificaciones = {&"agilidad": 40, &"critico": 0.10, &"robo_vida": 0.12}
+	guadaña.aura = {&"dano_aliados": 0.20}
+	guadaña.pasiva = "Aura: +20 % daño para ti y todos los aliados cercanos."
+	guadaña.descripcion = "Tu aura de ejecutor potencia el daño de toda la rebelión."
+	return [corazon, daga, orbe, cuerno, comandante, guadaña]
 
 
 static func _base(

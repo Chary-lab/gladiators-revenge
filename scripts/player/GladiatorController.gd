@@ -36,6 +36,9 @@ const SLOT_R := 3
 const RANGO_AGGRO := 7.0
 const RANGO_OBJETIVO := 12.0
 const RADIO_ATAQUE_MOVIMIENTO := 6.0
+## Radio en metros en el que las auras de objetos épicos/legendarios alcanzan
+## a los gladiadores aliados.
+const RADIO_AURA := 10.0
 
 const TECLAS_HABILIDAD: Dictionary = {
 	KEY_Q: SLOT_Q,
@@ -1125,6 +1128,8 @@ func _invocar_espiritu(habilidad: AbilityData, punto: Vector3) -> void:
 	var dano := maxf(1.0, estadisticas.escalar_invocacion(habilidad.dano_base))
 	dano += bono_rango(habilidad, "dano")
 	dano += bono_talento(habilidad, "dano")
+	# Aura de daño: objetos épicos/legendarios potencian a los espíritus.
+	dano *= 1.0 + bono_aura(&"dano_aliados")
 
 	var cantidad := 2 if rango >= 3 else 1
 	for i in cantidad:
@@ -1191,11 +1196,16 @@ func _atacar_basico() -> void:
 		_temporizador_ataque = 0.15
 		return
 
-	_temporizador_ataque = 1.0 / maxf(0.2, estadisticas.velocidad_ataque * (1.0 + _buff_ataque))
+	# Auras de objetos épicos/legendarios: se suman una vez por ataque.
+	var auras := auras_cercanas()
+	var vatq_aura := 1.0 + float(auras.get(&"velocidad_ataque_aliados", 0.0))
+	_temporizador_ataque = 1.0 / maxf(0.2, estadisticas.velocidad_ataque * (1.0 + _buff_ataque) * vatq_aura)
 	var dano := estadisticas.escalar_ataque_principal(
 		arma_actual.dano_ataque_base, arma_actual.atributo_principal
 	)
 	dano *= 1.0 + _buff_dano
+	# Aura de daño: bonos de objetos épicos/legendarios de ti y aliados cercanos.
+	dano *= 1.0 + float(auras.get(&"dano_aliados", 0.0))
 	var critico := _critico_asegurado > 0.0 or randf() < estadisticas.probabilidad_critico
 	if critico:
 		dano *= estadisticas.multiplicador_critico
@@ -1211,10 +1221,37 @@ func _atacar_basico() -> void:
 	ataque_basico.emit(objetivo, dano, critico)
 	dano_infligido += dano
 	estadisticas_combate_cambiadas.emit()
-	var robo := estadisticas.robo_vida + _buff_robo
+	# Aura de robo de vida: objetos épicos/legendarios de ti y aliados cercanos.
+	var robo := estadisticas.robo_vida + _buff_robo + float(auras.get(&"robo_vida_aliados", 0.0))
 	if robo > 0.0:
 		curar(dano * robo)
 	Sfx.reproducir("critico" if critico else "golpe", -8.0)
+
+## Suma las auras de uno mismo y de los aliados cercanos en un solo barrido.
+## Los espíritus no llevan inventario, así que no aportan.
+func auras_cercanas() -> Dictionary:
+	var totales: Dictionary = {}
+	if inventario != null:
+		var propias := inventario.auras()
+		for clave in propias:
+			totales[clave] = float(totales.get(clave, 0.0)) + float(propias[clave])
+	for nodo in get_tree().get_nodes_in_group(GRUPO_GLADIADORES):
+		var aliado := nodo as GladiatorController
+		if aliado == null or aliado == self or not is_instance_valid(aliado):
+			continue
+		if global_position.distance_to(aliado.global_position) > RADIO_AURA:
+			continue
+		if aliado.inventario == null:
+			continue
+		var suyas := aliado.inventario.auras()
+		for clave in suyas:
+			totales[clave] = float(totales.get(clave, 0.0)) + float(suyas[clave])
+	return totales
+
+
+## Bono de un tipo de aura concreto (ej. "dano_aliados").
+func bono_aura(tipo: StringName) -> float:
+	return float(auras_cercanas().get(tipo, 0.0))
 
 
 func cooldown_restante(slot: int) -> float:

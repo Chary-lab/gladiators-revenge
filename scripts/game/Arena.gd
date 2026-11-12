@@ -933,7 +933,7 @@ func _crear_suelo() -> void:
 				if tile != null:
 					tile.position = Vector3(float(x) + 3.0, 0.0, float(z) + 3.0)
 					tile.scale = Vector3.ONE * 1.05
-					add_child(tile)
+					# Va dentro del StaticBody del suelo: hereda su colisión.
 					suelo.add_child(tile)
 
 	# Baldosas en la zona segura (base).

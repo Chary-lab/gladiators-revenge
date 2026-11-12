@@ -284,6 +284,54 @@ func _ejecutar() -> void:
 		"revivir conserva el inventario"
 	)
 
+	# --- Auras de objetos épicos y legendarios -----------------------------
+	var epicos := 0
+	var auras_ok := true
+	for item in ItemCatalog.crear_catalogo():
+		if item.rareza == ItemData.Rareza.EPICO:
+			epicos += 1
+			if item.aura.is_empty():
+				auras_ok = false
+	_comprobar(epicos >= 3 and auras_ok, "el catálogo trae objetos épicos con aura")
+
+	var autorreceta := false
+	for receta in ItemCatalog.recetas():
+		if receta.receta.has(receta.id):
+			autorreceta = true
+	_comprobar(not autorreceta, "ninguna receta se pide a sí misma")
+
+	var base_aura: Vector3 = jugador.global_position
+	var portador: GladiatorController = escena._instanciar_gladiador(base_aura + Vector3(2.0, 0.0, 0.0), 7)
+	var lejano: GladiatorController = escena._instanciar_gladiador(base_aura + Vector3(60.0, 0.0, 0.0), 8)
+	portador.inventario.agregar(ItemCatalog.obtener(&"anillo_vampiro"))
+	lejano.inventario.agregar(ItemCatalog.obtener(&"guadaña_verdugo_ancestral"))
+	await process_frame
+	_comprobar(is_equal_approx(portador.bono_aura(&"robo_vida_aliados"), 0.05), "el portador recibe su propia aura")
+	_comprobar(is_equal_approx(portador.bono_aura(&"dano_aliados"), 0.0), "un aliado lejano no aporta su aura")
+	lejano.global_position = portador.global_position + Vector3(2.0, 0.0, 0.0)
+	await process_frame
+	_comprobar(is_equal_approx(portador.bono_aura(&"dano_aliados"), 0.20), "un aliado cercano aporta su aura")
+	_comprobar(is_equal_approx(portador.bono_aura(&"robo_vida_aliados"), 0.05), "las auras de distintas claves no se mezclan")
+	portador.queue_free()
+	lejano.queue_free()
+	await process_frame
+
+	# Cadena de forja: el último ingrediente crea la épica y su aura
+	var fabricante: GladiatorController = escena._instanciar_gladiador(Vector3(24.0, 0.0, 0.0), 9)
+	fabricante.inventario.agregar(ItemCatalog.obtener(&"nucleo_ferreo"))
+	escena.game_state.oro = 4000
+	var forjado: bool = escena.comprar_para(fabricante, ItemCatalog.obtener(&"raiz_savia"))
+	_comprobar(
+		forjado and fabricante.inventario.contar(&"armadura_brasas") == 1,
+		"comprar el último ingrediente forja la Armadura de Brasas"
+	)
+	_comprobar(
+		is_equal_approx(fabricante.bono_aura(&"dano_aliados"), 0.10),
+		"la épica forjada irradia su aura de daño"
+	)
+	fabricante.queue_free()
+	await process_frame
+
 	# --- Fin de partida ----------------------------------------------------
 	escena._finalizar("DERROTA", "prueba de cierre")
 	_comprobar(escena.terminado, "terminar cierra la partida")

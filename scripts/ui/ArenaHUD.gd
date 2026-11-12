@@ -634,7 +634,7 @@ func _actualizar_inventario() -> void:
 			borde.set_corner_radius_all(4)
 			boton.add_theme_stylebox_override("focus", borde)
 		else:
-			boton.add_theme_stylebox_override("focus", null)
+			boton.remove_theme_stylebox_override("focus")
 
 
 func _evento_raton_inventario(indice: int, boton: Button, evento: InputEvent) -> void:

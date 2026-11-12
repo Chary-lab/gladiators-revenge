@@ -4,6 +4,9 @@ extends Resource
 ## GladiatorStats._bonos_inventario; ninguna fórmula vive aquí.
 
 enum Tipo { POCION, PERGAMINO, COMPONENTE, INTERMEDIO, LEGENDARIO }
+## Rareza del objeto: común = ingrediente/base, épico = stats + aura,
+## legendario = único y muy poderoso.
+enum Rareza { COMUN, EPICO, LEGENDARIO }
 
 @export var id: StringName = &""
 @export var nombre := ""
@@ -14,7 +17,14 @@ enum Tipo { POCION, PERGAMINO, COMPONENTE, INTERMEDIO, LEGENDARIO }
 @export var nivel := 1
 @export var precio := 100
 @export var precio_forja := 0
+## Rareza del objeto: común (ingredientes básicos), épico (stats fuertes + aura)
+## o legendario (único y muy poderoso).
+@export var rareza: Rareza = Rareza.COMUN
+## Bonificaciones personales del portador (vida, daño, armadura, etc.).
 @export var bonificaciones: Dictionary = {}
+## Aura: bonificación que el portador irradia a sí mismo y a sus aliados
+## cercanos (espíritus, estandarte). Clave = tipo de aura, valor = magnitud.
+@export var aura: Dictionary = {}
 @export var receta: Array[StringName] = []
 @export var habilidad: AbilityData
 @export var pasiva := ""

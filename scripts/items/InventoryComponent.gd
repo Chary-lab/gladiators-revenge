@@ -14,6 +14,9 @@ var ranuras: Array[Dictionary] = []
 var _cooldowns := PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 var _cd_pocion := 0.0
 var _jugador: GladiatorController
+## Bonos de aura activos del inventario (bonos que el portador irradia a sí
+## mismo y a sus aliados cercanos). Clave = tipo de aura, valor = magnitud.
+var _bonos_aura: Dictionary = {}
 
 
 func _ready() -> void:
@@ -275,12 +278,17 @@ func usar(indice: int, jugador: GladiatorController) -> bool:
 
 func _recalcular_bonos() -> void:
 	var totales: Dictionary = {}
+	var auras: Dictionary = {}
 	for ranura in ranuras:
 		var item: ItemData = ranura["item"]
 		if item == null:
 			continue
 		for clave in item.bonificaciones:
 			totales[clave] = float(totales.get(clave, 0.0)) + float(item.bonificaciones[clave])
+		# Acumular auras de objetos épicos y legendarios
+		for clave in item.aura:
+			auras[clave] = float(auras.get(clave, 0.0)) + float(item.aura[clave])
+	_bonos_aura = auras
 	if _jugador != null and _jugador.estadisticas != null:
 		var vida_antes := _jugador.estadisticas.salud_maxima
 		_jugador.estadisticas.aplicar_bonos_inventario(totales)
@@ -290,3 +298,11 @@ func _recalcular_bonos() -> void:
 			# Un objeto que da vida máxima también entrega esa vida al campeón:
 			# no se queda "sin llenar" al comprar o forjar.
 			_jugador.curar(ganancia)
+
+## Auras activas acumuladas de los objetos equipados.
+func auras() -> Dictionary:
+	return _bonos_aura
+
+## Devuelve el valor acumulado de un tipo de aura (ej. "dano_aliados", "vida_aliados").
+func obtener_aura(tipo: StringName) -> float:
+	return float(_bonos_aura.get(tipo, 0.0))

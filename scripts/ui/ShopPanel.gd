@@ -656,6 +656,19 @@ func _tipo_item(item: ItemData) -> String:
 
 
 func _rareza_color(item: ItemData) -> Color:
+	# La rareza manda: épico = púrpura, legendario = dorado.
+	match item.rareza:
+		ItemData.Rareza.COMUN:
+			return _color_por_tipo(item)
+		ItemData.Rareza.EPICO:
+			return Color(0.72, 0.52, 1.0)  # púrpura
+		ItemData.Rareza.LEGENDARIO:
+			return Color(1.0, 0.78, 0.30)  # dorado
+	return _color_por_tipo(item)
+
+
+## Color de respaldo por tipo para objetos comunes (pociones, pergaminos...).
+func _color_por_tipo(item: ItemData) -> Color:
 	match item.tipo:
 		ItemData.Tipo.POCION: return Color(0.45, 0.90, 0.55)
 		ItemData.Tipo.PERGAMINO: return Color(0.72, 0.52, 1.0)
