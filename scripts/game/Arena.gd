@@ -1067,8 +1067,6 @@ func _crear_decoracion() -> void:
 	_instanciar_prop(escombro, Vector3(4.0, 0, 14.0), 1.0)
 	_instanciar_prop(escombro, Vector3(14.0, 0, -14.0), 1.1)
 	_instanciar_prop(escombro, Vector3(-25.0, 0, 0.0), 1.1)
-	_instanciar_prop(escombro, Vector3(24.0, 0, 0.0), 1.1)
-
 	# Barreras bajas en los bordes laterales de la arena.
 	_instanciar_prop(barrera, Vector3(-29.0, 0, -8.0), 1.0)
 	_instanciar_prop(barrera, Vector3(-29.0, 0, 8.0), 1.0)
