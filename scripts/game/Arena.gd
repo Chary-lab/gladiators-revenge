@@ -921,12 +921,31 @@ func _crear_suelo() -> void:
 	forma.position.y = -0.5
 	suelo.add_child(forma)
 
-	var visual := MeshInstance3D.new()
-	var plano := PlaneMesh.new()
-	plano.size = Vector2(ANCHO, LARGO)
-	visual.mesh = plano
-	visual.material_override = _material(Color(0.36, 0.29, 0.22))
-	suelo.add_child(visual)
+	# Suelo de la arena usando meshes de KayKit para que no se vea plano.
+	var suelo_tierra := load("res://assets/kaykit/dungeon/floor_dirt_large.gltf.glb") as PackedScene
+	var suelo_baldosa := load("res://assets/kaykit/dungeon/floor_tile_large.gltf.glb") as PackedScene
+
+	# Tiles de tierra en el área de combate principal.
+	if suelo_tierra != null:
+		for x in range(-int(ANCHO * 0.5), int(ANCHO * 0.5), 6):
+			for z in range(-int(LARGO * 0.5), int(LARGO * 0.5), 6):
+				var tile := suelo_tierra.instantiate() as Node3D
+				if tile != null:
+					tile.position = Vector3(float(x) + 3.0, 0.0, float(z) + 3.0)
+					tile.scale = Vector3.ONE * 1.05
+					add_child(tile)
+					suelo.add_child(tile)
+
+	# Baldosas en la zona segura (base).
+	if suelo_baldosa != null:
+		for x in range(int(BORDE_ARENA + 2), int(ANCHO * 0.5), 6):
+			for z in range(-int(LARGO * 0.5), int(LARGO * 0.5), 6):
+				var tile := suelo_baldosa.instantiate() as Node3D
+				if tile != null:
+					tile.position = Vector3(float(x) + 3.0, 0.015, float(z) + 3.0)
+					tile.scale = Vector3.ONE * 1.05
+					add_child(tile)
+
 	add_child(suelo)
 
 	# Terreno exterior: evita que la cámara enseñe el vacío en las esquinas.
@@ -983,14 +1002,17 @@ func _crear_muros() -> void:
 
 
 ## Props modulares de KayKit: columnas, antorchas, estandartes y cobertura.
+## La arena se llena con elementos visuales para que no se vea vacía.
 func _crear_decoracion() -> void:
 	var columna := load("res://assets/kaykit/dungeon/column.gltf.glb") as PackedScene
 	var antorcha := load("res://assets/kaykit/dungeon/torch_lit.gltf.glb") as PackedScene
 	var banderin := load("res://assets/kaykit/dungeon/banner_red.gltf.glb") as PackedScene
+	var banderin_patron := load("res://assets/kaykit/dungeon/banner_patternA_red.gltf.glb") as PackedScene
 	var muro_roto := load("res://assets/kaykit/dungeon/wall_broken.gltf.glb") as PackedScene
 	var escombro := load("res://assets/kaykit/dungeon/rubble_large.gltf.glb") as PackedScene
+	var barrera := load("res://assets/kaykit/dungeon/barrier.gltf.glb") as PackedScene
 
-	# Cuatro columnas en las esquinas de la arena, con antorchas cálidas.
+	# Columnas y antorchas en las cuatro esquinas de la arena.
 	var esquinas := [
 		Vector3(-ANCHO * 0.5 + 3.0, 0, -LARGO * 0.5 + 3.0),
 		Vector3(-ANCHO * 0.5 + 3.0, 0, LARGO * 0.5 - 3.0),
@@ -1007,22 +1029,56 @@ func _crear_decoracion() -> void:
 		luz.light_color = Color(1.0, 0.58, 0.26)
 		add_child(luz)
 
-	# Ritmo visual en los muros norte y sur de la arena.
-	for x in [-22.0, -8.0, 4.0]:
+	# Columnas adicionales a lo largo de los muros norte y sur.
+	for x in [-26.0, -16.0, -6.0, 4.0, 14.0]:
 		_instanciar_prop(columna, Vector3(x, 0, -LARGO * 0.5 + 1.6), 1.5)
 		_instanciar_prop(columna, Vector3(x, 0, LARGO * 0.5 - 1.6), 1.5)
+		_instanciar_prop(antorcha, Vector3(x, 2.8, -LARGO * 0.5 + 1.6), 1.2)
+		_instanciar_prop(antorcha, Vector3(x, 2.8, LARGO * 0.5 - 1.6), 1.2)
+		var luz_n := OmniLight3D.new()
+		luz_n.position = Vector3(x, 3.1, -LARGO * 0.5 + 1.6)
+		luz_n.omni_range = 8.0
+		luz_n.light_energy = 1.0
+		luz_n.light_color = Color(1.0, 0.55, 0.25)
+		add_child(luz_n)
+		var luz_s := OmniLight3D.new()
+		luz_s.position = Vector3(x, 3.1, LARGO * 0.5 - 1.6)
+		luz_s.omni_range = 8.0
+		luz_s.light_energy = 1.0
+		luz_s.light_color = Color(1.0, 0.55, 0.25)
+		add_child(luz_s)
 
-	for x in [-18.0, 0.0]:
+	# Banderas y estandartes en los muros.
+	for x in [-22.0, -8.0, 6.0, 20.0]:
 		_instanciar_prop(banderin, Vector3(x, 2.2, -LARGO * 0.5 + 1.1), 1.35)
+		_instanciar_prop(banderin_patron, Vector3(x, 2.2, LARGO * 0.5 - 1.1), 1.35)
 
-	# Cobertura: muros derruidos y escombros, siempre fuera del carril central.
+	# Cobertura: muros derruidos y escombros distribuidos por la arena.
+	_instanciar_prop(muro_roto, Vector3(-24.0, 0, -10.0), 1.3)
+	_instanciar_prop(muro_roto, Vector3(-24.0, 0, 10.0), 1.3)
 	_instanciar_prop(muro_roto, Vector3(-19.0, 0, -6.0), 1.2)
 	_instanciar_prop(muro_roto, Vector3(-19.0, 0, 6.0), 1.2)
+	_instanciar_prop(muro_roto, Vector3(BORDE_ARENA - 2.0, 0, -14.0), 1.1)
+	_instanciar_prop(muro_roto, Vector3(BORDE_ARENA - 2.0, 0, 14.0), 1.1)
+
+	_instanciar_prop(escombro, Vector3(-17.0, 0, -14.0), 1.1)
 	_instanciar_prop(escombro, Vector3(-13.0, 0, 10.0), 1.0)
 	_instanciar_prop(escombro, Vector3(-4.0, 0, -10.0), 0.9)
+	_instanciar_prop(escombro, Vector3(4.0, 0, 14.0), 1.0)
+	_instanciar_prop(escombro, Vector3(14.0, 0, -14.0), 1.1)
 	_instanciar_prop(escombro, Vector3(-25.0, 0, 0.0), 1.1)
+	_instanciar_prop(escombro, Vector3(24.0, 0, 0.0), 1.1)
+
+	# Barreras bajas en los bordes laterales de la arena.
+	_instanciar_prop(barrera, Vector3(-29.0, 0, -8.0), 1.0)
+	_instanciar_prop(barrera, Vector3(-29.0, 0, 8.0), 1.0)
+	_instanciar_prop(barrera, Vector3(BORDE_ARENA + 2.0, 0, -8.0), 1.0)
+	_instanciar_prop(barrera, Vector3(BORDE_ARENA + 2.0, 0, 8.0), 1.0)
+
 	_crear_caja_estatica(Vector3(-19.0, 1.0, -6.0), Vector3(2.6, 2.0, 2.0), Color(0.28, 0.25, 0.22))
 	_crear_caja_estatica(Vector3(-19.0, 1.0, 6.0), Vector3(2.6, 2.0, 2.0), Color(0.28, 0.25, 0.22))
+	_crear_caja_estatica(Vector3(20.0, 1.0, -12.0), Vector3(2.6, 2.0, 2.0), Color(0.28, 0.25, 0.22))
+	_crear_caja_estatica(Vector3(20.0, 1.0, 12.0), Vector3(2.6, 2.0, 2.0), Color(0.28, 0.25, 0.22))
 
 
 func _instanciar_prop(escena: PackedScene, pos: Vector3, escala: float) -> void:

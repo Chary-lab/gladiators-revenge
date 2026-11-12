@@ -469,3 +469,24 @@ func _morir() -> void:
 	murio.emit(recompensa)
 	if _gestor != null and is_instance_valid(_gestor) and _gestor.has_method("al_morir_enemigo"):
 		_gestor.al_morir_enemigo(recompensa, xp_recompensa)
+
+	# Partículas de muerte: cubos que saltan hacia arriba.
+	for i in range(8):
+		var p := MeshInstance3D.new()
+		var c := BoxMesh.new()
+		c.size = Vector3(0.15, 0.15, 0.15)
+		p.mesh = c
+		var ang := float(i) * TAU / 8.0
+		var d := Vector3(cos(ang), 0.7, sin(ang))
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.9, 0.3, 0.3)
+		mat.emission_enabled = true
+		mat.emission = Color(0.9, 0.3, 0.3)
+		mat.emission_energy_multiplier = 2.0
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		p.material_override = mat
+		add_child(p)
+		var tp := p.create_tween()
+		tp.tween_property(p, "global_position", global_position + d * 2.5, 0.6).set_ease(Tween.EASE_OUT)
+		tp.tween_property(mat, "emission_energy_multiplier", 0.0, 0.6)
+		tp.chain().tween_callback(p.queue_free)

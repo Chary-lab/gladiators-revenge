@@ -50,16 +50,19 @@ static func mostrar(
 		etiqueta.text = "%d" % int(round(cantidad))
 
 	etiqueta.global_position = posicion + Vector3(randf_range(-0.25, 0.25), 1.7, 0.0)
-	etiqueta.font_size = 72 if critico else 52
-	etiqueta.scale = Vector3.ONE * (1.35 if critico else 1.0)
+	etiqueta.font_size = 80 if critico else 60
+	etiqueta.scale = Vector3.ONE * 0.5
 	etiqueta.visible = true
 	etiqueta.modulate.a = 1.0
+	var tarjeta_pop := etiqueta.create_tween()
+	tarjeta_pop.tween_property(etiqueta, "scale", Vector3.ONE * (1.5 if critico else 1.2), 0.1)
 
 	if etiqueta.has_meta("tween"):
 		var anterior: Tween = etiqueta.get_meta("tween")
 		if anterior != null and anterior.is_valid():
 			anterior.kill()
 
+	# Animación de salida y desvanecimiento
 	var tween := etiqueta.create_tween()
 	etiqueta.set_meta("tween", tween)
 	tween.set_parallel(true)

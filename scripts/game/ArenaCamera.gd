@@ -15,6 +15,11 @@ var _shake_intensity := 0.0
 var _shake_decay := 8.0
 var _shake_offset := Vector3.ZERO
 
+## Activa el screen shake con una intensidad dada. Se llama al recibir daño.
+func agitar(intensidad := 0.5) -> void:
+	_shake_timer = 0.25
+	_shake_intensity = maxf(_shake_intensity, intensidad)
+
 
 func _ready() -> void:
 	projection = PROJECTION_ORTHOGONAL

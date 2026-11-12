@@ -336,3 +336,49 @@ func _construir_visual() -> void:
 		material_domo.emission_energy_multiplier = 1.0
 		domo.material_override = material_domo
 		add_child(domo)
+
+	# Destello central al lanzar la habilidad.
+	var destello := MeshInstance3D.new()
+	var esfera_destello := SphereMesh.new()
+	esfera_destello.radius = _radio * 0.15
+	esfera_destello.radial_segments = 16
+	esfera_destello.rings = 8
+	destello.mesh = esfera_destello
+	destello.position.y = 0.08
+	var material_destello := StandardMaterial3D.new()
+	material_destello.albedo_color = _color
+	material_destello.emission_enabled = true
+	material_destello.emission = _color
+	material_destello.emission_energy_multiplier = 4.0
+	material_destello.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material_destello.cull_mode = BaseMaterial3D.CULL_DISABLED
+	destello.material_override = material_destello
+	add_child(destello)
+	var tween_d := destello.create_tween()
+	tween_d.set_parallel(true)
+	tween_d.tween_property(destello, "scale", Vector3.ONE * 3.0, 0.25).set_ease(Tween.EASE_OUT)
+	tween_d.tween_property(material_destello, "emission_energy_multiplier", 0.0, 0.25)
+	tween_d.chain().tween_callback(destello.queue_free)
+
+	# Partículas de impacto: cubos pequeños que salen disparados desde el centro.
+	if _duracion <= 0.0:
+		for i in range(6):
+			var particula := MeshInstance3D.new()
+			var cubo := BoxMesh.new()
+			cubo.size = Vector3(0.12, 0.12, 0.12)
+			particula.mesh = cubo
+			var angulo := float(i) * TAU / 6.0
+			var dir := Vector3(cos(angulo), 0.4, sin(angulo))
+			var material_p := StandardMaterial3D.new()
+			material_p.albedo_color = _color
+			material_p.emission_enabled = true
+			material_p.emission = _color
+			material_p.emission_energy_multiplier = 3.0
+			material_p.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			particula.material_override = material_p
+			add_child(particula)
+			var tween_p := particula.create_tween()
+			var destino_p := global_position + dir * _radio
+			tween_p.tween_property(particula, "global_position", destino_p, 0.4).set_ease(Tween.EASE_OUT)
+			tween_p.tween_property(material_p, "emission_energy_multiplier", 0.0, 0.4)
+			tween_p.chain().tween_callback(particula.queue_free)
