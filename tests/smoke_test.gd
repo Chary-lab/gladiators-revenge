@@ -468,7 +468,17 @@ func _ejecutar() -> void:
 		menu.has_signal("crear_sala") and menu.has_method("estado_creacion") and menu.has_method("sala_fallida"),
 		"el menú de red ofrece crear una sala pública"
 	)
+	_comprobar(menu.get("_url") == null, "el menú ya no pide una URL a mano")
 	menu.free()
+	_comprobar(
+		escena.get("_hud").has_method("establecer_lobby"),
+		"el HUD tiene la sala de espera con cuenta atrás"
+	)
+	var gestor_oleadas = escena.get("_oleadas")
+	_comprobar(
+		gestor_oleadas != null and gestor_oleadas.has_method("en_espera") and gestor_oleadas.has_method("asegurar_preparacion"),
+		"las oleadas exponen el estado de espera y su extensión"
+	)
 	var creador := CrearSala.new()
 	_comprobar(
 		creador._nombre_binario().begins_with("cloudflared"),

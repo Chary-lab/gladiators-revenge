@@ -347,6 +347,7 @@ func _process(delta: float) -> void:
 	else:
 		_curar_en_zona_segura(delta)
 	_tiempo_entrada = maxf(0.0, _tiempo_entrada - delta)
+	_actualizar_lobby()
 
 
 # --- Red cooperativa ------------------------------------------------------
@@ -471,6 +472,9 @@ func agregar_jugador_red(peer: int) -> void:
 		cuerpo.murio.connect(_al_morir_desregistrar_remoto.bind(cuerpo))
 	if _oleadas != null:
 		_oleadas.agregar_jugador(cuerpo)
+		# Si alguien entra con la cuenta atrás casi terminada, se le dan unos
+		# segundos para elegir campeón en la armería.
+		_oleadas.asegurar_preparacion(8.0)
 	if _supabase != null:
 		_supabase.actualizar_jugadores(jugadores_red.size())
 
@@ -1759,6 +1763,28 @@ func revisar_forjas_automaticas() -> void:
 				hizo_algo = true
 				_avisar("Forjado automático: %s" % creado.nombre, 2.5)
 				break
+
+
+## Sala de espera con cuenta atrás: se muestra mientras la partida prepara la
+## primera oleada y desaparece al empezar el combate.
+func _actualizar_lobby() -> void:
+	if _hud == null or _oleadas == null or not is_instance_valid(_hud):
+		return
+	var terminado_ya: bool = game_state != null and game_state.esta_terminado()
+	var visible := _oleadas.en_espera() and not terminado_ya and not _publico_bloquea_lobby()
+	if not visible:
+		_hud.establecer_lobby(false, 0.0, 0, 0, false)
+		return
+	var conectados := 1
+	if es_servidor:
+		conectados = maxi(1, jugadores_red.size())
+	elif es_cliente:
+		conectados = maxi(1, _jugadores_remotos.size())
+	_hud.establecer_lobby(true, _oleadas.tiempo_preparacion(), conectados, 3, not (es_servidor or es_cliente))
+
+
+func _publico_bloquea_lobby() -> bool:
+	return false
 
 
 func _actualizar_pista() -> void:

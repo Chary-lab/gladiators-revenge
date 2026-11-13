@@ -6,7 +6,6 @@ signal jugar_solo
 signal unirse(url: String)
 signal crear_sala
 
-var _url: LineEdit
 var _estado_servidores: Label
 var _lista_servidores: VBoxContainer
 var _boton_crear: Button
@@ -15,7 +14,7 @@ var _estado_creacion: Label
 var _supabase: Supabase
 
 
-func configurar(url_inicial: String) -> void:
+func configurar(_url_inicial: String = "") -> void:
 	layer = 20
 	var fondo := ColorRect.new()
 	fondo.color = Color(0.04, 0.035, 0.03, 0.94)
@@ -114,28 +113,6 @@ func configurar(url_inicial: String) -> void:
 		_estado_creacion.add_theme_color_override("font_color", Color(0.7, 0.66, 0.58))
 		columna.add_child(_estado_creacion)
 
-	columna.add_child(HSeparator.new())
-
-	var etiqueta := Label.new()
-	etiqueta.text = "Servidor cooperativo (wss://… o ws://IP:9080)"
-	etiqueta.add_theme_font_size_override("font_size", 13)
-	etiqueta.add_theme_color_override("font_color", Color(0.85, 0.78, 0.62))
-	columna.add_child(etiqueta)
-
-	_url = LineEdit.new()
-	_url.custom_minimum_size = Vector2(340, 40)
-	_url.placeholder_text = "wss://tu-servidor.ejemplo.com"
-	_url.text = url_inicial
-	_url.add_theme_font_size_override("font_size", 15)
-	columna.add_child(_url)
-
-	var unirse_boton := Button.new()
-	unirse_boton.text = "UNIRSE A PARTIDA"
-	unirse_boton.custom_minimum_size = Vector2(340, 46)
-	unirse_boton.add_theme_font_size_override("font_size", 18)
-	unirse_boton.pressed.connect(_al_pulsar_unirse)
-	columna.add_child(unirse_boton)
-
 	var ayuda := Label.new()
 	ayuda.text = "La clase se elige una sola vez por partida en la armería."
 	ayuda.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -168,7 +145,7 @@ func _al_recibir_servidores(ok: bool, lista: Array) -> void:
 		var causa := ""
 		if _supabase != null and not _supabase.ultimo_error.is_empty():
 			causa = " (%s)" % _supabase.ultimo_error
-		_estado_servidores.text = "No se pudo consultar Supabase%s · escribe la URL" % causa
+		_estado_servidores.text = "No se pudo consultar el lobby%s · reintentá" % causa
 		# Un reintento automático: el primer intento de la Web puede llegar antes
 		# de que el motor tenga listo el backend de red.
 		if not _reintentado:
@@ -205,14 +182,14 @@ func _al_recibir_servidores(ok: bool, lista: Array) -> void:
 			break
 
 	if mostrados == 0:
-		_estado_servidores.text = "No hay servidores activos · escribe una URL"
+		_estado_servidores.text = "No hay salas activas · creá una"
 	else:
 		_estado_servidores.text = "%d servidor(es) activo(s)" % mostrados
 
 
 func _unirse_a(url: String) -> void:
-	_url.text = url
-	_al_pulsar_unirse()
+	queue_free()
+	unirse.emit(url)
 
 
 func _al_pulsar_solo() -> void:
@@ -220,12 +197,7 @@ func _al_pulsar_solo() -> void:
 	jugar_solo.emit()
 
 
-func _al_pulsar_unirse() -> void:
-	var destino := _url.text.strip_edges()
-	if destino.is_empty():
-		return
-	queue_free()
-	unirse.emit(destino)
+
 
 
 func _al_pulsar_crear() -> void:
@@ -243,8 +215,7 @@ func sala_creada(url_publica: String) -> void:
 	estado_creacion("Sala pública lista: %s" % url_publica)
 	if _boton_crear != null:
 		_boton_crear.disabled = false
-	if _url != null and _url.text.strip_edges().is_empty():
-		_url.text = url_publica
+
 
 
 func sala_fallida(motivo: String) -> void:

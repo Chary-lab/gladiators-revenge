@@ -25,6 +25,9 @@ var _hud_arriba: Control
 var _consola: Panel
 var _mensaje: Label
 var _pista: Label
+var _lobby: PanelContainer
+var _lobby_tiempo: Label
+var _lobby_detalle: Label
 var _aviso: Label
 var _oleada: Label
 var _oro: Label
@@ -158,6 +161,7 @@ func construir() -> void:
 	_crear_overlay()
 	_crear_mensajes()
 	_crear_revive()
+	_crear_lobby()
 	_capa_tooltip = CanvasLayer.new()
 	_capa_tooltip.layer = 60
 	add_child(_capa_tooltip)
@@ -421,6 +425,69 @@ func _crear_mensajes() -> void:
 
 	_pista = _texto(_raiz, "", Vector2(180, 510), Vector2(920, 20), 12, Color(0.8, 0.76, 0.66))
 	_pista.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+## Panel central de la sala de espera (cuenta atrás antes de la primera oleada).
+func _crear_lobby() -> void:
+	_lobby = PanelContainer.new()
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0.07, 0.06, 0.05, 0.94)
+	estilo.border_color = BRONCE
+	estilo.set_border_width_all(2)
+	estilo.set_corner_radius_all(8)
+	estilo.content_margin_left = 26
+	estilo.content_margin_right = 26
+	estilo.content_margin_top = 14
+	estilo.content_margin_bottom = 14
+	_lobby.add_theme_stylebox_override("panel", estilo)
+	_lobby.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lobby.visible = false
+	_raiz.add_child(_lobby)
+
+	var columna := VBoxContainer.new()
+	columna.add_theme_constant_override("separation", 4)
+	_lobby.add_child(columna)
+
+	var titulo := Label.new()
+	titulo.text = "SALA DE ESPERA"
+	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	titulo.add_theme_font_size_override("font_size", 18)
+	titulo.add_theme_color_override("font_color", Color(0.92, 0.72, 0.35))
+	titulo.add_theme_constant_override("outline_size", 6)
+	columna.add_child(titulo)
+
+	_lobby_tiempo = Label.new()
+	_lobby_tiempo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_lobby_tiempo.add_theme_font_size_override("font_size", 40)
+	_lobby_tiempo.add_theme_color_override("font_color", TEXTO)
+	_lobby_tiempo.add_theme_constant_override("outline_size", 10)
+	columna.add_child(_lobby_tiempo)
+
+	_lobby_detalle = Label.new()
+	_lobby_detalle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_lobby_detalle.add_theme_font_size_override("font_size", 13)
+	_lobby_detalle.add_theme_color_override("font_color", Color(0.78, 0.72, 0.6))
+	columna.add_child(_lobby_detalle)
+
+	# Franja centrada bajo la barra superior (el HUD trabaja en 1280x720).
+	_lobby.custom_minimum_size = Vector2(800, 118)
+	_lobby.position = Vector2(240, 92)
+
+
+func establecer_lobby(visible: bool, segundos: float, jugadores: int, maximo: int, es_local: bool) -> void:
+	if _lobby == null:
+		return
+	_lobby.visible = visible
+	if not visible:
+		return
+	var total := int(ceil(maxf(0.0, segundos)))
+	_lobby_tiempo.text = "%d:%02d" % [total / 60, total % 60]
+	if es_local:
+		_lobby_detalle.text = "Preparación · elegí tu campeón en la armería"
+	elif jugadores <= 1:
+		_lobby_detalle.text = "Esperando gladiadores… 1/%d · elegí tu campeón" % maximo
+	else:
+		_lobby_detalle.text = "%d/%d gladiadores · elegí tu campeón en la armería" % [jugadores, maximo]
 
 
 func _crear_revive() -> void:

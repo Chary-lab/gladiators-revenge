@@ -267,6 +267,19 @@ func _cb_jefe_salud_cambiada(actual: float, maxima: float, jefe: ArenaBossAI) ->
 	jefe_invocado.emit(jefe)
 
 
+## ¿La partida sigue en la sala de espera (antes de la primera oleada)?
+func en_espera() -> bool:
+	return _estado == Estado.ESPERA
+
+
+## Garantiza al menos `segundos` de preparación (un jugador que entra tarde
+## necesita tiempo para elegir campeón). No alarga si ya queda más.
+func asegurar_preparacion(segundos: float) -> void:
+	if _estado != Estado.ESPERA:
+		return
+	_temporizador = maxf(_temporizador, segundos)
+
+
 func tiempo_preparacion() -> float:
 	if _estado != Estado.ESPERA:
 		return 0.0
