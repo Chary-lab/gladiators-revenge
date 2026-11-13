@@ -107,6 +107,7 @@ var _supabase: Supabase
 var _menu: MenuRed
 var _creador: CrearSala
 var _maestro: MaestroSalas
+var _tactil: TouchControls
 var _remota: SalaRemota
 var _api_salas := ""
 var _servidor_publico_url := ""
@@ -330,6 +331,7 @@ func _iniciar_local() -> void:
 	_crear_oleadas()
 	_crear_publico()
 	_crear_hud()
+	_crear_controles_tactiles()
 	_conectar()
 
 
@@ -1381,6 +1383,54 @@ func _crear_publico() -> void:
 	_publico = AudienceFury.new()
 	add_child(_publico)
 	_publico.iniciar(_jugador, CENTRO_ARENA, RADIO_PUBLICO)
+
+
+## Controles táctiles: solo si la pantalla es táctil (o con --tactil para probar).
+func _crear_controles_tactiles() -> void:
+	if _jugador == null:
+		return
+	var pantalla_tactil := DisplayServer.is_touchscreen_available()
+	if not pantalla_tactil and not ("--tactil" in OS.get_cmdline_user_args()):
+		return
+	_tactil = TouchControls.new()
+	_tactil.name = "Tactil"
+	add_child(_tactil)
+	_tactil.configurar(_jugador)
+	_tactil.habilidad.connect(_al_habilidad_tactil)
+	_tactil.interactuar.connect(_interactuar_cercano)
+	_tactil.detener.connect(_al_detener_tactil)
+
+
+## Con el dedo no hay ratón para apuntar: la habilidad va al enemigo más cercano
+## y, si no hay ninguno, hacia donde mira el gladiador.
+func _punto_habilidad() -> Vector3:
+	var origen := _jugador.global_position if _jugador != null else Vector3.ZERO
+	var mejor: Node3D = null
+	var mejor_distancia := INF
+	for enemigo in get_tree().get_nodes_in_group("enemigos"):
+		var cuerpo := enemigo as Node3D
+		if cuerpo == null or not is_instance_valid(cuerpo) or not cuerpo.visible:
+			continue
+		var distancia := origen.distance_squared_to(cuerpo.global_position)
+		if distancia < mejor_distancia:
+			mejor_distancia = distancia
+			mejor = cuerpo
+	if mejor != null:
+		return mejor.global_position
+	if _jugador == null:
+		return origen
+	return origen - _jugador.global_transform.basis.z * 3.0
+
+
+func _al_habilidad_tactil(slot: int) -> void:
+	if _jugador == null or _jugador.esta_muerto:
+		return
+	_jugador.intentar_habilidad(slot, _punto_habilidad())
+
+
+func _al_detener_tactil() -> void:
+	if _jugador != null:
+		_jugador.detener()
 
 
 func _crear_hud() -> void:

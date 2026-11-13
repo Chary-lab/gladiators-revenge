@@ -4,7 +4,7 @@ Arena de supervivencia con perspectiva isométrica 2.5D en **Godot 4.7**, pensad
 para publicarse en **Web (HTML5 / WebAssembly)**. IP original: gladiadores orcos
 de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 
-## Estado (v1.4 jugable)
+## Estado (v1.5 jugable)
 
 Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
@@ -13,10 +13,13 @@ renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, é
 legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo**
 para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 
-- 111 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 114 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
+- **Controles táctiles** en móvil: tocar el suelo mueve/ataca y hay botones
+  grandes de Q/W/E/R, INTERACTUAR (F) y DETENER. Las habilidades apuntan al
+  enemigo más cercano.
 - Todo el arte es **CC0** (KayKit, Kenney); el código es **MIT**.
 
 ## Ejecutar
@@ -388,7 +391,9 @@ godot --headless --path . --export-debug "Android" "build/android/gladiators-rev
 ```
 
 El juego usa el renderizador **GL Compatibility** y vista 1280×720 con
-`canvas_items`, así que el mismo proyecto escala a móviles y tablets.
+`canvas_items`, así que el mismo proyecto escala a móviles y tablets. En pantallas
+táctiles aparece una capa de botones (`TouchControls`): Q/W/E/R, INTERACTUAR y
+DETENER; para probarla en escritorio: `godot -- --tactil`.
 
 ## Multijugador online
 

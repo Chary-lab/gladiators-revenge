@@ -474,6 +474,21 @@ func _ejecutar() -> void:
 		escena.get("_hud").has_method("establecer_lobby"),
 		"el HUD tiene la sala de espera con cuenta atrás"
 	)
+	# --- Controles táctiles -------------------------------------------------
+	var tactil := TouchControls.new()
+	tactil.configurar(null)
+	_comprobar(
+		tactil.has_signal("habilidad") and tactil.has_signal("interactuar") and tactil.has_signal("detener"),
+		"los controles táctiles exponen habilidades e interacción"
+	)
+	_comprobar(
+		(tactil.get("_botones") as Array).size() == 4,
+		"los controles táctiles dibujan Q/W/E/R"
+	)
+	tactil.free()
+	var punto: Variant = escena._punto_habilidad()
+	_comprobar(punto is Vector3, "en táctil la habilidad apunta a un punto del mundo")
+
 	var gestor_oleadas = escena.get("_oleadas")
 	_comprobar(
 		gestor_oleadas != null and gestor_oleadas.has_method("en_espera") and gestor_oleadas.has_method("asegurar_preparacion"),
