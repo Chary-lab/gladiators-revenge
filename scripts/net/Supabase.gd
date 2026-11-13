@@ -23,7 +23,10 @@ var _jugadores := 0
 var _timer: Timer
 
 
-func _ready() -> void:
+func _init() -> void:
+	# La configuración se lee al construir el nodo, no en _ready: MenuRed y el
+	# servidor crean la instancia y la usan en el mismo fotograma (si no, la
+	# primera consulta del lobby y el anuncio de la sala fallaban en silencio).
 	_base = _config("supabase/url", "SUPABASE_URL").trim_suffix("/")
 	_anon = _config("supabase/anon_key", "SUPABASE_ANON_KEY")
 	_service = OS.get_environment("SUPABASE_SERVICE_KEY").strip_edges()

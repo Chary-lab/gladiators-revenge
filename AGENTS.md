@@ -7,7 +7,7 @@ Godot 4.7 / GDScript arena survival, GL Compatibility, Web/HTML5 target. Code, c
 - The git repo is `D:\Orc Gladiators`. `D:\Opencode` is only the OpenCode runtime, not this project.
 - `scenes/main.tscn` is just a `Node3D` root with `Arena.gd`. `scripts/game/Arena.gd` builds the map, safe zone, navmesh, player, camera, waves, HUD and shops **in code**. Edit scripts, not a scene tree.
 - Composition root is `scripts/game/Arena.gd`; HUD is `scripts/ui/ArenaHUD.gd`; wave state is `scripts/game/WaveManager.gd`.
-- `tests/inspect_crear_sala.gd` is a manual probe of the Cloudflare tunnel (needs network); it is not part of the suite. The rest of `tests/` is: `smoke_test.gd`, `wave_sim.gd`, `net_smoke.gd` (client A) and `net_smoke_b.gd` (client B).
+- `tests/inspect_crear_sala.gd` is a manual probe of the Cloudflare tunnel (needs network); `tests/inspect_lobby.gd` probes the Supabase lobby (lista de servidores tal como la ve el menú). Neither is part of the suite. The rest of `tests/` is: `smoke_test.gd`, `wave_sim.gd`, `net_smoke.gd` (client A) and `net_smoke_b.gd` (client B).
 
 ## Commands
 
@@ -28,7 +28,7 @@ godot --headless --script res://tests/inspect_crear_sala.gd   # sonda del túnel
 godot -- --captura-combate                 # windowed screenshot to captura_combate.png
 ```
 
-- Expected baseline: smoke **103/103**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **104/104**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
 - En `--headless` los fotogramas corren a miles por segundo: `await process_frame` no espera nada. Los tests esperan con `create_timer(0.01)` (`_esperar_hasta`) o `create_timer(segundos)`.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
@@ -56,6 +56,7 @@ godot -- --captura-combate                 # windowed screenshot to captura_comb
 - One class per player and match: the server enforces `clases_ocupadas`/`clase_por_peer`; choosing disables the other pedestals for that player. Do not allow class changes after selection.
 - `Arena` supports local, `--servidor` and `--cliente=…` modes. Server runs `Arena` + `WaveManager`; client builds world/UI and applies snapshots in `_aplicar_snapshot`.
 - `Sfx.reproducir` is a no-op in headless to keep the server/tests silent; do not remove that guard.
+- `Supabase` lee `supabase/url`, la anon key y `--clave-supabase` en `_init()`, no en `_ready`: `MenuRed` y `_iniciar_servidor` crean el nodo y lo usan en el mismo fotograma, así que con `_ready` la primera consulta del lobby (y el anuncio de la sala) fallaban en silencio.
 - Web/APK start in `MenuRed` (Jugar solo / CREAR SALA / Unirse). Web can auto-join with `?servidor=wss://…`; desktop uses `--cliente=`. The **CREAR SALA** button (`scripts/net/CrearSala.gd`, desktop only) downloads `cloudflared` into `user://bin` on first use, opens a quick Cloudflare tunnel against `http://localhost:9080` (never `tcp://`: the browser needs the WebSocket upgrade over TLS), launches `godot --headless -- --servidor --publico=<wss url>` and joins the host through `ws://127.0.0.1:9080`. `Arena._exit_tree` and the TERMINAR button kill both processes.
 - The server needs `SUPABASE_SERVICE_KEY` to announce the room; the game passes it as `--clave-supabase=…`, read from the env or from `user://supabase.local.cfg`. Never commit it, never put it in `project.godot` or the exported client.
 - Server deployment: `Dockerfile`, `fly.toml`, `render.yaml`; TLS is terminated by the host, clients use `wss://`.

@@ -477,6 +477,14 @@ func _ejecutar() -> void:
 	_comprobar(creador.url_publica().is_empty(), "la sala no anuncia URL antes de abrir el túnel")
 	creador.free()
 
+	# --- Lobby online ------------------------------------------------------
+	var supabase := Supabase.new()
+	_comprobar(
+		supabase.configurado_cliente(),
+		"Supabase queda configurado al construirse, sin esperar un fotograma"
+	)
+	supabase.free()
+
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
 	Sfx.liberar()
 	quit(1 if _fallos > 0 else 0)
