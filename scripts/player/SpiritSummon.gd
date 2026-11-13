@@ -65,10 +65,9 @@ static func crear() -> SpiritSummon:
 	var visual := CharacterVisual.new()
 	visual.name = "Visual"
 	espiritu.add_child(visual)
-	visual.configurar(RUTA_MODELO, Color(0.55, 1.0, 0.78), "mago")
+	visual.configurar(RUTA_MODELO, Color(0.55, 1.0, 0.78), "mago", true)
 	visual.scale = Vector3.ONE * 0.95
 	espiritu._visual = visual
-	espiritu._hacer_espectral()
 
 	var agente := NavigationAgent3D.new()
 	agente.name = "NavigationAgent3D"
@@ -414,42 +413,6 @@ func aplicar_buff(duracion: float, bonus_ataque: float, robo: float) -> void:
 	_buff_ataque = maxf(_buff_ataque, bonus_ataque)
 	_buff_robo = maxf(_buff_robo, robo)
 	_tiempo_buff = maxf(_tiempo_buff, duracion)
-
-
-func _hacer_espectral() -> void:
-	if _visual == null:
-		return
-	_aplicar_materiales(_visual)
-	_visual.scale = _visual.scale * 0.98
-
-
-func _aplicar_materiales(nodo: Node) -> void:
-	for hijo in nodo.get_children():
-		if hijo is MeshInstance3D:
-			var malla := hijo as MeshInstance3D
-			if malla.mesh == null:
-				continue
-			for i in malla.mesh.get_surface_count():
-				var original := malla.get_surface_override_material(i)
-				if original == null:
-					original = malla.mesh.surface_get_material(i)
-				if original == null:
-					continue
-				var material := original.duplicate() as StandardMaterial3D
-				if material == null:
-					continue
-				material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-				material.albedo_color = Color(
-					material.albedo_color.r,
-					material.albedo_color.g,
-					material.albedo_color.b,
-					0.82
-				)
-				material.emission_enabled = true
-				material.emission = Color(0.25, 1.0, 0.72)
-				material.emission_energy_multiplier = 0.55
-				malla.set_surface_override_material(i, material)
-		_aplicar_materiales(hijo)
 
 
 func _disipar() -> void:

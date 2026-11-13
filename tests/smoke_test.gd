@@ -178,6 +178,30 @@ func _ejecutar() -> void:
 	_comprobar(not get_nodes_in_group("aliados").is_empty(), "la ultimate invoca un espíritu aliado")
 	_comprobar(get_nodes_in_group("aliados")[0].is_in_group("aliados"), "el espíritu pertenece al equipo aliado")
 	_comprobar(not get_nodes_in_group("aliados")[0].is_in_group("enemigos"), "el espíritu no se registra como enemigo")
+
+	# El espíritu se dibuja translúcido y comparte materiales entre invocaciones:
+	# duplicarlos por instancia costaba ~550 ms al liberarlo.
+	var espiritu: Node3D = get_nodes_in_group("aliados")[0]
+	var malla_espectral: MeshInstance3D = null
+	var material_espectral: BaseMaterial3D = null
+	for nodo in espiritu.find_children("*", "MeshInstance3D", true, false):
+		var malla := nodo as MeshInstance3D
+		var activo := malla.get_active_material(0)
+		if activo is BaseMaterial3D and (activo as BaseMaterial3D).transparency == BaseMaterial3D.TRANSPARENCY_ALPHA:
+			malla_espectral = malla
+			material_espectral = activo as BaseMaterial3D
+			break
+	_comprobar(material_espectral != null, "el espíritu se dibuja translúcido")
+	var otro_espiritu := SpiritSummon.crear()
+	escena.add_child(otro_espiritu)
+	var material_repetido: BaseMaterial3D = null
+	if malla_espectral != null:
+		var gemela := otro_espiritu.find_child(malla_espectral.name, true, false) as MeshInstance3D
+		if gemela != null:
+			material_repetido = gemela.get_active_material(0) as BaseMaterial3D
+	_comprobar(material_repetido != null and material_repetido == material_espectral, "los espíritus comparten materiales (no se duplican por instancia)")
+	otro_espiritu.queue_free()
+
 	for aliado in get_nodes_in_group("aliados"):
 		aliado.queue_free()
 

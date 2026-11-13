@@ -36,11 +36,18 @@ var _muerto := false
 var _anim_en_curso: StringName = &""
 var _arma: Node3D
 var _tinte := Color.WHITE
+var _ruta_modelo := ""
+var _espectral := false
 
 
 ## Caché de escenas por ruta: `load()` de un GLB cuesta ~55 ms la primera
 ## vez (medido) y eso se notaba como tirón al invocar al espíritu.
 static var _escenas: Dictionary = {}
+
+## Materiales de tinte compartidos por (modelo, malla, color, espectral).
+## Duplicarlos en cada instancia translúcida costaba ~550 ms al liberar el nodo
+## (el driver recompila la variante con skinning y mezcla alfa).
+static var _materiales_tinte: Dictionary = {}
 
 
 ## Carga en disco una o varias rutas para que el primer uso sea instantáneo.
@@ -63,11 +70,15 @@ static func _obtener_escena(ruta: String) -> PackedScene:
 
 ## Crea el visual. `perfil` permite elegir animaciones según el tipo de modelo:
 ##   "barbaro", "esqueleto", "caballero" o "mago".
-func configurar(ruta_modelo: String, tinte: Color = Color.WHITE, perfil: String = "barbaro") -> CharacterVisual:
+## `espectral` aplica el tinte translúcido de los espíritus invocados.
+func configurar(ruta_modelo: String, tinte: Color = Color.WHITE, perfil: String = "barbaro", espectral: bool = false) -> CharacterVisual:
 	var escena := _obtener_escena(ruta_modelo)
 	if escena == null:
 		push_error("CharacterVisual: no se pudo cargar " + ruta_modelo)
 		return self
+
+	_ruta_modelo = ruta_modelo
+	_espectral = espectral
 
 	_raiz = escena.instantiate() as Node3D
 	if _raiz == null:
@@ -135,7 +146,9 @@ func _ocultar_equipo_por_defecto() -> void:
 
 
 ## El atlas de KayKit es un gradiente: multiplicar el albedo da skins coherentes
-## sin duplicar texturas ni mallas.
+## sin duplicar texturas ni mallas. Los materiales se comparten entre instancias
+## con el mismo tinte: duplicarlos por nodo y liberarlos costaba ~550 ms cuando
+## eran translúcidos.
 func _aplicar_tinte(tinte: Color) -> void:
 	_tinte = tinte
 	for nodo in _raiz.find_children("*", "MeshInstance3D", true, false):
@@ -143,9 +156,21 @@ func _aplicar_tinte(tinte: Color) -> void:
 		var material := _material_de(malla)
 		if material == null:
 			continue
-		var copia := material.duplicate() as BaseMaterial3D
-		var es_cabeza := "head" in malla.name.to_lower()
-		copia.albedo_color = tinte if es_cabeza else tinte.lerp(Color.WHITE, 0.65)
+		var clave := "%s|%s|%s|%s" % [_ruta_modelo, malla.name, tinte.to_html(), str(_espectral)]
+		var copia: BaseMaterial3D = _materiales_tinte.get(clave)
+		if copia == null:
+			copia = material.duplicate() as BaseMaterial3D
+			var es_cabeza := "head" in malla.name.to_lower()
+			var color := tinte if es_cabeza else tinte.lerp(Color.WHITE, 0.65)
+			if _espectral:
+				color.a = 0.82
+				copia.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				copia.emission_enabled = true
+				copia.emission = Color(0.25, 1.0, 0.72)
+				copia.emission_energy_multiplier = 0.55
+			copia.albedo_color = color
+			copia.resource_name = clave
+			_materiales_tinte[clave] = copia
 		malla.material_override = copia
 
 
