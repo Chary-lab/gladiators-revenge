@@ -19,10 +19,12 @@ func _comprobar(condicion: bool, texto: String) -> void:
 
 
 func _esperar_hasta(condicion: Callable, maximo := 600) -> bool:
+	# En headless los fotogramas corren a miles por segundo: se espera 10 ms por
+	# vuelta para que "maximo" sean ~maximo/100 segundos y no milisegundos.
 	for i in maximo:
 		if bool(condicion.call()):
 			return true
-		await process_frame
+		await create_timer(0.01).timeout
 	return bool(condicion.call())
 
 
@@ -56,13 +58,10 @@ func _init() -> void:
 	)
 
 	red.enviar_clase(&"filo")
-	var clase_ok := false
-	for i in 300:
-		if jugador.arma_actual != null and jugador.arma_actual.id_clase() == &"filo":
-			clase_ok = true
-			break
-		await process_frame
-	_comprobar(clase_ok, "el segundo jugador recibe su clase Filo")
+	_comprobar(
+		await _esperar_hasta(func() -> bool: return jugador.arma_actual != null and jugador.arma_actual.id_clase() == &"filo"),
+		"el segundo jugador recibe su clase Filo"
+	)
 
 	_comprobar(
 		await _esperar_hasta(func() -> bool: return escena.get("_jugadores_remotos").size() >= 2, 600),
@@ -77,16 +76,14 @@ func _init() -> void:
 	_comprobar(clases.has(&"bastion") and clases.has(&"filo"), "la partida tiene dos clases distintas")
 
 	# El jugador A sigue vivo; B muere y debe revivir conservando su compra.
-	red.enviar_accion(&"comprar", {"id": &"pocion_mana"})
 	var compra := false
-	for i in 300:
-		if jugador.inventario != null and jugador.inventario.tiene(&"pocion_mana"):
-			compra = true
-			break
-		await process_frame
+	red.enviar_accion(&"debug_base", {})
+	red.enviar_accion(&"comprar", {"id": &"pocion_mana"})
+	compra = await _esperar_hasta(func() -> bool: return jugador.inventario != null and jugador.inventario.tiene(&"pocion_mana"))
 	_comprobar(compra, "el segundo jugador compra un objeto antes de caer")
 
 	red.enviar_accion(&"debug_morir", {})
+
 	_comprobar(
 		await _esperar_hasta(func() -> bool: return jugador.esta_muerto and jugador.revive_en > 0.0, 300),
 		"el jugador cae y entra en cuenta atrás de revivir"

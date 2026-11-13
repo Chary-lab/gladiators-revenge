@@ -304,7 +304,7 @@ godot --headless --path . --script res://tests/wave_sim.gd
 
 # Red: servidor + cliente A + cliente B (ver docs/ONLINE.md)
 godot --headless -- --servidor --puerto=9080 --red-rapida
-godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9080
+godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9080 --esperar=40
 godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1:9080
 ```
 

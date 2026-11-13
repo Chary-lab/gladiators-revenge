@@ -107,18 +107,29 @@ juego (útil en un equipo dedicado).
 ## Pruebas de red
 
 ```powershell
-# Terminal 1
+# Terminal 1: servidor con oleadas rápidas
 godot --headless -- --servidor --puerto=9080 --red-rapida
 
-# Terminal 2 (jugador A)
-godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9080 --esperar=12
+# Terminal 2: jugador A (se queda conectado 40 s y se cura solo)
+godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9080 --esperar=40
 
-# Terminal 3 (jugador B)
+# Terminal 3: jugador B, unos 5 s después de A
 godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1:9080
 ```
 
 Cubren conexión, snapshots, movimiento autoritativo, compra sincronizada, clase
 única por jugador, clase única entre jugadores, enemigos y oleadas.
+
+La prueba B **necesita a A conectado a la vez**: comprueba que el Bastión aparece
+ocupado en el lobby y que B revive gracias a un compañero vivo. Si se ejecuta con
+el servidor para ella sola, esas comprobaciones fallan por diseño.
+
+Detalle de `--red-rapida`: la primera oleada entra a los 0,5 s y las siguientes
+cada segundo, así que el portón encierra al jugador en la arena. Las pruebas usan
+la acción `debug_base` (solo con `--red-rapida`) para volver a la fuente y poder
+comprar, y esperan con temporizadores reales (`create_timer`), no con
+`await process_frame`: en `--headless` los fotogramas corren a miles por segundo
+y no esperan nada.
 
 ## Despliegue del servidor
 

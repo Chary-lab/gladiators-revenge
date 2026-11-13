@@ -248,13 +248,21 @@ func _iniciar_cliente_con_url(direccion: String) -> void:
 	_iniciar_cliente()
 
 
-func _iniciar_local() -> void:
+func _crear_estado_partida() -> void:
+	# Servidor y partida local comparten economía: sin GameState el servidor
+	# reventaba al pagar oleadas o al comprar en la tienda.
+	if game_state != null:
+		return
 	game_state = GameState.new()
 	game_state.name = "GameState"
 	add_child(game_state)
 	game_state.oro_cambiado.connect(_al_oro_local)
 	game_state.puntos_cambiados.connect(_al_puntos_local)
 	game_state.partida_terminada.connect(_finalizar)
+
+
+func _iniciar_local() -> void:
+	_crear_estado_partida()
 
 	enemy_tracker = EnemyTracker.new()
 	enemy_tracker.name = "EnemyTracker"
@@ -295,6 +303,7 @@ func _process(delta: float) -> void:
 # --- Red cooperativa ------------------------------------------------------
 
 func _iniciar_servidor() -> void:
+	_crear_estado_partida()
 	red = NetCoop.new()
 	red.name = "Red"
 	add_child(red)
@@ -344,7 +353,7 @@ func _iniciar_cliente() -> void:
 func _crear_jugador_local() -> void:
 	_jugador = _instanciar_gladiador(Vector3(24.0, 0, 0), 0)
 	jugadores.append(_jugador)
-	_jugador.murio.connect(_al_morir_jugador)
+	_jugador.murio.connect(_al_morir_jugador.bind(_jugador))
 	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
 	if tracker != null:
 		tracker.registrar(_jugador)
@@ -404,7 +413,7 @@ func agregar_jugador_red(peer: int) -> void:
 	cuerpo.red = red
 	jugadores_red[peer] = cuerpo
 	jugadores.append(cuerpo)
-	cuerpo.murio.connect(_al_morir_jugador)
+	cuerpo.murio.connect(_al_morir_jugador.bind(cuerpo))
 	var _cb_ataque_red := _al_ataque_red.bind(peer)
 	cuerpo.ataque_basico.connect(_cb_ataque_red)
 	var tracker = get_tree().get_first_node_in_group("gladiador_tracker")
@@ -465,7 +474,13 @@ func equipar_clase_red(peer: int, clase: StringName) -> void:
 
 func aplicar_accion_red(peer: int, accion: StringName, datos: Dictionary) -> void:
 	var cuerpo: GladiatorController = jugadores_red.get(peer)
-	if cuerpo == null or cuerpo.esta_muerto:
+	if cuerpo == null:
+		return
+	# Las acciones de prueba se atienden antes del filtro de muerte: si no,
+	# debug_curar nunca podría revivir a un gladiador caído.
+	if _aplicar_accion_prueba(cuerpo, accion):
+		return
+	if cuerpo.esta_muerto:
 		return
 	match accion:
 		&"mover":
@@ -513,19 +528,32 @@ func aplicar_accion_red(peer: int, accion: StringName, datos: Dictionary) -> voi
 			_ciclar_skin()
 		&"bandera":
 			_interactuar_bandera(cuerpo)
-		&"debug_morir":
-			if "--red-rapida" in OS.get_cmdline_user_args():
-				cuerpo.recibir_dano(999999.0, GladiatorStats.TIPO_VERDADERO)
-		&"debug_curar":
-			if "--red-rapida" in OS.get_cmdline_user_args():
-				if cuerpo.esta_muerto:
-					cuerpo.revivir_red(cuerpo.global_position, 1.0)
-				else:
-					cuerpo.salud_actual = cuerpo.estadisticas.salud_maxima
-					cuerpo.mana_actual = cuerpo.estadisticas.mana_maximo
-					cuerpo.escudo_actual = 0.0
 		_:
 			pass
+
+
+## Acciones de prueba (solo con --red-rapida). Devuelve true si la atendió.
+func _aplicar_accion_prueba(cuerpo: GladiatorController, accion: StringName) -> bool:
+	if not ("--red-rapida" in OS.get_cmdline_user_args()):
+		return false
+	match accion:
+		&"debug_morir":
+			cuerpo.recibir_dano(999999.0, GladiatorStats.TIPO_VERDADERO)
+		&"debug_curar":
+			if cuerpo.esta_muerto:
+				cuerpo.revivir_red(cuerpo.global_position, 1.0)
+			else:
+				cuerpo.salud_actual = cuerpo.estadisticas.salud_maxima
+				cuerpo.mana_actual = cuerpo.estadisticas.mana_maximo
+				cuerpo.escudo_actual = 0.0
+		&"debug_base":
+			# Devuelve al gladiador a la base para probar la tienda sin esperar
+			# a que la oleada termine y se abra el portón.
+			cuerpo.global_position = _fuente + Vector3(-2.0, 0, 0)
+			cuerpo.detener()
+		_:
+			return false
+	return true
 
 
 func _preparar_punto_red(cuerpo: GladiatorController, punto) -> void:
@@ -1774,18 +1802,29 @@ func _al_jefe_murio() -> void:
 	_jefe_actual = null
 
 
-func _al_morir_jugador() -> void:
+func _al_morir_jugador(caido: GladiatorController = null) -> void:
+	# La señal `murio` sale antes de que el controlador copie `esta_muerto`, así
+	# que el que acaba de caer se cuenta aparte con `caido` en lugar de mirar su
+	# bandera (si no, nadie quedaba vivo y la cuenta atrás de revivir nunca
+	# arrancaba).
 	var vivos := 0
 	for jugador in jugadores:
-		if jugador != null and is_instance_valid(jugador) and not jugador.esta_muerto:
-			vivos += 1
+		if jugador == null or not is_instance_valid(jugador):
+			continue
+		if jugador == caido or jugador.esta_muerto:
+			continue
+		vivos += 1
 	if vivos == 0:
 		_finalizar("DERROTA", "Todos los gladiadores han caído.")
 		return
 	if not es_servidor:
 		return
 	for jugador in jugadores:
-		if jugador != null and is_instance_valid(jugador) and jugador.esta_muerto and jugador.revive_en <= 0.0:
+		if jugador == null or not is_instance_valid(jugador):
+			continue
+		if not (jugador == caido or jugador.esta_muerto):
+			continue
+		if jugador.revive_en <= 0.0:
 			jugador.revive_en = TIEMPO_REVIVIR
 
 

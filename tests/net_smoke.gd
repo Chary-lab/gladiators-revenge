@@ -18,11 +18,19 @@ func _comprobar(condicion: bool, texto: String) -> void:
 		printerr("  FALLO ", texto)
 
 
+func _mantenerse_vivo(red) -> void:
+	while true:
+		red.enviar_accion(&"debug_curar", {})
+		await create_timer(0.5).timeout
+
+
 func _esperar_hasta(condicion: Callable, maximo := 600) -> bool:
+	# En headless los fotogramas corren a miles por segundo: se espera 10 ms por
+	# vuelta para que "maximo" sean ~maximo/100 segundos y no milisegundos.
 	for i in maximo:
 		if bool(condicion.call()):
 			return true
-		await process_frame
+		await create_timer(0.01).timeout
 	return bool(condicion.call())
 
 
@@ -47,14 +55,19 @@ func _init() -> void:
 	)
 	_comprobar(jugador != null and escena.get("_jugadores_remotos").has(red.peer_local), "el jugador local está registrado")
 
+	# El cliente A es el "compañero vivo" de esta prueba: si muere, la partida
+	# termina y el cliente B ya no puede probar el revivir. Se cura solo.
+	_mantenerse_vivo(red)
+
+	# Con --red-rapida las oleadas se suceden cada segundo y el portón devuelve al
+	# jugador a la arena, donde la tienda está cerrada: se vuelve a la base (acción
+	# de pruebas) y se compra en el mismo envío.
+	red.enviar_accion(&"debug_base", {})
 	red.enviar_accion(&"comprar", {"id": &"brasa_forja"})
-	var compra_ok := false
-	for i in 300:
-		if jugador.inventario != null and jugador.inventario.tiene(&"brasa_forja"):
-			compra_ok = true
-			break
-		await process_frame
-	_comprobar(compra_ok, "la compra del mercader se sincroniza desde el servidor")
+	_comprobar(
+		await _esperar_hasta(func() -> bool: return jugador.inventario != null and jugador.inventario.tiene(&"brasa_forja")),
+		"la compra del mercader se sincroniza desde el servidor"
+	)
 
 	var posicion_inicial: Vector3 = jugador.global_position
 	red.enviar_accion(&"mover", {"punto": Vector3(18.0, 0.0, 0.0)})
@@ -62,13 +75,10 @@ func _init() -> void:
 	_comprobar(jugador.global_position.distance_to(posicion_inicial) > 0.4, "el servidor mueve al gladiador")
 
 	red.enviar_clase(&"bastion")
-	var clase_ok := false
-	for i in 300:
-		if jugador.arma_actual != null and jugador.arma_actual.id_clase() == &"bastion":
-			clase_ok = true
-			break
-		await process_frame
-	_comprobar(clase_ok, "la clase Bastión llega desde el servidor")
+	_comprobar(
+		await _esperar_hasta(func() -> bool: return jugador.arma_actual != null and jugador.arma_actual.id_clase() == &"bastion"),
+		"la clase Bastión llega desde el servidor"
+	)
 
 	red.enviar_clase(&"filo")
 	await create_timer(0.6).timeout
