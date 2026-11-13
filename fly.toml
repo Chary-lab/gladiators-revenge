@@ -1,5 +1,5 @@
 app = "gladiators-revenge-server"
-primary_region = "mad"
+primary_region = "gru"
 
 [build]
   dockerfile = "Dockerfile"

@@ -254,6 +254,8 @@ func _conectar_sala(cliente: StreamPeerTCP, crudo: PackedByteArray, numero: int)
 	_reservas.erase(numero)
 	_relays.append({
 		"desde": Time.get_ticks_msec(),
+		"intentos": 0,
+		"ultimo": 0,
 		"cliente": cliente,
 		"sala": sala,
 		"numero": numero,
@@ -278,6 +280,18 @@ func _bombear_relays() -> void:
 		if e_sala == StreamPeerTCP.STATUS_CONNECTING:
 			activos.append(r)
 			continue
+		# En frío (el contenedor acaba de despertar) la sala puede no estar
+		# escuchando todavía: se reintenta unos segundos antes de rendirse.
+		if e_sala == StreamPeerTCP.STATUS_ERROR and int(r.get("intentos", 0)) < 12:
+			var ahora := Time.get_ticks_msec()
+			if ahora - int(r.get("ultimo", 0)) > 400:
+				r["intentos"] = int(r.get("intentos", 0)) + 1
+				r["ultimo"] = ahora
+				var nueva := StreamPeerTCP.new()
+				if nueva.connect_to_host("127.0.0.1", _puerto_sala(numero)) == OK:
+					r["sala"] = nueva
+				activos.append(r)
+				continue
 		if e_cliente != StreamPeerTCP.STATUS_CONNECTED or e_sala != StreamPeerTCP.STATUS_CONNECTED:
 			print("[MAESTRO] sala %d: cierre (cliente=%d sala=%d tras %d ms)" % [
 				numero, e_cliente, e_sala, Time.get_ticks_msec() - int(r.get("desde", 0))])

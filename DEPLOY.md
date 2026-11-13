@@ -66,6 +66,26 @@ Dos formas:
 En escritorio el botón CREAR SALA sigue usando el túnel propio; la API solo se
 usa en Web/APK (o si arrancás con `--api=https://<tu-servicio>`).
 
+## Despliegue real (lo que quedó andando)
+
+- App: **https://gladiators-revenge-server.fly.dev** (región `gru`, 1 máquina de
+  1 GB, 2 salas).
+- La web ya apunta ahí con `red/api_url` en `project.godot`, así que **CREAR SALA
+  funciona sin parámetros**. Con `?api=` podés apuntar a otro servidor.
+- La máquina se apaga sola cuando no hay uso (`auto_stop_machines = "stop"`):
+  el primer pedido después de un rato tarda ~6 s en despertar.
+
+Tres cosas que costaron y conviene no repetir:
+
+1. `mad` (Madrid) está deprecada en Fly; el despliegue falla al crear la máquina.
+   Región válida y cercana: `gru`.
+2. La imagen necesita `RUN godot --headless --path /app --import`: sin importar
+   el proyecto no existe `.godot/global_script_class_cache.cfg`, los `class_name`
+   no se resuelven y el servidor no llega a abrir el puerto (Fly avisa "not
+   listening on the expected address").
+3. Los secretos se cargan con `fly secrets import` leyendo un archivo **sin BOM**
+   y por stdin; el script ya lo hace y falla en voz alta si no puede.
+
 ## Comprobar que quedó bien
 
 ```powershell

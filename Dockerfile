@@ -21,6 +21,11 @@ RUN wget -q \
 WORKDIR /app
 COPY . .
 
+# Importar una vez dentro de la imagen: sin .godot/ el registro de class_name
+# queda vacío y los scripts no compilan (el servidor no llegaba a abrir el
+# puerto y Fly avisaba "not listening on the expected address").
+RUN godot --headless --path /app --import     && test -f /app/.godot/global_script_class_cache.cfg
+
 # El maestro escucha en PORT y levanta una sala (proceso Godot) por cada SALAS.
 # Necesita SUPABASE_SERVICE_KEY para que las salas se anuncien en el lobby.
 ENV PORT=9080
