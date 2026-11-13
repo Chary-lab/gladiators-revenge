@@ -10,6 +10,7 @@ var _url: LineEdit
 var _estado_servidores: Label
 var _lista_servidores: VBoxContainer
 var _boton_crear: Button
+var _reintentado := false
 var _estado_creacion: Label
 var _supabase: Supabase
 
@@ -159,7 +160,16 @@ func _al_recibir_servidores(ok: bool, lista: Array) -> void:
 	for hijo in _lista_servidores.get_children():
 		hijo.queue_free()
 	if not ok:
-		_estado_servidores.text = "No se pudo consultar Supabase · escribe la URL"
+		var causa := ""
+		if _supabase != null and not _supabase.ultimo_error.is_empty():
+			causa = " (%s)" % _supabase.ultimo_error
+		_estado_servidores.text = "No se pudo consultar Supabase%s · escribe la URL" % causa
+		# Un reintento automático: el primer intento de la Web puede llegar antes
+		# de que el motor tenga listo el backend de red.
+		if not _reintentado:
+			_reintentado = true
+			await get_tree().create_timer(1.5).timeout
+			_actualizar_servidores()
 		return
 
 	var ahora := Time.get_unix_time_from_system()

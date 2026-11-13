@@ -21,6 +21,8 @@ var _url_publica := ""
 var _max_jugadores := 3
 var _jugadores := 0
 var _timer: Timer
+## Último fallo de red/HTTP, para que el menú pueda mostrar la causa.
+var ultimo_error := ""
 
 
 func _init() -> void:
@@ -149,6 +151,8 @@ func _parse_servidores(code: int, body: String, callback: Callable) -> void:
 			lista = [datos]
 	else:
 		ok = false
+		if ultimo_error.is_empty():
+			ultimo_error = "respuesta inesperada (HTTP %d)" % code
 	callback.call(ok, lista)
 
 
@@ -186,6 +190,7 @@ func _peticion(
 	var error := http.request(_base + ruta, cabeceras, metodo, cuerpo)
 	if error != OK:
 		http.queue_free()
+		ultimo_error = "red: %s" % error_string(error)
 		if callback.is_valid():
 			callback.call(0, "Error de red: %s" % error_string(error))
 
@@ -200,6 +205,10 @@ func _al_responder(
 ) -> void:
 	if is_instance_valid(http):
 		http.queue_free()
+	if code >= 200 and code < 300:
+		ultimo_error = ""
+	else:
+		ultimo_error = "HTTP %d" % code
 	if callback.is_valid():
 		callback.call(code, cuerpo.get_string_from_utf8())
 
