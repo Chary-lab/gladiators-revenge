@@ -106,12 +106,18 @@ var _estaba_muerto := false
 var _supabase: Supabase
 var _menu: MenuRed
 var _creador: CrearSala
+var _maestro: MaestroSalas
+var _remota: SalaRemota
+var _api_salas := ""
 var _servidor_publico_url := ""
 var _hora_inicio_partida := 0.0
 
 
 func _ready() -> void:
 	get_tree().paused = false
+	if "--maestro" in OS.get_cmdline_user_args():
+		_iniciar_maestro()
+		return
 	_leer_modo_red()
 
 	_crear_entorno()
@@ -186,10 +192,27 @@ func _leer_modo_red() -> void:
 			url_servidor = consulta
 	if not es_servidor and url_servidor.is_empty():
 		url_servidor = str(ProjectSettings.get_setting("red/servidor_url", ""))
+	_api_salas = _resolver_api()
 	if es_servidor and _servidor_publico_url.is_empty():
 		_servidor_publico_url = OS.get_environment("SERVER_PUBLIC_URL").strip_edges()
 		if _servidor_publico_url.is_empty():
 			_servidor_publico_url = str(ProjectSettings.get_setting("red/servidor_publico_url", ""))
+
+
+func _resolver_api() -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--api="):
+			return arg.substr("--api=".length()).strip_edges()
+	var env := OS.get_environment("SALA_API").strip_edges()
+	if not env.is_empty():
+		return env
+	if OS.has_feature("web"):
+		var consulta = JavaScriptBridge.eval(
+			"(new URLSearchParams(window.location.search)).get('api') || ''"
+		)
+		if consulta is String and not consulta.is_empty():
+			return consulta.strip_edges()
+	return str(ProjectSettings.get_setting("red/api_url", "")).strip_edges()
 
 
 func _necesita_menu() -> bool:
@@ -210,8 +233,13 @@ func _mostrar_menu() -> void:
 
 
 func _al_crear_sala() -> void:
-	# El host solo pulsa CREAR SALA: el juego descarga cloudflared si falta,
-	# abre el túnel y lanza el servidor headless que se anuncia en Supabase.
+	# En Web y APK la sala la crea el servidor maestro en la nube: el navegador
+	# no puede abrir puertos ni lanzar un servidor.
+	if OS.has_feature("web") or OS.has_feature("mobile"):
+		_al_crear_sala_remota()
+		return
+	# En escritorio el host no instala nada: el juego descarga cloudflared si
+	# falta, abre el túnel y lanza el servidor headless que se anuncia.
 	if _creador == null:
 		_creador = CrearSala.new()
 		_creador.name = "CrearSala"
@@ -220,6 +248,27 @@ func _al_crear_sala() -> void:
 		_creador.lista.connect(_al_sala_lista)
 		_creador.fallo.connect(_al_fallo_creacion)
 	_creador.crear()
+
+
+func _al_crear_sala_remota() -> void:
+	if _remota == null:
+		_remota = SalaRemota.new()
+		_remota.name = "SalaRemota"
+		add_child(_remota)
+		_remota.lista.connect(_al_sala_remota_lista)
+		_remota.fallo.connect(_al_fallo_creacion)
+	_remota.configurar(_api_salas)
+	if _menu != null and is_instance_valid(_menu):
+		_menu.estado_creacion("Pidiendo sala al servidor…")
+	_remota.crear()
+
+
+func _al_sala_remota_lista(url: String) -> void:
+	if _menu != null and is_instance_valid(_menu):
+		_menu.sala_creada(url)
+		_menu.queue_free()
+		_menu = null
+	_iniciar_cliente_con_url(url)
 
 
 func _al_estado_creacion(texto: String) -> void:
@@ -1914,9 +1963,27 @@ func _finalizar(titulo: String, detalle: String) -> void:
 			)
 			_supabase.marcar_inactivo()
 			if red != null:
-				red.cerrar()
+				# Cerrar de inmediato pisaba el mensaje de fin: el cliente veía
+				# "el servidor cerró la conexión" en vez de la pantalla de derrota.
+				_cerrar_red_mas_tarde()
 	else:
 		Sfx.reproducir("victoria" if titulo == "VICTORIA" else "derrota")
+
+
+func _cerrar_red_mas_tarde() -> void:
+	if red == null:
+		return
+	await get_tree().create_timer(1.0).timeout
+	if red != null:
+		red.cerrar()
+
+
+func _iniciar_maestro() -> void:
+	_maestro = MaestroSalas.new()
+	_maestro.name = "Maestro"
+	add_child(_maestro)
+	if not _maestro.iniciar():
+		push_error("No se pudo iniciar el maestro de salas")
 
 
 func _exit_tree() -> void:
@@ -1926,6 +1993,10 @@ func _exit_tree() -> void:
 	# servidor headless y el túnel que abrió el botón CREAR SALA.
 	if _creador != null and is_instance_valid(_creador):
 		_creador.cerrar()
+	if _maestro != null and is_instance_valid(_maestro):
+		_maestro.cerrar()
+	if _remota != null and is_instance_valid(_remota):
+		_remota.queue_free()
 
 func _al_pulsar_terminar() -> void:
 	if es_servidor:

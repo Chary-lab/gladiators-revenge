@@ -28,7 +28,7 @@ godot --headless --script res://tests/inspect_crear_sala.gd   # sonda del túnel
 godot -- --captura-combate                 # windowed screenshot to captura_combate.png
 ```
 
-- Expected baseline: smoke **104/104**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **106/106**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
 - En `--headless` los fotogramas corren a miles por segundo: `await process_frame` no espera nada. Los tests esperan con `create_timer(0.01)` (`_esperar_hasta`) o `create_timer(segundos)`.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
@@ -59,7 +59,10 @@ godot -- --captura-combate                 # windowed screenshot to captura_comb
 - `Supabase` lee `supabase/url`, la anon key y `--clave-supabase` en `_init()`, no en `_ready`: `MenuRed` y `_iniciar_servidor` crean el nodo y lo usan en el mismo fotograma, así que con `_ready` la primera consulta del lobby (y el anuncio de la sala) fallaban en silencio.
 - Web/APK start in `MenuRed` (Jugar solo / CREAR SALA / Unirse). Web can auto-join with `?servidor=wss://…`; desktop uses `--cliente=`. The **CREAR SALA** button (`scripts/net/CrearSala.gd`, desktop only) downloads `cloudflared` into `user://bin` on first use, opens a quick Cloudflare tunnel against `http://localhost:9080` (never `tcp://`: the browser needs the WebSocket upgrade over TLS), launches `godot --headless -- --servidor --publico=<wss url>` and joins the host through `ws://127.0.0.1:9080`. `Arena._exit_tree` and the TERMINAR button kill both processes.
 - The server needs `SUPABASE_SERVICE_KEY` to announce the room; the game passes it as `--clave-supabase=…`, read from the env or from `user://supabase.local.cfg`. Never commit it, never put it in `project.godot` or the exported client.
-- Server deployment: `Dockerfile`, `fly.toml`, `render.yaml`; TLS is terminated by the host, clients use `wss://`.
+- Server deployment: `Dockerfile`, `fly.toml`, `render.yaml`; TLS is terminated by the host, clients use `wss://`. El contenedor arranca `--maestro` (no `--servidor`): `scripts/net/MaestroSalas.gd` escucha en `PORT`, levanta `SALAS` procesos de sala en `puerto-base+n` y enruta `GET /sala/<n>` con proxy TCP puro (el handshake lo hace la sala). `POST /salas` reserva con caducidad de 90 s y `GET /salud` es el health check; `OPTIONS` responde CORS abierto.
+- La sala se reinicia al desconectarse el último cliente, así el siguiente grupo empieza limpio. Cada sala es un proceso de ~180 MB: 512 MB = 1 sala.
+- En Web/APK `CREAR SALA` usa `SalaRemota` (POST /salas) porque el navegador no puede abrir puertos; en escritorio sigue el túnel de `CrearSala`. La API se resuelve por `--api=`, `SALA_API`, `?api=` o `red/api_url`.
+- `HTTPRequest` **no funciona en la build Web** (falla con código 0 sin llegar a la red): en `OS.has_feature("web")` hay que usar `JavaScriptBridge` + `fetch` (ver `Supabase._peticion_web` y `SalaRemota._crear_web`).
 - Supabase is optional infrastructure: client uses `anon` key + RLS to list `servidores`; only the headless server uses `SUPABASE_SERVICE_KEY` from env. Never put the service key or the Postgres connection string in the client, `project.godot` or git. Migration: `supabase/migrations/0001_coop.sql`.
 
 ## UI / rendering gotchas

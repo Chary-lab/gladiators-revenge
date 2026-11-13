@@ -6,6 +6,10 @@ primary_region = "mad"
 
 [env]
   PORT = "9080"
+  SALAS = "2"
+  # SUPABASE_SERVICE_KEY se carga con: fly secrets set SUPABASE_SERVICE_KEY=...
+  # SERVER_PUBLIC_URL apunta a la URL pública (https://<app>.fly.dev) y el
+  # maestro la reparte como wss://<app>.fly.dev/sala/<n>.
 
 [http_service]
   internal_port = 9080
@@ -15,6 +19,7 @@ primary_region = "mad"
   min_machines_running = 0
 
 [[vm]]
-  memory = "512mb"
+  # Cada sala es un proceso Godot (~180 MB) más el maestro: 2 salas piden 1 GB.
+  memory = "1024mb"
   cpu_kind = "shared"
   cpus = 1

@@ -90,8 +90,9 @@ func configurar(url_inicial: String) -> void:
 	solo.pressed.connect(_al_pulsar_solo)
 	columna.add_child(solo)
 
-	# Solo el anfitrión de escritorio puede levantar el servidor y el túnel.
-	if not OS.has_feature("web") and not OS.has_feature("mobile"):
+	# En escritorio la sala la levanta el propio juego (túnel + servidor headless);
+	# en Web/APK la pide al servidor maestro en la nube.
+	if true:
 		_boton_crear = Button.new()
 		_boton_crear.text = "CREAR SALA"
 		_boton_crear.custom_minimum_size = Vector2(340, 46)
@@ -101,7 +102,11 @@ func configurar(url_inicial: String) -> void:
 		columna.add_child(_boton_crear)
 
 		_estado_creacion = Label.new()
-		_estado_creacion.text = "Crea una sala y tus amigos la ven en esta lista."
+		_estado_creacion.text = (
+			"Pide una sala al servidor público y compartí el enlace."
+			if OS.has_feature("web") or OS.has_feature("mobile")
+			else "Crea una sala y tus amigos la ven en esta lista."
+		)
 		_estado_creacion.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_estado_creacion.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_estado_creacion.custom_minimum_size = Vector2(340, 0)

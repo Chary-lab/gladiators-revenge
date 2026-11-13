@@ -485,6 +485,25 @@ func _ejecutar() -> void:
 	)
 	supabase.free()
 
+	# --- Salas en la nube --------------------------------------------------
+	var remota := SalaRemota.new()
+	# Las lambdas capturan por valor: se usa una caja para leer el motivo.
+	var caja := [""]
+	remota.fallo.connect(func(m: String) -> void: caja[0] = m)
+	remota.configurar("")
+	remota.crear()
+	_comprobar(
+		str(caja[0]).contains("servidor de salas"),
+		"sin servidor de salas, crear sala avisa del error"
+	)
+	remota.free()
+	var maestro := MaestroSalas.new()
+	_comprobar(
+		maestro.has_method("iniciar") and maestro.has_method("cerrar"),
+		"el maestro de salas expone iniciar y cerrar"
+	)
+	maestro.free()
+
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
 	Sfx.liberar()
 	quit(1 if _fallos > 0 else 0)

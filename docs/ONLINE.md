@@ -104,6 +104,51 @@ se guarda en el repo, en `project.godot` ni en el cliente exportado.
 `crear_sala.ps1` sigue disponible para hostear desde una consola sin abrir el
 juego (útil en un equipo dedicado).
 
+## Salas en la nube (maestro)
+
+El contenedor no corre una sola partida: corre un **maestro** que levanta varias
+salas y enruta a cada jugador a la suya. Así la web y el APK también pueden
+**crear** sala (un navegador no puede abrir un servidor ni un túnel).
+
+```powershell
+# Local
+godot --headless -- --maestro --salas=2 --puerto=8080 --puerto-base=9101
+```
+
+- Puerto público: `PORT` (o `--puerto=`). Salas: `SALAS` (o `--salas=`).
+- Cada sala es un proceso `godot --headless -- --servidor --puerto=910X --publico=<url>`
+  que se anuncia solo en Supabase (`SUPABASE_SERVICE_KEY`).
+- Rutas del maestro:
+  - `POST /salas` → `{"sala":1,"url":"wss://host/sala/1"}`. Reserva con caducidad
+    de 90 s; si no queda ninguna libre responde 503.
+  - `GET /sala/<n>` con `Upgrade: websocket` → proxy TCP puro contra el proceso de
+    esa sala (el handshake WebSocket lo hace la sala, no el maestro).
+  - `GET /` y `GET /salud` → estado en JSON (sirve de health check).
+  - `OPTIONS` → 204 con CORS abierto, para que la web pueda pedir salas.
+- Cuando se desconecta el último jugador de una sala, su proceso se reinicia: el
+  siguiente grupo entra en una partida limpia.
+
+En el cliente:
+
+- `red/api_url` (o `?api=https://…` en la URL de la web, o `--api=` en escritorio,
+  o la variable `SALA_API`) apunta al maestro.
+- En Web/APK el botón **CREAR SALA** pide una sala al maestro y entra directo.
+  En escritorio sigue levantando el túnel propio.
+- Ojo con la memoria: cada sala es un proceso de ~180 MB. 512 MB dan para una
+  sala; el `fly.toml` pide 1 GB para dos.
+
+### Desplegar
+
+```powershell
+fly secrets set SUPABASE_SERVICE_KEY=... SERVER_PUBLIC_URL=https://<app>.fly.dev
+fly deploy
+```
+
+En Render: crear el Web Service desde el `Dockerfile`, cargar
+`SUPABASE_SERVICE_KEY` y `SERVER_PUBLIC_URL`, y dejar `SALAS=1` con el plan free.
+Después, exportar la web con `red/api_url` apuntando a esa URL (o abrir
+`https://<pages>/?api=https://<app>.fly.dev`).
+
 ## Pruebas de red
 
 ```powershell

@@ -21,6 +21,7 @@ window/stretch/mode="canvas_items"
 
 servidor_url=""
 servidor_publico_url=""
+api_url=""
 
 [supabase]
 

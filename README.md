@@ -40,10 +40,11 @@ Godot 4.7 se instaló con `winget install GodotEngine.GodotEngine`.
 ## Cooperativo online
 
 En Web y APK aparece un menú con **Jugar solo**, **Crear sala** y **Unirse a
-partida**. Con **Crear sala** el host no instala nada: el juego descarga
+partida**. En escritorio, **Crear sala** lo hace todo sin instalar nada: descarga
 `cloudflared` la primera vez, abre el túnel, lanza el servidor headless y registra
 la sala en el lobby público; el botón **Terminar** de la pantalla final apaga
-servidor y túnel. El servidor (`Dockerfile`, `fly.toml`, `render.yaml`) es la
+servidor y túnel. En la web y el APK, **Crear sala** pide una sala al servidor
+maestro desplegado (`red/api_url`), porque un navegador no puede abrir puertos. El servidor (`Dockerfile`, `fly.toml`, `render.yaml`) es la
 autoridad de oleadas, enemigos, daño, oro, compras, talentos e inventario. Los
 clientes envían sus acciones y reciben snapshots a 15 Hz.
 
@@ -271,6 +272,8 @@ scripts/
   net/NetCoop.gd            WebSocket, RPCs, lobby y snapshots
   net/Supabase.gd           registro de servidores y partidas por REST
   net/CrearSala.gd          descarga cloudflared, abre el túnel y lanza el servidor
+  net/MaestroSalas.gd       varias salas por contenedor (HTTP + proxy por ruta)
+  net/SalaRemota.gd         pide una sala al maestro (Web/APK)
   ui/
     ArenaHUD.gd             consola 185 px, retrato, ficha, 2x3 y parrilla 4x3
     ArenaMinimap.gd         radar 2D del patio

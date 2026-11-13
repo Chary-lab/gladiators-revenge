@@ -21,7 +21,10 @@ RUN wget -q \
 WORKDIR /app
 COPY . .
 
+# El maestro escucha en PORT y levanta una sala (proceso Godot) por cada SALAS.
+# Necesita SUPABASE_SERVICE_KEY para que las salas se anuncien en el lobby.
 ENV PORT=9080
+ENV SALAS=2
 EXPOSE 9080
 
-CMD ["sh", "-c", "exec godot --headless --path /app -- --servidor --puerto=${PORT:-9080}"]
+CMD ["sh", "-c", "exec godot --headless --path /app -- --maestro --puerto=${PORT:-9080} --salas=${SALAS:-2}"]

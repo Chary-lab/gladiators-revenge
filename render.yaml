@@ -6,3 +6,9 @@ services:
     envVars:
       - key: PORT
         value: 9080
+      - key: SALAS
+        value: "1"     # el plan free da 512 MB: una sala por instancia
+      - key: SUPABASE_SERVICE_KEY
+        sync: false    # se carga en el panel de Render
+      - key: SERVER_PUBLIC_URL
+        value: https://gladiators-revenge-server.onrender.com
