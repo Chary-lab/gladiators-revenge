@@ -39,10 +39,13 @@ Godot 4.7 se instaló con `winget install GodotEngine.GodotEngine`.
 
 ## Cooperativo online
 
-En Web y APK aparece un menú con **Jugar solo** y **Unirse a partida**. El
-servidor (`Dockerfile`, `fly.toml`, `render.yaml`) es la autoridad de oleadas,
-enemigos, daño, oro, compras, talentos e inventario. Los clientes envían sus
-acciones y reciben snapshots a 10 Hz.
+En Web y APK aparece un menú con **Jugar solo**, **Crear sala** y **Unirse a
+partida**. Con **Crear sala** el host no instala nada: el juego descarga
+`cloudflared` la primera vez, abre el túnel, lanza el servidor headless y registra
+la sala en el lobby público; el botón **Terminar** de la pantalla final apaga
+servidor y túnel. El servidor (`Dockerfile`, `fly.toml`, `render.yaml`) es la
+autoridad de oleadas, enemigos, daño, oro, compras, talentos e inventario. Los
+clientes envían sus acciones y reciben snapshots a 15 Hz.
 
 - Hasta 3 jugadores, una clase distinta por persona y partida.
 - El servidor rechaza repetir clase o cambiarla después de elegir.
@@ -267,10 +270,11 @@ scripts/
     WaveManager.gd          20 oleadas, jefes y recompensas
   net/NetCoop.gd            WebSocket, RPCs, lobby y snapshots
   net/Supabase.gd           registro de servidores y partidas por REST
+  net/CrearSala.gd          descarga cloudflared, abre el túnel y lanza el servidor
   ui/
     ArenaHUD.gd             consola 185 px, retrato, ficha, 2x3 y parrilla 4x3
     ArenaMinimap.gd         radar 2D del patio
-    MenuRed.gd              menú Jugar solo / Unirse a partida
+    MenuRed.gd              menú Jugar solo / Crear sala / Unirse a partida
     DamageNumbers.gd        números de daño/curación con pool
     TalentPanel.gd          panel de talentos con rangos y requisitos
     ShopPanel.gd            tienda, recetario, forja y tooltips

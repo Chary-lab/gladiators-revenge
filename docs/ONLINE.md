@@ -77,6 +77,33 @@ https://tu-pagina/?servidor=wss://tu-servidor.example.com
 El valor por defecto se configura en `project.godot` con
 `red/servidor_url`.
 
+## Crear sala desde el juego
+
+En Web/APK (y en escritorio con `--menu-red`) el menú de red tiene tres acciones:
+**JUGAR SOLO**, **CREAR SALA** y **UNIRSE A PARTIDA**. El botón **CREAR SALA**
+hace todo sin que el host instale nada a mano:
+
+1. Si falta, descarga `cloudflared` a `user://bin` (una sola vez, ~55 MB) y lo
+   reutiliza en las siguientes partidas.
+2. Abre un túnel HTTP rápido de Cloudflare contra `http://localhost:9080` y lee
+   la URL `wss://…trycloudflare.com` de su registro.
+3. Lanza un `godot --headless -- --servidor --puerto=9080 --publico=<url>` que se
+   anuncia solo en Supabase (latido cada 20 s).
+4. Mete al host como cliente por `ws://127.0.0.1:9080` (sin pasar por internet).
+
+Los demás jugadores ven la sala en la lista del menú y entran con un clic. Al
+terminar la partida, el botón **TERMINAR** (solo el host) cierra la escena, mata
+el servidor y el túnel y borra la sala de Supabase: al salir del juego también se
+apagan ambos procesos.
+
+La clave de servicio que necesita el servidor para escribir en Supabase se toma
+de `SUPABASE_SERVICE_KEY` o, si no existe, de `user://supabase.local.cfg` (texto
+plano con la clave). El juego la pasa al servidor con `--clave-supabase=…`; nunca
+se guarda en el repo, en `project.godot` ni en el cliente exportado.
+
+`crear_sala.ps1` sigue disponible para hostear desde una consola sin abrir el
+juego (útil en un equipo dedicado).
+
 ## Pruebas de red
 
 ```powershell

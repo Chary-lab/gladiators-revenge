@@ -27,6 +27,12 @@ func _ready() -> void:
 	_base = _config("supabase/url", "SUPABASE_URL").trim_suffix("/")
 	_anon = _config("supabase/anon_key", "SUPABASE_ANON_KEY")
 	_service = OS.get_environment("SUPABASE_SERVICE_KEY").strip_edges()
+	if _service.is_empty():
+		# El servidor puede lanzarse desde el botón CREAR SALA del juego; en ese
+		# caso la clave viaja por argumento (solo en el equipo del host).
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--clave-supabase="):
+				_service = arg.substr("--clave-supabase=".length()).strip_edges()
 	_region = _config("supabase/region", "SUPABASE_REGION")
 	if _region.is_empty():
 		_region = "local"

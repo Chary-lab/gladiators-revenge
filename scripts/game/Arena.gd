@@ -104,6 +104,8 @@ var _log_snapshot := false
 var _eventos_red: Array = []
 var _estaba_muerto := false
 var _supabase: Supabase
+var _menu: MenuRed
+var _creador: CrearSala
 var _servidor_publico_url := ""
 var _hora_inicio_partida := 0.0
 
@@ -199,11 +201,45 @@ func _necesita_menu() -> bool:
 
 
 func _mostrar_menu() -> void:
-	var menu := MenuRed.new()
-	add_child(menu)
-	menu.configurar(url_servidor)
-	menu.jugar_solo.connect(_iniciar_local)
-	menu.unirse.connect(_iniciar_cliente_con_url)
+	_menu = MenuRed.new()
+	add_child(_menu)
+	_menu.configurar(url_servidor)
+	_menu.jugar_solo.connect(_iniciar_local)
+	_menu.unirse.connect(_iniciar_cliente_con_url)
+	_menu.crear_sala.connect(_al_crear_sala)
+
+
+func _al_crear_sala() -> void:
+	# El host solo pulsa CREAR SALA: el juego descarga cloudflared si falta,
+	# abre el túnel y lanza el servidor headless que se anuncia en Supabase.
+	if _creador == null:
+		_creador = CrearSala.new()
+		_creador.name = "CrearSala"
+		add_child(_creador)
+		_creador.estado.connect(_al_estado_creacion)
+		_creador.lista.connect(_al_sala_lista)
+		_creador.fallo.connect(_al_fallo_creacion)
+	_creador.crear()
+
+
+func _al_estado_creacion(texto: String) -> void:
+	if _menu != null and is_instance_valid(_menu):
+		_menu.estado_creacion(texto)
+
+
+func _al_sala_lista(url_local: String, url_publica: String) -> void:
+	if _menu != null and is_instance_valid(_menu):
+		_menu.sala_creada(url_publica)
+		_menu.queue_free()
+		_menu = null
+	# El host entra como cliente por localhost: el servidor es headless.
+	_iniciar_cliente_con_url(url_local)
+
+
+func _al_fallo_creacion(motivo: String) -> void:
+	push_warning("[SALA] %s" % motivo)
+	if _menu != null and is_instance_valid(_menu):
+		_menu.sala_fallida(motivo)
 
 
 func _iniciar_cliente_con_url(direccion: String) -> void:
@@ -1270,6 +1306,7 @@ func _crear_hud() -> void:
 	_hud = ArenaHUD.new()
 	add_child(_hud)
 	_hud.configurar(_jugador, _oleadas, _bandera, self)
+	_hud.terminar_partida.connect(_al_pulsar_terminar)
 
 	# Barra de vida del jefe (oculta por defecto)
 	_jefe_barra_nodo = Control.new()
@@ -1815,7 +1852,7 @@ func _finalizar(titulo: String, detalle: String) -> void:
 	if _hud != null:
 		_hud.cerrar_talentos()
 		_hud.cerrar_tienda()
-		_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle])
+		_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle], es_servidor)
 	if es_servidor:
 		if red != null:
 			red.difundir_fin(titulo, detalle)
@@ -1837,6 +1874,8 @@ func _finalizar(titulo: String, detalle: String) -> void:
 				lista
 			)
 			_supabase.marcar_inactivo()
+			if red != null:
+				red.cerrar()
 	else:
 		Sfx.reproducir("victoria" if titulo == "VICTORIA" else "derrota")
 
@@ -1844,6 +1883,19 @@ func _finalizar(titulo: String, detalle: String) -> void:
 func _exit_tree() -> void:
 	if es_servidor and _supabase != null:
 		_supabase.detener_latido()
+	# Al salir (o al pulsar TERMINAR, que recarga la escena) el host apaga el
+	# servidor headless y el túnel que abrió el botón CREAR SALA.
+	if _creador != null and is_instance_valid(_creador):
+		_creador.cerrar()
+
+func _al_pulsar_terminar() -> void:
+	if es_servidor:
+		if red != null:
+			red.cerrar()
+		if _supabase != null:
+			_supabase.marcar_inactivo()
+			_supabase.detener_latido()
+	get_tree().reload_current_scene()
 
 
 func esta_congelado() -> bool:

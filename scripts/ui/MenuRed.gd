@@ -4,10 +4,13 @@ extends CanvasLayer
 
 signal jugar_solo
 signal unirse(url: String)
+signal crear_sala
 
 var _url: LineEdit
 var _estado_servidores: Label
 var _lista_servidores: VBoxContainer
+var _boton_crear: Button
+var _estado_creacion: Label
 var _supabase: Supabase
 
 
@@ -85,6 +88,25 @@ func configurar(url_inicial: String) -> void:
 	solo.add_theme_font_size_override("font_size", 18)
 	solo.pressed.connect(_al_pulsar_solo)
 	columna.add_child(solo)
+
+	# Solo el anfitrión de escritorio puede levantar el servidor y el túnel.
+	if not OS.has_feature("web") and not OS.has_feature("mobile"):
+		_boton_crear = Button.new()
+		_boton_crear.text = "CREAR SALA"
+		_boton_crear.custom_minimum_size = Vector2(340, 46)
+		_boton_crear.add_theme_font_size_override("font_size", 18)
+		_boton_crear.add_theme_color_override("font_color", Color(0.92, 0.72, 0.35))
+		_boton_crear.pressed.connect(_al_pulsar_crear)
+		columna.add_child(_boton_crear)
+
+		_estado_creacion = Label.new()
+		_estado_creacion.text = "Crea una sala y tus amigos la ven en esta lista."
+		_estado_creacion.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_estado_creacion.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_estado_creacion.custom_minimum_size = Vector2(340, 0)
+		_estado_creacion.add_theme_font_size_override("font_size", 12)
+		_estado_creacion.add_theme_color_override("font_color", Color(0.7, 0.66, 0.58))
+		columna.add_child(_estado_creacion)
 
 	columna.add_child(HSeparator.new())
 
@@ -189,3 +211,28 @@ func _al_pulsar_unirse() -> void:
 		return
 	queue_free()
 	unirse.emit(destino)
+
+
+func _al_pulsar_crear() -> void:
+	if _boton_crear != null:
+		_boton_crear.disabled = true
+	crear_sala.emit()
+
+
+func estado_creacion(texto: String) -> void:
+	if _estado_creacion != null:
+		_estado_creacion.text = texto
+
+
+func sala_creada(url_publica: String) -> void:
+	estado_creacion("Sala pública lista: %s" % url_publica)
+	if _boton_crear != null:
+		_boton_crear.disabled = false
+	if _url != null and _url.text.strip_edges().is_empty():
+		_url.text = url_publica
+
+
+func sala_fallida(motivo: String) -> void:
+	estado_creacion("No se pudo crear la sala · %s" % motivo)
+	if _boton_crear != null:
+		_boton_crear.disabled = false

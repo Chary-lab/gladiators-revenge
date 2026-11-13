@@ -462,6 +462,21 @@ func _ejecutar() -> void:
 	var panel = escena.get("_hud").get("_talentos")
 	_comprobar(panel != null and not panel.visible, "el panel de talentos se cierra al terminar")
 
+	# --- Sala online (botón CREAR SALA) -----------------------------------
+	var menu := MenuRed.new()
+	_comprobar(
+		menu.has_signal("crear_sala") and menu.has_method("estado_creacion") and menu.has_method("sala_fallida"),
+		"el menú de red ofrece crear una sala pública"
+	)
+	menu.free()
+	var creador := CrearSala.new()
+	_comprobar(
+		creador._nombre_binario().begins_with("cloudflared"),
+		"el creador de sala resuelve el binario de cloudflared"
+	)
+	_comprobar(creador.url_publica().is_empty(), "la sala no anuncia URL antes de abrir el túnel")
+	creador.free()
+
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
 	Sfx.liberar()
 	quit(1 if _fallos > 0 else 0)

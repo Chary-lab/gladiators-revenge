@@ -73,6 +73,7 @@ var _tooltip: TooltipRico
 var _capa_tooltip: CanvasLayer
 var _comandos_datos: Array = []
 var _comando_activo: Array = [false, false, false, false, false, false, false, false]
+signal terminar_partida
 var _cd_antes: Array = [0.0, 0.0, 0.0, 0.0]
 var _overlay: Panel
 var _overlay_detalle: VBoxContainer
@@ -747,10 +748,19 @@ func mostrar_mensaje(texto: String, duracion := 2.5) -> void:
 	tween.tween_property(_mensaje, "modulate:a", 0.0, 0.6)
 
 
-func mostrar_final(texto: String) -> void:
+func mostrar_final(texto: String, mostrar_terminar := false) -> void:
 	_mensaje.text = texto
 	_mensaje.modulate.a = 1.0
 	_mensaje.add_theme_font_size_override("font_size", 32)
+	if mostrar_terminar:
+		var btn := Button.new()
+		btn.text = "TERMINAR"
+		btn.custom_minimum_size = Vector2(200, 44)
+		btn.add_theme_font_size_override("font_size", 16)
+		btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		btn.offset_top = -120
+		btn.pressed.connect(terminar_partida.emit)
+		_raiz.add_child(btn)
 
 
 func establecer_pista(texto: String) -> void:
