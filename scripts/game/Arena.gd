@@ -110,6 +110,7 @@ var _creador: CrearSala
 static var volver_al_menu := false
 var _maestro: MaestroSalas
 var _tactil: TouchControls
+var _seleccion: SeleccionCampeon
 var _ajustes: Ajustes
 var _tactil_moviendo := false
 var _tactil_ultimo_envio := 0
@@ -147,7 +148,7 @@ func _ready() -> void:
 		_iniciar_local()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args:
 		_capturar()
 
 	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
@@ -629,6 +630,81 @@ func _preparar_punto_red(cuerpo: GladiatorController, punto) -> void:
 
 func _al_ataque_red(_objetivo, _dano, critico: bool, peer: int) -> void:
 	_eventos_red.append({"tipo": "ataque", "peer": peer, "critico": critico})
+
+
+## Ficha de cada campeón para la pantalla de selección: números reales del
+## sistema de estadísticas con el arma de la clase, no valores inventados.
+## Una corrida de captura no debe abrir la forja salvo que se pida.
+func _en_captura() -> bool:
+	for arg in OS.get_cmdline_user_args():
+		if String(arg).begins_with("--captura"):
+			return true
+	return false
+
+
+func _perfiles_campeon() -> Array:
+	var salida: Array = []
+	for arma in WeaponItem.crear_catalogo_base():
+		if arma == null:
+			continue
+		var clase := arma.id_clase()
+		if clase == &"prisionero":
+			continue
+		var stats := GladiatorStats.new()
+		stats.configurar_clase(clase)
+		var rango := stats.rango_dano_ataque(arma.dano_ataque_base, arma.atributo_principal)
+		var habilidades: Array = []
+		for hab in arma.habilidades:
+			if hab != null:
+				habilidades.append({"nombre": hab.nombre})
+		salida.append({
+			"clase": clase,
+			"nombre": String(ForjaTema.NOMBRE_EMBLEMA.get(clase, clase)).to_upper(),
+			"lema": String(ForjaTema.LEMA_CLASE.get(clase, "")),
+			"vida": stats.salud_maxima,
+			"mana": stats.mana_maximo,
+			"dano_min": rango.x,
+			"dano_max": rango.y,
+			"defensa": stats.mitigacion_fisica,
+			"habilidades": habilidades,
+		})
+	return salida
+
+
+## Abre la forja de campeones (modal). Se puede cerrar y elegir luego en la
+## armería, así que no bloquea la partida.
+func _mostrar_seleccion_campeon(forzar := false) -> void:
+	if _seleccion != null or _jugador == null:
+		return
+	if _campeon_elegido and not forzar:
+		return
+	var perfiles := _perfiles_campeon()
+	if perfiles.is_empty():
+		return
+	_seleccion = SeleccionCampeon.new()
+	add_child(_seleccion)
+	_seleccion.elegido.connect(_al_elegir_campeon)
+	_seleccion.cerrado.connect(func() -> void: _seleccion = null)
+	_seleccion.configurar(perfiles, _jugador.arma_actual.id_clase() if _jugador.arma_actual != null else &"")
+
+
+func _al_elegir_campeon(clase: StringName) -> void:
+	_seleccion = null
+	if es_cliente:
+		if red != null:
+			red.enviar_clase(clase)
+		_avisar("Solicitando clase %s…" % String(ForjaTema.NOMBRE_EMBLEMA.get(clase, clase)), 2.5)
+		return
+	for pedestal in _pedestales:
+		if pedestal.arma != null and pedestal.arma.id_clase() == clase:
+			if pedestal.comprar(_jugador):
+				_campeon_elegido = true
+				for otro in _pedestales:
+					if otro != pedestal:
+						otro.desactivar()
+				_avisar("Campeón: %s" % pedestal.arma.nombre, 2.8)
+				Sfx.reproducir("compra", -3.0)
+			return
 
 
 func _arma_por_clase(clase: StringName) -> WeaponItem:
@@ -1400,6 +1476,8 @@ func _crear_controles_tactiles() -> void:
 	var pantalla_tactil := DisplayServer.is_touchscreen_available()
 	if not pantalla_tactil and not ("--tactil" in OS.get_cmdline_user_args()):
 		return
+	if not es_cliente and not es_servidor and not _en_captura():
+		call_deferred("_mostrar_seleccion_campeon")
 	_tactil = TouchControls.new()
 	_tactil.name = "Tactil"
 	add_child(_tactil)
@@ -1408,6 +1486,7 @@ func _crear_controles_tactiles() -> void:
 		_tactil.aplicar_escala(_ajustes.escala_tactil)
 	_tactil.habilidad.connect(_al_habilidad_tactil)
 	_tactil.mover.connect(_al_mover_tactil)
+	_tactil.pausa.connect(_al_pausa_tactil)
 	_tactil.interactuar.connect(_interactuar_cercano)
 	_tactil.detener.connect(_al_detener_tactil)
 
@@ -1453,6 +1532,19 @@ func _al_mover_tactil(direccion: Vector2) -> void:
 		red.enviar_accion(&"mover", {"punto": punto})
 		return
 	_jugador.mover_tactil(direccion)
+
+
+## Pausa táctil: abre Ajustes (volumen y tamaño de botones) sobre la partida.
+func _al_pausa_tactil() -> void:
+	if get_tree().paused:
+		return
+	var panel := SettingsPanel.new()
+	add_child(panel)
+	panel.configurar()
+	panel.cerrado.connect(func() -> void:
+		if _tactil != null and _ajustes != null:
+			_tactil.aplicar_escala(_ajustes.escala_tactil)
+	)
 
 
 func _al_habilidad_tactil(slot: int) -> void:
@@ -2212,7 +2304,8 @@ func _capturar() -> void:
 	var capturar_jefe := "--captura-jefe" in args
 	var tienda := "--captura-tienda" in args
 	var fin := "--captura-fin" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin
+	var campeon := "--captura-campeon" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon
 	if combate:
 		var sin_arma: bool = _jugador != null and _jugador.arma_actual != null and _jugador.arma_actual.clase == WeaponItem.Clase.PRISIONERO
 		if sin_arma:
@@ -2245,10 +2338,14 @@ func _capturar() -> void:
 			_hud.alternar_tienda()
 		elif cerca and _camara != null:
 			_camara.size = 7.0
+		if campeon:
+			_mostrar_seleccion_campeon(true)
+			print("SELECCION: ", _seleccion != null, " perfiles=", _perfiles_campeon().size())
+			await get_tree().create_timer(0.8).timeout
 		if fin:
 			_finalizar("DERROTA", "Los gladiadores han caído en la arena.")
 			await get_tree().create_timer(1.2).timeout
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin) else 8.5).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -2267,6 +2364,8 @@ func _capturar() -> void:
 		ruta = "res://captura_tienda.png"
 	if fin:
 		ruta = "res://captura_fin.png"
+	if campeon:
+		ruta = "res://captura_campeon.png"
 	elif combate:
 		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))

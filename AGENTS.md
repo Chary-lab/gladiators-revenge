@@ -28,7 +28,7 @@ godot --headless --script res://tests/inspect_crear_sala.gd   # sonda del túnel
 godot -- --captura-combate                 # windowed screenshot to captura_combate.png
 ```
 
-- Expected baseline: smoke **119/119**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **124/124**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
 - En `--headless` los fotogramas corren a miles por segundo: `await process_frame` no espera nada. Los tests esperan con `create_timer(0.01)` (`_esperar_hasta`) o `create_timer(segundos)`.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
@@ -54,6 +54,8 @@ godot -- --captura-combate                 # windowed screenshot to captura_comb
 - Revive: a dead player with a living teammate counts down 10 s (2.5× faster within 4 m) and revives next to the nearest ally at 60 % HP, keeping inventory/talents/level. All players dead still ends the run. Server action `debug_morir`/`debug_curar` only works with `--red-rapida` for tests.
 - Sala de espera: `WaveManager.en_espera()` y `asegurar_preparacion(segundos)` mantienen la cuenta atrás de 30 s antes de la primera oleada; si alguien entra con menos de 8 s, `agregar_jugador_red` la alarga. `ArenaHUD.establecer_lobby(visible, segundos, jugadores, maximo, es_local)` dibuja el panel central (título, cuenta atrás grande y "N/3 gladiadores").
 - El menú de red ya no pide URL a mano: lista de salas + JUGAR SOLO + CREAR SALA. Para entrar a una sala se pulsa su botón en la lista.
+- Tema: `scripts/ui/ForjaTema.gd` centraliza la paleta (carbón, oro, ascua), paneles, botones, barras segmentadas, emblemas de clase (`ForjaTema.Emblema`, las clases internas se usan calificadas) y el aro de runas del joystick (`ForjaTema.AroRunas`). Cualquier pantalla nueva toma los colores de aquí.
+- Selección de campeón: `scripts/ui/SeleccionCampeon.gd` (CanvasLayer 55) se abre al empezar la partida local si no hay clase (`Arena._mostrar_seleccion_campeon`), recibe `_perfiles_campeon()` con vida/maná/daño/defensa calculados desde `GladiatorStats` y el arma de la clase, y al confirmar equipa por la misma vía que el pedestal (`pedestal.comprar`) o pide clase al servidor. `--captura-campeon` la fotografía.
 - Táctil: `scripts/ui/TouchControls.gd` tiene joystick (base + perilla, emite `mover(direccion)`), Q/W/E/R y DETENER/INTERACTUAR. El gladiador usa `mover_tactil(direccion)` (movimiento directo, sin navegación) y en red el cliente manda la acción `mover` a ~8 Hz mientras se mantiene la dirección.
 - Ajustes: `scripts/core/Ajustes.gd` (user://ajustes.cfg) guarda `volumen` y `escala_tactil`; `SettingsPanel` los edita desde el menú. `Arena._ready` los carga y aplica (bus Master y escala del joystick/botones).
 - Actualizador: `scripts/net/Actualizador.gd` consulta el último release de GitHub y, si `tag_name` es mayor que `config/version`, el menú muestra "Nueva versión vX · tocar para descargar" (abre el release; no instala solo: eso requiere plugin nativo de Android).

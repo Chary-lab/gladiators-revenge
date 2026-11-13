@@ -489,6 +489,26 @@ func _ejecutar() -> void:
 		(tactil.get("_base") as Panel) != null and (tactil.get("_perilla") as Panel) != null,
 		"el joystick táctil dibuja base y perilla"
 	)
+	_comprobar(
+		(tactil.get("_aro") as ForjaTema.AroRunas) != null,
+		"el joystick dibuja el aro de runas"
+	)
+	_comprobar(tactil.has_signal("pausa"), "el HUD táctil tiene botón de pausa")
+	var perfiles: Array = escena._perfiles_campeon()
+	_comprobar(perfiles.size() == 3, "la forja de campeones ofrece las tres clases")
+	var primer_perfil: Dictionary = perfiles[0]
+	_comprobar(
+		float(primer_perfil.get("vida", 0.0)) > 0.0 and float(primer_perfil.get("dano_max", 0.0)) > 0.0,
+		"cada campeón llega con estadísticas calculadas"
+	)
+	var seleccion := SeleccionCampeon.new()
+	escena.add_child(seleccion)
+	seleccion.configurar(perfiles, &"")
+	_comprobar(
+		(seleccion.get("_emblemas") as Array).size() == 3 and seleccion.get("_marca") != null,
+		"la pantalla de campeón monta emblemas y ficha"
+	)
+	seleccion.free()
 	tactil.free()
 	var punto: Variant = escena._punto_habilidad()
 	_comprobar(punto is Vector3, "en táctil la habilidad apunta a un punto del mundo")
