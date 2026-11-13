@@ -175,16 +175,21 @@ func _peticion(
 	add_child(http)
 	http.request_completed.connect(_al_responder.bind(http, callback))
 
+	# En Web el navegador prohíbe varias cabeceras (Accept-Encoding entre ellas):
+	# enviarlas hace que el fetch falle con código 0 sin llegar a Supabase.
+	var es_web := OS.has_feature("web")
 	var cabeceras := PackedStringArray([
 		"apikey: %s" % clave,
 		"Authorization: Bearer %s" % clave,
-		"Content-Type: application/json",
 		"Accept: application/json",
-		"Accept-Encoding: identity",
 	])
+	if not es_web:
+		cabeceras.append("Accept-Encoding: identity")
+	if metodo == HTTPClient.METHOD_POST:
+		cabeceras.append("Content-Type: application/json")
 	if metodo == HTTPClient.METHOD_POST and TABLA_SERVIDORES in ruta:
 		cabeceras.append("Prefer: resolution=merge-duplicates,return=minimal")
-	else:
+	elif not es_web:
 		cabeceras.append("Prefer: return=minimal")
 
 	var error := http.request(_base + ruta, cabeceras, metodo, cuerpo)
