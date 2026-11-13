@@ -485,9 +485,29 @@ func _ejecutar() -> void:
 		(tactil.get("_botones") as Array).size() == 4,
 		"los controles táctiles dibujan Q/W/E/R"
 	)
+	_comprobar(
+		(tactil.get("_base") as Panel) != null and (tactil.get("_perilla") as Panel) != null,
+		"el joystick táctil dibuja base y perilla"
+	)
 	tactil.free()
 	var punto: Variant = escena._punto_habilidad()
 	_comprobar(punto is Vector3, "en táctil la habilidad apunta a un punto del mundo")
+
+	# --- Ajustes y actualizador --------------------------------------------
+	var ajustes := Ajustes.new()
+	ajustes.volumen = 0.5
+	ajustes.escala_tactil = 1.2
+	ajustes.guardar()
+	var releidos := Ajustes.cargar()
+	_comprobar(
+		is_equal_approx(releidos.volumen, 0.5) and is_equal_approx(releidos.escala_tactil, 1.2),
+		"los ajustes se guardan y se vuelven a leer"
+	)
+	var actualizador := Actualizador.new()
+	_comprobar(actualizador._es_mas_nueva("1.6.0", "1.5.0"), "el actualizador detecta una versión más nueva")
+	_comprobar(not actualizador._es_mas_nueva("1.5.0", "1.5.0"), "el actualizador no molesta si ya está al día")
+	_comprobar(not actualizador._es_mas_nueva("1.4.9", "1.5.0"), "el actualizador no retrocede de versión")
+	actualizador.free()
 
 	var gestor_oleadas = escena.get("_oleadas")
 	_comprobar(

@@ -10,8 +10,11 @@ var _estado_servidores: Label
 var _lista_servidores: VBoxContainer
 var _boton_crear: Button
 var _reintentado := false
+var _aviso_version: Label
+var _enlace_release := ""
 var _estado_creacion: Label
 var _supabase: Supabase
+var _actualizador: Actualizador
 
 
 func configurar(_url_inicial: String = "") -> void:
@@ -113,12 +116,36 @@ func configurar(_url_inicial: String = "") -> void:
 		_estado_creacion.add_theme_color_override("font_color", Color(0.7, 0.66, 0.58))
 		columna.add_child(_estado_creacion)
 
+	var fila_botones := HBoxContainer.new()
+	fila_botones.add_theme_constant_override("separation", 8)
+	columna.add_child(fila_botones)
+	var ajustes_btn := Button.new()
+	ajustes_btn.text = "AJUSTES"
+	ajustes_btn.custom_minimum_size = Vector2(166, 40)
+	ajustes_btn.add_theme_font_size_override("font_size", 15)
+	ajustes_btn.pressed.connect(_al_pulsar_ajustes)
+	fila_botones.add_child(ajustes_btn)
+	_aviso_version = Label.new()
+	_aviso_version.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_aviso_version.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_aviso_version.custom_minimum_size = Vector2(166, 0)
+	_aviso_version.add_theme_font_size_override("font_size", 11)
+	_aviso_version.add_theme_color_override("font_color", Color(0.9, 0.7, 0.35))
+	_aviso_version.mouse_filter = Control.MOUSE_FILTER_STOP
+	_aviso_version.gui_input.connect(_al_pulsar_aviso)
+	fila_botones.add_child(_aviso_version)
+
 	var ayuda := Label.new()
 	ayuda.text = "La clase se elige una sola vez por partida en la armería."
 	ayuda.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ayuda.add_theme_font_size_override("font_size", 12)
 	ayuda.add_theme_color_override("font_color", Color(0.62, 0.58, 0.5))
 	columna.add_child(ayuda)
+
+	_actualizador = Actualizador.new()
+	add_child(_actualizador)
+	_actualizador.disponible.connect(_al_hay_version)
+	_actualizador.comprobar()
 
 	_supabase = Supabase.new()
 	add_child(_supabase)
@@ -190,6 +217,28 @@ func _al_recibir_servidores(ok: bool, lista: Array) -> void:
 func _unirse_a(url: String) -> void:
 	queue_free()
 	unirse.emit(url)
+
+
+func _al_pulsar_ajustes() -> void:
+	var panel := SettingsPanel.new()
+	add_child(panel)
+	panel.configurar()
+
+
+func _al_hay_version(version: String, url: String) -> void:
+	if _aviso_version == null:
+		return
+	_enlace_release = url
+	_aviso_version.text = "Nueva versión v%s · tocar para descargar" % version
+
+
+func _al_pulsar_aviso(evento: InputEvent) -> void:
+	if _enlace_release.is_empty():
+		return
+	if evento is InputEventMouseButton and (evento as InputEventMouseButton).pressed:
+		_actualizador.abrir_enlace(_enlace_release)
+	elif evento is InputEventScreenTouch and (evento as InputEventScreenTouch).pressed:
+		_actualizador.abrir_enlace(_enlace_release)
 
 
 func _al_pulsar_solo() -> void:

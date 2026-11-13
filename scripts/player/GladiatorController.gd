@@ -79,6 +79,8 @@ var tiene_punto_red := false
 var _pos_objetivo_red := Vector3.ZERO
 ## Segundos restantes para revivir en co-op; 0 si está vivo o sin rescate.
 var revive_en := 0.0
+## Dirección del joystick táctil (x, z); cero cuando no se usa.
+var direccion_tactil := Vector2.ZERO
 
 var salud_actual := 0.0
 var mana_actual := 0.0
@@ -563,8 +565,28 @@ func _animar_destino(destino: Vector3, marcador: MeshInstance3D, radio: float) -
 	tween.chain().tween_callback(_tween_cb)
 
 
+## Movimiento directo desde el joystick táctil (no pasa por navegación).
+func mover_tactil(direccion: Vector2) -> void:
+	direccion_tactil = direccion.limit_length(1.0)
+
+
 func _mover(delta: float) -> void:
 	var deseada := Vector3.ZERO
+
+	# Joystick: manda sobre el destino de clic mientras se esté arrastrando.
+	if direccion_tactil.length_squared() > 0.04:
+		var dir := Vector3(direccion_tactil.x, 0.0, direccion_tactil.y)
+		if dir.length_squared() > 0.0004:
+			dir = dir.normalized()
+			deseada = dir * estadisticas.velocidad_movimiento * _multiplicador_velocidad
+			_orientar(dir, delta)
+			_tiene_orden_movimiento = false
+			velocity = velocity.move_toward(deseada, ACELERACION * delta)
+			velocity.y = 0.0
+			move_and_slide()
+			if visual != null:
+				visual.mover(velocity.length())
+			return
 
 	if objetivo_actual != null and not mantener_posicion:
 		var distancia := global_position.distance_to(objetivo_actual.global_position)

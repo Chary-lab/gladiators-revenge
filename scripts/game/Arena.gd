@@ -106,8 +106,13 @@ var _estaba_muerto := false
 var _supabase: Supabase
 var _menu: MenuRed
 var _creador: CrearSala
+## Se pone a true al salir al lobby para que la escena recargada abra el menú.
+static var volver_al_menu := false
 var _maestro: MaestroSalas
 var _tactil: TouchControls
+var _ajustes: Ajustes
+var _tactil_moviendo := false
+var _tactil_ultimo_envio := 0
 var _remota: SalaRemota
 var _api_salas := ""
 var _servidor_publico_url := ""
@@ -116,6 +121,8 @@ var _hora_inicio_partida := 0.0
 
 func _ready() -> void:
 	get_tree().paused = false
+	_ajustes = Ajustes.cargar()
+	_ajustes.aplicar()
 	if "--maestro" in OS.get_cmdline_user_args():
 		_iniciar_maestro()
 		return
@@ -133,13 +140,14 @@ func _ready() -> void:
 		_iniciar_servidor()
 	elif es_cliente:
 		_iniciar_cliente()
-	elif _necesita_menu():
+	elif _necesita_menu() or volver_al_menu:
+		volver_al_menu = false
 		_mostrar_menu()
 	else:
 		_iniciar_local()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args:
 		_capturar()
 
 	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
@@ -1396,7 +1404,10 @@ func _crear_controles_tactiles() -> void:
 	_tactil.name = "Tactil"
 	add_child(_tactil)
 	_tactil.configurar(_jugador)
+	if _ajustes != null:
+		_tactil.aplicar_escala(_ajustes.escala_tactil)
 	_tactil.habilidad.connect(_al_habilidad_tactil)
+	_tactil.mover.connect(_al_mover_tactil)
 	_tactil.interactuar.connect(_interactuar_cercano)
 	_tactil.detener.connect(_al_detener_tactil)
 
@@ -1422,6 +1433,28 @@ func _punto_habilidad() -> Vector3:
 	return origen - _jugador.global_transform.basis.z * 3.0
 
 
+## Joystick: en local mueve directo; en red se manda la orden al servidor a
+## 8 Hz mientras se mantiene la dirección (reutiliza la acción "mover").
+func _al_mover_tactil(direccion: Vector2) -> void:
+	if _jugador == null or _jugador.esta_muerto:
+		return
+	if es_cliente:
+		var ahora := Time.get_ticks_msec()
+		if direccion.length_squared() < 0.04:
+			if _tactil_moviendo:
+				_tactil_moviendo = false
+				red.enviar_accion(&"detener", {})
+			return
+		if ahora - _tactil_ultimo_envio < 120:
+			return
+		_tactil_ultimo_envio = ahora
+		_tactil_moviendo = true
+		var punto := _jugador.global_position + Vector3(direccion.x, 0.0, direccion.y) * 5.0
+		red.enviar_accion(&"mover", {"punto": punto})
+		return
+	_jugador.mover_tactil(direccion)
+
+
 func _al_habilidad_tactil(slot: int) -> void:
 	if _jugador == null or _jugador.esta_muerto:
 		return
@@ -1438,6 +1471,8 @@ func _crear_hud() -> void:
 	add_child(_hud)
 	_hud.configurar(_jugador, _oleadas, _bandera, self)
 	_hud.terminar_partida.connect(_al_pulsar_terminar)
+	_hud.reintentar.connect(_al_reintentar)
+	_hud.salir_lobby.connect(_al_salir_lobby)
 
 	# Barra de vida del jefe (oculta por defecto)
 	_jefe_barra_nodo = Control.new()
@@ -2016,7 +2051,7 @@ func _finalizar(titulo: String, detalle: String) -> void:
 	if _hud != null:
 		_hud.cerrar_talentos()
 		_hud.cerrar_tienda()
-		_hud.mostrar_final("%s\n%s\n\nEnter para reintentar" % [titulo, detalle], es_servidor)
+		_hud.mostrar_final("%s\n%s" % [titulo, detalle], not es_cliente)
 	if es_servidor:
 		if red != null:
 			red.difundir_fin(titulo, detalle)
@@ -2073,6 +2108,29 @@ func _exit_tree() -> void:
 		_maestro.cerrar()
 	if _remota != null and is_instance_valid(_remota):
 		_remota.queue_free()
+
+## Volver a jugar: recarga la escena (en local arranca otra partida; el host de
+## una sala la rearma con la misma configuración).
+func _al_reintentar() -> void:
+	if es_servidor:
+		_al_pulsar_terminar()
+		return
+	if es_cliente and red != null:
+		red.cerrar()
+	get_tree().reload_current_scene()
+
+
+## Salir al lobby: recarga mostrando el menú de red (en Web/APK siempre; en
+## escritorio se fuerza).
+func _al_salir_lobby() -> void:
+	volver_al_menu = true
+	if es_servidor:
+		_al_pulsar_terminar()
+		return
+	if es_cliente and red != null:
+		red.cerrar()
+	get_tree().reload_current_scene()
+
 
 func _al_pulsar_terminar() -> void:
 	if es_servidor:
@@ -2153,7 +2211,8 @@ func _capturar() -> void:
 	var habilidad := "--captura-habilidad" in args
 	var capturar_jefe := "--captura-jefe" in args
 	var tienda := "--captura-tienda" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda
+	var fin := "--captura-fin" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin
 	if combate:
 		var sin_arma: bool = _jugador != null and _jugador.arma_actual != null and _jugador.arma_actual.clase == WeaponItem.Clase.PRISIONERO
 		if sin_arma:
@@ -2186,7 +2245,10 @@ func _capturar() -> void:
 			_hud.alternar_tienda()
 		elif cerca and _camara != null:
 			_camara.size = 7.0
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda) else 8.5).timeout
+		if fin:
+			_finalizar("DERROTA", "Los gladiadores han caído en la arena.")
+			await get_tree().create_timer(1.2).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -2203,6 +2265,8 @@ func _capturar() -> void:
 		ruta = "res://captura_jefe.png"
 	elif tienda:
 		ruta = "res://captura_tienda.png"
+	if fin:
+		ruta = "res://captura_fin.png"
 	elif combate:
 		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))

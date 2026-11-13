@@ -4,7 +4,7 @@ Arena de supervivencia con perspectiva isométrica 2.5D en **Godot 4.7**, pensad
 para publicarse en **Web (HTML5 / WebAssembly)**. IP original: gladiadores orcos
 de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 
-## Estado (v1.5 jugable)
+## Estado (v1.6 jugable)
 
 Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
@@ -13,13 +13,17 @@ renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, é
 legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo**
 para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 
-- 114 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 119 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
-- **Controles táctiles** en móvil: tocar el suelo mueve/ataca y hay botones
-  grandes de Q/W/E/R, INTERACTUAR (F) y DETENER. Las habilidades apuntan al
-  enemigo más cercano.
+- **Controles táctiles** en móvil: joystick de movimiento a la izquierda y
+  botones grandes de Q/W/E/R, INTERACTUAR y DETENER. Las habilidades apuntan al
+  enemigo más cercano. El tamaño de los botones se ajusta desde Ajustes.
+- **Ajustes** (volumen y tamaño táctil) y **aviso de versión nueva** en el menú:
+  comprueba el release de GitHub y abre la descarga con un toque.
+- **Fin de partida** con "Volver a jugar" y "Salir al lobby" (los invitados de
+  una sala solo ven Salir al lobby).
 - Todo el arte es **CC0** (KayKit, Kenney); el código es **MIT**.
 
 ## Ejecutar

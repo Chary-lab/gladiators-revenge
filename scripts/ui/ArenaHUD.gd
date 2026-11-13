@@ -25,6 +25,11 @@ var _hud_arriba: Control
 var _consola: Panel
 var _mensaje: Label
 var _pista: Label
+var _panel_final: PanelContainer
+var _final_titulo: Label
+var _final_detalle: Label
+var _boton_reintentar: Button
+var _boton_lobby: Button
 var _lobby: PanelContainer
 var _lobby_tiempo: Label
 var _lobby_detalle: Label
@@ -77,6 +82,8 @@ var _capa_tooltip: CanvasLayer
 var _comandos_datos: Array = []
 var _comando_activo: Array = [false, false, false, false, false, false, false, false]
 signal terminar_partida
+signal reintentar
+signal salir_lobby
 var _cd_antes: Array = [0.0, 0.0, 0.0, 0.0]
 var _overlay: Panel
 var _overlay_detalle: VBoxContainer
@@ -815,19 +822,67 @@ func mostrar_mensaje(texto: String, duracion := 2.5) -> void:
 	tween.tween_property(_mensaje, "modulate:a", 0.0, 0.6)
 
 
-func mostrar_final(texto: String, mostrar_terminar := false) -> void:
-	_mensaje.text = texto
-	_mensaje.modulate.a = 1.0
-	_mensaje.add_theme_font_size_override("font_size", 32)
-	if mostrar_terminar:
-		var btn := Button.new()
-		btn.text = "TERMINAR"
-		btn.custom_minimum_size = Vector2(200, 44)
-		btn.add_theme_font_size_override("font_size", 16)
-		btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-		btn.offset_top = -120
-		btn.pressed.connect(terminar_partida.emit)
-		_raiz.add_child(btn)
+## Pantalla de fin de partida con botones. `puede_reintentar` se desactiva para
+## los invitados de una sala (solo el servidor puede rearmar la partida).
+func mostrar_final(texto: String, puede_reintentar := true) -> void:
+	_mensaje.modulate.a = 0.0
+	if _panel_final == null:
+		_crear_panel_final()
+	_panel_final.visible = true
+	_final_titulo.text = texto.get_slice("\n", 0)
+	_final_detalle.text = texto.get_slice("\n", 1) if texto.contains("\n") else ""
+	_boton_reintentar.visible = puede_reintentar
+	_boton_lobby.visible = true
+
+
+func _crear_panel_final() -> void:
+	_panel_final = PanelContainer.new()
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0.07, 0.06, 0.05, 0.96)
+	estilo.border_color = BRONCE
+	estilo.set_border_width_all(3)
+	estilo.set_corner_radius_all(10)
+	estilo.content_margin_left = 32
+	estilo.content_margin_right = 32
+	estilo.content_margin_top = 22
+	estilo.content_margin_bottom = 22
+	_panel_final.add_theme_stylebox_override("panel", estilo)
+	_panel_final.position = Vector2(390, 240)
+	_panel_final.custom_minimum_size = Vector2(500, 0)
+	_raiz.add_child(_panel_final)
+
+	var columna := VBoxContainer.new()
+	columna.add_theme_constant_override("separation", 10)
+	_panel_final.add_child(columna)
+
+	_final_titulo = Label.new()
+	_final_titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_final_titulo.add_theme_font_size_override("font_size", 40)
+	_final_titulo.add_theme_color_override("font_color", Color(0.92, 0.72, 0.35))
+	_final_titulo.add_theme_constant_override("outline_size", 8)
+	columna.add_child(_final_titulo)
+
+	_final_detalle = Label.new()
+	_final_detalle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_final_detalle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_final_detalle.custom_minimum_size = Vector2(430, 0)
+	_final_detalle.add_theme_font_size_override("font_size", 15)
+	_final_detalle.add_theme_color_override("font_color", TEXTO)
+	columna.add_child(_final_detalle)
+
+	_boton_reintentar = Button.new()
+	_boton_reintentar.text = "VOLVER A JUGAR"
+	_boton_reintentar.custom_minimum_size = Vector2(0, 48)
+	_boton_reintentar.add_theme_font_size_override("font_size", 19)
+	_boton_reintentar.pressed.connect(func() -> void: reintentar.emit())
+	columna.add_child(_boton_reintentar)
+
+	_boton_lobby = Button.new()
+	_boton_lobby.text = "SALIR AL LOBBY"
+	_boton_lobby.custom_minimum_size = Vector2(0, 44)
+	_boton_lobby.add_theme_font_size_override("font_size", 17)
+	_boton_lobby.pressed.connect(func() -> void: salir_lobby.emit())
+	columna.add_child(_boton_lobby)
 
 
 func establecer_pista(texto: String) -> void:
