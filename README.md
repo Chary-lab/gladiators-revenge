@@ -56,6 +56,8 @@ clientes envían sus acciones y reciben snapshots a 15 Hz.
 - Si un jugador cae y otro sigue vivo, revive automáticamente en 10 s (≈4 s si
   un aliado está cerca) conservando nivel, talentos e inventario.
 - Guía de despliegue y pruebas: [`docs/ONLINE.md`](docs/ONLINE.md).
+- Para que la web cree salas: [`DEPLOY.md`](DEPLOY.md) (servidor maestro en Fly o
+  Render, y cómo apuntar la web con `red/api_url`).
 
 ## Supabase
 

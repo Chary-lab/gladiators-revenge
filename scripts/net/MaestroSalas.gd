@@ -67,11 +67,24 @@ func _puerto_sala(numero: int) -> int:
 	return _puerto_base + numero - 1
 
 
+## URL pública con la que los clientes entran a una sala.
+## En la nube `SERVER_PUBLIC_URL` llega como https://host: el WebSocket necesita
+## wss://, así que se cambia el esquema (antes salía https y el cliente no podía
+## conectar).
+func url_sala(numero: int) -> String:
+	return _url_sala(numero)
+
+
 func _url_sala(numero: int) -> String:
-	var base := _base_publica
+	var base := _base_publica.strip_edges().trim_suffix("/")
 	if base.is_empty():
 		base = "ws://127.0.0.1:%d" % _puerto
-	base = base.replace("wss://", "wss://").replace("ws://", "ws://").trim_suffix("/")
+	elif base.begins_with("https://"):
+		base = "wss://" + base.substr("https://".length())
+	elif base.begins_with("http://"):
+		base = "ws://" + base.substr("http://".length())
+	elif not (base.begins_with("wss://") or base.begins_with("ws://")):
+		base = "wss://" + base
 	return "%s/sala/%d" % [base, numero]
 
 

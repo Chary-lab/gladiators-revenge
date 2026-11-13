@@ -502,6 +502,17 @@ func _ejecutar() -> void:
 		maestro.has_method("iniciar") and maestro.has_method("cerrar"),
 		"el maestro de salas expone iniciar y cerrar"
 	)
+	# La URL pública de la sala debe salir en wss://, no en https://.
+	maestro.set("_base_publica", "https://app.fly.dev")
+	_comprobar(
+		maestro.url_sala(2) == "wss://app.fly.dev/sala/2",
+		"el maestro convierte la URL pública a wss para la sala"
+	)
+	maestro.set("_base_publica", "http://localhost:9000/")
+	_comprobar(
+		maestro.url_sala(1) == "ws://localhost:9000/sala/1",
+		"el maestro también acepta http:// para pruebas locales"
+	)
 	maestro.free()
 
 	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])

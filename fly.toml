@@ -1,4 +1,4 @@
-app = "gladiators-revenge"
+app = "gladiators-revenge-server"
 primary_region = "mad"
 
 [build]
@@ -7,9 +7,9 @@ primary_region = "mad"
 [env]
   PORT = "9080"
   SALAS = "2"
-  # SUPABASE_SERVICE_KEY se carga con: fly secrets set SUPABASE_SERVICE_KEY=...
-  # SERVER_PUBLIC_URL apunta a la URL pública (https://<app>.fly.dev) y el
-  # maestro la reparte como wss://<app>.fly.dev/sala/<n>.
+  # SUPABASE_SERVICE_KEY y SERVER_PUBLIC_URL se cargan como secretos:
+  #   .\desplegar.ps1  (o: fly secrets set SUPABASE_SERVICE_KEY=... SERVER_PUBLIC_URL=https://<app>.fly.dev)
+  # El maestro reparte la URL como wss://<app>.fly.dev/sala/<n>.
 
 [http_service]
   internal_port = 9080

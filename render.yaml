@@ -4,8 +4,8 @@ services:
     env: docker
     plan: free
     envVars:
-      - key: PORT
-        value: 9080
+      # Render inyecta PORT solo; no lo definas a mano o el servicio escucha
+      # en un puerto que Render no enruta (502).
       - key: SALAS
         value: "1"     # el plan free da 512 MB: una sala por instancia
       - key: SUPABASE_SERVICE_KEY
