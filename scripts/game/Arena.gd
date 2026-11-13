@@ -133,6 +133,35 @@ func _ready() -> void:
 	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args:
 		_capturar()
 
+	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
+	# al invocar al espíritu o al lanzar ciertas habilidades: se precarga aquí.
+	_precalentar_recursos()
+
+
+func _precalentar_recursos() -> void:
+	# En headless las pruebas usan el renderer dummy: instanciar las escenas solo
+	# escupe "Parameter \"material\" is null" y no calienta nada útil.
+	if DisplayServer.get_name() == "headless":
+		return
+	var rutas: Array = [
+		"res://assets/kaykit/skeletons/Skeleton_Warrior.glb",
+		"res://assets/kaykit/skeletons/Skeleton_Rogue.glb",
+		"res://assets/kaykit/skeletons/Skeleton_Mage.glb",
+		"res://assets/kaykit/adventurers/Knight.glb",
+		"res://assets/kaykit/adventurers/Barbarian.glb",
+	]
+	CharacterVisual.precargar(rutas)
+	var escenas: Array[PackedScene] = []
+	for arma in WeaponItem.crear_catalogo_base():
+		if arma.escena_visual != null:
+			escenas.append(arma.escena_visual)
+		for hab in arma.habilidades:
+			if hab != null and hab.escena_efecto != null:
+				escenas.append(hab.escena_efecto)
+	for escena in escenas:
+		var nodo := escena.instantiate()
+		nodo.free()
+
 
 func _leer_modo_red() -> void:
 	var args := OS.get_cmdline_user_args()

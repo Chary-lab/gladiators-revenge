@@ -38,10 +38,33 @@ var _arma: Node3D
 var _tinte := Color.WHITE
 
 
+## Caché de escenas por ruta: `load()` de un GLB cuesta ~55 ms la primera
+## vez (medido) y eso se notaba como tirón al invocar al espíritu.
+static var _escenas: Dictionary = {}
+
+
+## Carga en disco una o varias rutas para que el primer uso sea instantáneo.
+static func precargar(rutas: Array) -> void:
+	for ruta in rutas:
+		_obtener_escena(str(ruta))
+
+
+static func _obtener_escena(ruta: String) -> PackedScene:
+	# Con el renderer dummy (headless) la caché estática no aporta velocidad y
+	# deja una retahíla de "Parameter \"material\" is null" en el log de pruebas.
+	if DisplayServer.get_name() == "headless":
+		return load(ruta) as PackedScene
+	if _escenas.has(ruta):
+		return _escenas[ruta] as PackedScene
+	var escena := load(ruta) as PackedScene
+	_escenas[ruta] = escena
+	return escena
+
+
 ## Crea el visual. `perfil` permite elegir animaciones según el tipo de modelo:
 ##   "barbaro", "esqueleto", "caballero" o "mago".
 func configurar(ruta_modelo: String, tinte: Color = Color.WHITE, perfil: String = "barbaro") -> CharacterVisual:
-	var escena := load(ruta_modelo) as PackedScene
+	var escena := _obtener_escena(ruta_modelo)
 	if escena == null:
 		push_error("CharacterVisual: no se pudo cargar " + ruta_modelo)
 		return self
