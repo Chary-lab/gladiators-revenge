@@ -159,10 +159,15 @@ func _parse_servidores(code: int, body: String, callback: Callable) -> void:
 func _peticion(
 	metodo: int,
 	ruta: String,
-	cuerpo: String,
+	cuerpo_json: String,
 	usar_service: bool,
 	callback: Callable
 ) -> void:
+	# En Web el HTTPRequest nativo no llega a la red (falla con código 0): se usa
+	# el fetch del navegador a través de JavaScriptBridge.
+	if OS.has_feature("web"):
+		_peticion_web(metodo, ruta, cuerpo_json, usar_service, callback)
+		return
 	var clave := _service if usar_service else _anon
 	if _base.is_empty() or clave.is_empty():
 		if callback.is_valid():
@@ -192,12 +197,61 @@ func _peticion(
 	elif not es_web:
 		cabeceras.append("Prefer: return=minimal")
 
-	var error := http.request(_base + ruta, cabeceras, metodo, cuerpo)
+	var error := http.request(_base + ruta, cabeceras, metodo, cuerpo_json)
 	if error != OK:
 		http.queue_free()
 		ultimo_error = "red: %s" % error_string(error)
 		if callback.is_valid():
 			callback.call(0, "Error de red: %s" % error_string(error))
+
+
+var _web_seq := 0
+var _web_pendientes := {}
+var _web_callback
+
+
+func _peticion_web(metodo: int, ruta: String, cuerpo_json: String, usar_service: bool, callback: Callable) -> void:
+	var clave := _service if usar_service else _anon
+	if _base.is_empty() or clave.is_empty():
+		if callback.is_valid():
+			callback.call(0, "Supabase no configurado")
+		return
+	if _web_callback == null:
+		_web_callback = JavaScriptBridge.create_callback(_al_responder_web)
+		JavaScriptBridge.get_interface("window").__supabase_resp = _web_callback
+	_web_seq += 1
+	var id := _web_seq
+	_web_pendientes[id] = callback
+	var cabeceras := {
+		"apikey": clave,
+		"Authorization": "Bearer " + clave,
+		"Accept": "application/json",
+	}
+	if metodo == HTTPClient.METHOD_POST:
+		cabeceras["Content-Type"] = "application/json"
+		cabeceras["Prefer"] = "resolution=merge-duplicates,return=minimal"
+	# El cuerpo ya llega como texto JSON: reenviarlo tal cual (no se re-codifica).
+	var texto_cuerpo := "null" if metodo == HTTPClient.METHOD_GET else cuerpo_json
+	var verbo := "GET" if metodo == HTTPClient.METHOD_GET else "POST"
+	var js := (
+		"(async () => { try { const r = await fetch(%s, {method: %s, headers: %s, body: %s});"
+		+ " const t = await r.text(); window.__supabase_resp(%d, r.status, t); }"
+		+ " catch (e) { window.__supabase_resp(%d, 0, String(e)); } })();"
+	) % [
+		JSON.stringify(_base + ruta), JSON.stringify(verbo), JSON.stringify(cabeceras),
+		texto_cuerpo, id, id,
+	]
+	JavaScriptBridge.eval(js, true)
+
+
+func _al_responder_web(args: Array) -> void:
+	var id := int(args[0])
+	var codigo := int(args[1])
+	var texto := str(args[2])
+	var callback = _web_pendientes.get(id, null)
+	_web_pendientes.erase(id)
+	if callback is Callable and callback.is_valid():
+		callback.call(codigo, texto)
 
 
 func _al_responder(
