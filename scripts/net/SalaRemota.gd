@@ -14,6 +14,7 @@ var _api := ""
 var _callback
 var _secuencia := 0
 var _pidiendo := false
+var _reintentos := 0
 
 
 func configurar(url_api: String) -> void:
@@ -53,7 +54,7 @@ func _al_respuesta_web(args: Array) -> void:
 
 func _crear_nativo() -> void:
 	var http := HTTPRequest.new()
-	http.timeout = 15.0
+	http.timeout = 25.0
 	add_child(http)
 	http.request_completed.connect(_al_respuesta_nativa.bind(http))
 	var error := http.request(
@@ -78,7 +79,15 @@ func _interpretar(codigo: int, texto: String) -> void:
 	_pidiendo = false
 	var datos = JSON.parse_string(texto)
 	if codigo == 200 and datos is Dictionary and datos.has("url"):
+		_reintentos = 0
 		lista.emit(str(datos["url"]))
+		return
+	# Un fallo justo después de un despliegue (o al despertar la máquina) se
+	# arregla solo con un segundo intento.
+	if _reintentos < 1:
+		_reintentos += 1
+		await get_tree().create_timer(2.5).timeout
+		crear()
 		return
 	if datos is Dictionary and datos.has("error"):
 		fallo.emit(str(datos["error"]))
