@@ -149,6 +149,19 @@ En Render: crear el Web Service desde el `Dockerfile`, cargar
 Después, exportar la web con `red/api_url` apuntando a esa URL (o abrir
 `https://<pages>/?api=https://<app>.fly.dev`).
 
+## Sala de espera
+
+Al entrar a una sala la partida espera 30 s antes de la primera oleada
+(`WaveManager.espera_inicial`), que arrancan cuando entra el primer jugador. El
+HUD muestra un panel central con "SALA DE ESPERA", la cuenta atrás y
+"N/3 gladiadores · elegí tu campeón en la armería". Si alguien entra con menos de
+8 s restantes, `asegurar_preparacion` alarga el tiempo para que llegue a elegir
+campeón. Al empezar el combate el panel desaparece solo.
+
+El menú de red ya no pide URLs: lista las salas activas (un clic para entrar),
+JUGAR SOLO y CREAR SALA. `?servidor=wss://…` sigue sirviendo para abrir un enlace
+directo, pero no es necesario.
+
 ## Pruebas de red
 
 ```powershell

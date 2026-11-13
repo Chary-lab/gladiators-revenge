@@ -4,16 +4,16 @@ Arena de supervivencia con perspectiva isométrica 2.5D en **Godot 4.7**, pensad
 para publicarse en **Web (HTML5 / WebAssembly)**. IP original: gladiadores orcos
 de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 
-## Estado (v1.2 jugable)
+## Estado (v1.4 jugable)
 
 Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
 anti-camping, talentos con rangos, skins, HUD con retrato 3D y miniaturas
 renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, épicos y
-legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo** para hasta 3
-gladiadores; sin guardado todavía.
+legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo**
+para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 
-- 98 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 111 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
@@ -394,8 +394,16 @@ El juego usa el renderizador **GL Compatibility** y vista 1280×720 con
 
 El cooperativo online ya está implementado: servidor Godot headless
 autoritativo, WebSocket y snapshots. Hasta 3 jugadores con una clase distinta
-cada uno; el servidor rechaza repetir clase o cambiarla. La guía de ejecución,
-pruebas y despliegue está en [`docs/ONLINE.md`](docs/ONLINE.md).
+cada uno; el servidor rechaza repetir clase o cambiarla.
+
+- **Salas en la nube**: un maestro (`--maestro`) levanta varias partidas en un
+  contenedor y reparte a los jugadores con `POST /salas`. La web y el APK crean
+  sala con un clic; en escritorio el anfitrión puede levantar la suya con túnel.
+- **Sala de espera de 30 s** con cuenta atrás y "N/3 gladiadores"; si alguien
+  entra con menos de 8 s, la preparación se alarga.
+- El menú de red solo muestra la lista de salas: no hay que pegar URLs.
+- Guía de ejecución, pruebas y despliegue: [`docs/ONLINE.md`](docs/ONLINE.md) y
+  [`DEPLOY.md`](DEPLOY.md).
 
 ## Rendimiento web
 

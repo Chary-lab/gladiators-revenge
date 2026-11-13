@@ -5,6 +5,8 @@ config_version=5
 
 [application]
 
+config/version="1.4.0"
+
 config/name="Gladiators Revenge"
 config/icon="res://icon.svg"
 config/description="Arena de supervivencia cooperativa isométrica para Web (Godot 4)."
