@@ -22,6 +22,75 @@ var solo_visual = false
 ## Partículas de Kenney para efectos visuales de habilidad
 var _particulas_activas = []
 
+## Cachés compartidos entre lanzamientos. Crear una malla o un material por
+## golpe es barato, pero no gratis: ~18 materiales y ~18 tweens por habilidad
+## sumaban 6-12 ms a ese frame. Los materiales animados por Tween se duplican
+## del caché antes de asignarlos; los estáticos se comparten.
+static var _meshes: Dictionary = {}
+static var _materiales: Dictionary = {}
+
+
+## Devuelve una malla del caché, creándola la primera vez. Las mallas son
+## inmutables: se comparten entre todos los efectos activos.
+static func _malla(clave: String, creador: Callable) -> Mesh:
+	if _meshes.has(clave):
+		return _meshes.get(clave) as Mesh
+	var malla := creador.call() as Mesh
+	_meshes[clave] = malla
+	return malla
+
+
+static func _cilindro(radio_superior: float, radio_inferior: float, altura: float, segmentos: int) -> Mesh:
+	var m := CylinderMesh.new()
+	m.top_radius = radio_superior
+	m.bottom_radius = radio_inferior
+	m.height = altura
+	m.radial_segments = segmentos
+	return m
+
+
+static func _toro(radio_interior: float, radio_exterior: float, anillos: int, segmentos: int) -> Mesh:
+	var t := TorusMesh.new()
+	t.inner_radius = radio_interior
+	t.outer_radius = radio_exterior
+	t.rings = anillos
+	t.ring_segments = segmentos
+	return t
+
+
+static func _esfera(radio: float, segmentos_radiales: int, anillos: int, hemisferio: bool = false) -> Mesh:
+	var s := SphereMesh.new()
+	s.radius = radio
+	s.radial_segments = segmentos_radiales
+	s.rings = anillos
+	s.is_hemisphere = hemisferio
+	return s
+
+
+static func _cubo(tamano: Vector3) -> Mesh:
+	var c := BoxMesh.new()
+	c.size = tamano
+	return c
+
+
+## Material base por color, sin animar. Se comparte entre efectos; si un Tween
+## va a modificarlo, duplicar antes de asignar con _material(..., true).
+static func _material(color: Color, animado: bool = false) -> StandardMaterial3D:
+	var clave := color.to_html()
+	var base: StandardMaterial3D = null
+	if _materiales.has(clave):
+		base = _materiales.get(clave) as StandardMaterial3D
+	else:
+		base = StandardMaterial3D.new()
+		base.albedo_color = color
+		base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		base.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_materiales[clave] = base
+	if animado:
+		return base.duplicate() as StandardMaterial3D
+	return base
+
+
 ## Carga una textura de partícula de Kenney según el tipo.
 func _cargar_textura_particula(tipo: StringName) -> Texture2D:
 	var rutas = {
@@ -346,50 +415,32 @@ func _esta_provocado(enemigo: Node3D) -> bool:
 
 
 func _construir_visual() -> void:
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(_color.r, _color.g, _color.b, 0.32)
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var material = _material(Color(_color.r, _color.g, _color.b, 0.32))
 	material.emission_enabled = true
 	material.emission = _color
 	material.emission_energy_multiplier = 2.0
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 
 	var disco = MeshInstance3D.new()
-	var malla = CylinderMesh.new()
-	malla.top_radius = _radio
-	malla.bottom_radius = _radio
-	malla.height = 0.05
-	malla.radial_segments = 32
-	disco.mesh = malla
+	disco.mesh = _malla("disco|%f|%f|%f|%d" % [_radio, _radio, 0.05, 32], Callable(self, "_cilindro").bind(_radio, _radio, 0.05, 32))
 	disco.position.y = 0.05
 	disco.material_override = material
 	add_child(disco)
 
 	# Anillo nítido que marca el radio exacto.
 	var anillo = MeshInstance3D.new()
-	var toro = TorusMesh.new()
-	toro.inner_radius = maxf(0.05, _radio - 0.12)
-	toro.outer_radius = _radio
-	toro.rings = 40
-	toro.ring_segments = 8
-	anillo.mesh = toro
+	anillo.mesh = _malla("anillo|%f|%f|%d|%d" % [maxf(0.05, _radio - 0.12), _radio, 40, 8], Callable(self, "_toro").bind(maxf(0.05, _radio - 0.12), _radio, 40, 8))
 	anillo.position.y = 0.09
 	anillo.material_override = material
 	add_child(anillo)
 
 	# Onda de expansión al lanzar.
 	var onda = MeshInstance3D.new()
-	var toro_onda = TorusMesh.new()
-	toro_onda.inner_radius = 0.82
-	toro_onda.outer_radius = 1.0
-	toro_onda.rings = 32
-	toro_onda.ring_segments = 6
-	onda.mesh = toro_onda
+	onda.mesh = _malla("onda|%f|%f|%d|%d" % [0.82, 1.0, 32, 6], Callable(self, "_toro").bind(0.82, 1.0, 32, 6))
 	onda.position.y = 0.12
 	onda.scale = Vector3.ONE * 0.25
-	var material_onda = material.duplicate() as StandardMaterial3D
-	material_onda.albedo_color = Color(_color.r, _color.g, _color.b, 0.75)
+	var material_onda = _material(Color(_color.r, _color.g, _color.b, 0.75), true)
+	material_onda.cull_mode = BaseMaterial3D.CULL_DISABLED
 	onda.material_override = material_onda
 	add_child(onda)
 	var tween = onda.create_tween()
@@ -401,30 +452,20 @@ func _construir_visual() -> void:
 	# Domo translúcido para zonas persistentes (estandarte, raíces).
 	if _duracion > 0.0:
 		var domo = MeshInstance3D.new()
-		var esfera = SphereMesh.new()
-		esfera.radius = _radio
-		esfera.height = _radio
-		esfera.is_hemisphere = true
-		esfera.radial_segments = 32
-		esfera.rings = 12
+		var esfera = _esfera(_radio, 32, 12, true)
 		domo.mesh = esfera
 		domo.position.y = 0.02
-		var material_domo = material.duplicate() as StandardMaterial3D
-		material_domo.albedo_color = Color(_color.r, _color.g, _color.b, 0.10)
+		var material_domo = _material(Color(_color.r, _color.g, _color.b, 0.10), false)
 		material_domo.emission_energy_multiplier = 1.0
+		material_domo.cull_mode = BaseMaterial3D.CULL_DISABLED
 		domo.material_override = material_domo
 		add_child(domo)
 
 	# Destello central al lanzar la habilidad.
 	var destello = MeshInstance3D.new()
-	var esfera_destello = SphereMesh.new()
-	esfera_destello.radius = _radio * 0.15
-	esfera_destello.radial_segments = 16
-	esfera_destello.rings = 8
-	destello.mesh = esfera_destello
+	destello.mesh = _esfera(_radio * 0.15, 16, 8)
 	destello.position.y = 0.08
-	var material_destello = StandardMaterial3D.new()
-	material_destello.albedo_color = _color
+	var material_destello = _material(_color, true)
 	material_destello.emission_enabled = true
 	material_destello.emission = _color
 	material_destello.emission_energy_multiplier = 4.0
@@ -442,13 +483,10 @@ func _construir_visual() -> void:
 	if _duracion <= 0.0:
 		for i in range(6):
 			var particula = MeshInstance3D.new()
-			var cubo = BoxMesh.new()
-			cubo.size = Vector3(0.12, 0.12, 0.12)
-			particula.mesh = cubo
+			particula.mesh = _cubo(Vector3(0.12, 0.12, 0.12))
 			var angulo = float(i) * TAU / 6.0
 			var dir = Vector3(cos(angulo), 0.4, sin(angulo))
-			var material_p = StandardMaterial3D.new()
-			material_p.albedo_color = _color
+			var material_p = _material(_color, true)
 			material_p.emission_enabled = true
 			material_p.emission = _color
 			material_p.emission_energy_multiplier = 3.0
