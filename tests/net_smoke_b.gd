@@ -28,6 +28,22 @@ func _esperar_hasta(condicion: Callable, maximo := 600) -> bool:
 	return bool(condicion.call())
 
 
+## Espera a que lleguen N snapshots del servidor: espera por respuesta de red,
+## no por un sleep fijo.
+func _esperar_snapshots(red, cantidad: int, maximo := 300) -> bool:
+	var vistos := [0]
+	var contador := func(_datos: Dictionary) -> void: vistos[0] += 1
+	red.snapshot_recibido.connect(contador)
+	var ok := false
+	for i in maximo:
+		if vistos[0] >= cantidad:
+			ok = true
+			break
+		await create_timer(0.01).timeout
+	red.snapshot_recibido.disconnect(contador)
+	return ok
+
+
 func _init() -> void:
 	print("== Net smoke B: segundo cliente ==")
 	var escena: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
@@ -51,7 +67,8 @@ func _init() -> void:
 	)
 
 	red.enviar_clase(&"bastion")
-	await create_timer(0.8).timeout
+	# Negativa con espera por respuesta de red (3 snapshots), sin sleep fijo.
+	await _esperar_snapshots(red, 3)
 	_comprobar(
 		jugador.arma_actual == null or jugador.arma_actual.id_clase() != &"bastion",
 		"un segundo jugador no puede repetir el Bastión"
@@ -88,9 +105,9 @@ func _init() -> void:
 		await _esperar_hasta(func() -> bool: return jugador.esta_muerto and jugador.revive_en > 0.0, 300),
 		"el jugador cae y entra en cuenta atrás de revivir"
 	)
-	await create_timer(12.0).timeout
+	# La cuenta atrás dura 10 s: se sondea el estado (tope 25 s) en vez de dormir 12 s.
 	_comprobar(
-		not jugador.esta_muerto,
+		await _esperar_hasta(func() -> bool: return not jugador.esta_muerto, 2500),
 		"el jugador revive mientras un compañero sigue vivo"
 	)
 	_comprobar(jugador.salud_actual > 0.0, "revive con vida")

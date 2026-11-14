@@ -34,6 +34,22 @@ func _esperar_hasta(condicion: Callable, maximo := 600) -> bool:
 	return bool(condicion.call())
 
 
+## Espera a que lleguen N snapshots del servidor: espera por respuesta de red,
+## no por un sleep fijo.
+func _esperar_snapshots(red, cantidad: int, maximo := 300) -> bool:
+	var vistos := [0]
+	var contador := func(_datos: Dictionary) -> void: vistos[0] += 1
+	red.snapshot_recibido.connect(contador)
+	var ok := false
+	for i in maximo:
+		if vistos[0] >= cantidad:
+			ok = true
+			break
+		await create_timer(0.01).timeout
+	red.snapshot_recibido.disconnect(contador)
+	return ok
+
+
 func _init() -> void:
 	print("== Net smoke: cliente cooperativo ==")
 	var escena: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
@@ -71,8 +87,11 @@ func _init() -> void:
 
 	var posicion_inicial: Vector3 = jugador.global_position
 	red.enviar_accion(&"mover", {"punto": Vector3(18.0, 0.0, 0.0)})
-	await create_timer(2.5).timeout
-	_comprobar(jugador.global_position.distance_to(posicion_inicial) > 0.4, "el servidor mueve al gladiador")
+	# Se sondea el avance real en vez de dormir 2,5 s.
+	_comprobar(
+		await _esperar_hasta(func() -> bool: return jugador.global_position.distance_to(posicion_inicial) > 0.4, 400),
+		"el servidor mueve al gladiador"
+	)
 
 	red.enviar_clase(&"bastion")
 	_comprobar(
@@ -81,7 +100,9 @@ func _init() -> void:
 	)
 
 	red.enviar_clase(&"filo")
-	await create_timer(0.6).timeout
+	# Comprobación negativa: se espera la respuesta del servidor (3 snapshots) en
+	# lugar de dormir 0,6 s fijos.
+	await _esperar_snapshots(red, 3)
 	_comprobar(
 		jugador.arma_actual.id_clase() == &"bastion",
 		"un jugador no puede escoger una segunda clase"

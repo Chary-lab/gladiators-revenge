@@ -1,0 +1,137 @@
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "scenes/**"
+      - "tests/**"
+      - "project.godot"
+      - ".github/workflows/pruebas.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "scenes/**"
+      - "tests/**"
+      - "project.godot"
+      - ".github/workflows/pruebas.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Una suite por runner: el paralelismo es entre jobs, no dentro de un job.
+  suite:
+    name: ${{ matrix.suite }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: smoke
+            script: res://tests/smoke_test.gd
+          - suite: regression
+            script: res://tests/regression_test.gd
+          - suite: wave
+            script: res://tests/wave_sim.gd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+
+      # El import se hace en serie antes de las pruebas: .godot/ no viaja en git.
+      - name: Importar proyecto
+        run: godot --headless --editor --quit
+
+      - name: Ejecutar ${{ matrix.suite }}
+        run: |
+          set -o pipefail
+          godot --headless --script "${{ matrix.script }}" 2>&1 | tee "salida-${{ matrix.suite }}.log"
+
+      - name: Comprobar resumen
+        run: |
+          ultima=$(grep -E "^== " "salida-${{ matrix.suite }}.log" | tail -1)
+          echo "$ultima"
+          if [ -z "$ultima" ]; then
+            echo "::error::La suite ${{ matrix.suite }} no imprimió su resumen"
+            exit 1
+          fi
+          if ! echo "$ultima" | grep -q "0 fallos"; then
+            echo "::error::La suite ${{ matrix.suite }} tiene fallos"
+            exit 1
+          fi
+          if grep -qE "^[[:space:]]+FALLO " "salida-${{ matrix.suite }}.log"; then
+            echo "::error::La suite ${{ matrix.suite }} tiene fallos"
+            exit 1
+          fi
+
+      - name: Subir registro
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pruebas-${{ matrix.suite }}
+          path: salida-${{ matrix.suite }}.log
+          if-no-files-found: warn
+
+  # El cooperativo necesita servidor + dos clientes vivos a la vez: un solo job.
+  red:
+    name: red
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: suite
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+
+      - name: Importar proyecto
+        run: godot --headless --editor --quit
+
+      - name: Servidor + cliente A + cliente B
+        run: |
+          godot --headless -- --servidor --puerto=9080 --red-rapida > servidor.log 2>&1 &
+          servidor=$!
+          for i in $(seq 1 100); do
+            if (exec 3<>/dev/tcp/127.0.0.1/9080) 2>/dev/null; then break; fi
+            sleep 0.2
+          done
+          # A se queda 40 s vivo: B necesita un compañero para probar el revivir.
+          godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9080 --esperar=40 > cliente-a.log 2>&1 &
+          cliente_a=$!
+          sleep 5
+          godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1:9080 > cliente-b.log 2>&1
+          codigo_b=$?
+          wait "$cliente_a" || true
+          kill "$servidor" 2>/dev/null || true
+          cat cliente-a.log cliente-b.log
+          grep -E "^== " cliente-a.log cliente-b.log
+          if grep -qE "^[[:space:]]+FALLO " cliente-a.log cliente-b.log; then
+            echo "::error::La suite de red tiene fallos"
+            exit 1
+          fi
+          exit $codigo_b
+
+      - name: Subir registros
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pruebas-red
+          path: |
+            servidor.log
+            cliente-a.log
+            cliente-b.log
+          if-no-files-found: warn

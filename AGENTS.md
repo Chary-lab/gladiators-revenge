@@ -7,7 +7,7 @@ Godot 4.7 / GDScript arena survival, GL Compatibility, Web/HTML5 target. Code, c
 - The git repo is `D:\Orc Gladiators`. `D:\Opencode` is only the OpenCode runtime, not this project.
 - `scenes/main.tscn` is just a `Node3D` root with `Arena.gd`. `scripts/game/Arena.gd` builds the map, safe zone, navmesh, player, camera, waves, HUD and shops **in code**. Edit scripts, not a scene tree.
 - Composition root is `scripts/game/Arena.gd`; HUD is `scripts/ui/ArenaHUD.gd`; wave state is `scripts/game/WaveManager.gd`.
-- `tests/inspect_crear_sala.gd` is a manual probe of the Cloudflare tunnel (needs network); `tests/inspect_lobby.gd` probes the Supabase lobby (lista de servidores tal como la ve el menú). Neither is part of the suite. The rest of `tests/` is: `smoke_test.gd`, `wave_sim.gd`, `net_smoke.gd` (client A) and `net_smoke_b.gd` (client B).
+- `tests/inspect_crear_sala.gd` is a manual probe of the Cloudflare tunnel (needs network); `tests/inspect_lobby.gd` probes the Supabase lobby (lista de servidores tal como la ve el menú). Neither is part of the suite. The rest of `tests/` is: `smoke_test.gd` (smoke crítico, 15 checks), `regression_test.gd` (cobertura completa, hereda del anterior), `wave_sim.gd`, `net_smoke.gd` (client A) and `net_smoke_b.gd` (client B).
 
 ## Commands
 
@@ -16,8 +16,11 @@ Run from the repo root. `godot` resolves to the winget shim; if missing, use `C:
 ```powershell
 godot --version
 godot --headless --editor --quit           # import after new assets/scripts
-godot --headless --script res://tests/smoke_test.gd
+godot --headless --script res://tests/smoke_test.gd          # smoke crítico (15 checks, ~2 s)
+godot --headless --script res://tests/regression_test.gd     # cobertura completa (135 checks)
 godot --headless --script res://tests/wave_sim.gd
+./tools/pruebas.ps1 -Suite all                                # suites en paralelo
+./tools/pruebas.ps1 -Suite red                                # servidor + clientes A/B
 godot --headless --script res://tests/balance_report.gd   # tabla de balance (no es prueba)
 godot --headless --quit-after 600          # normal boot smoke run
 godot --headless -- --servidor --puerto=9080 [--red-rapida]
@@ -32,13 +35,15 @@ godot -- --captura-apodo                   # modal de apodo
 godot -- --tactil --captura-ficha           # HUD táctil con la ficha del campeón abierta
 ```
 
-- Expected baseline: smoke **135/135**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **15/15**, regression **135/135**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- `tests/smoke_test.gd` corre en modo smoke (solo las comprobaciones críticas: arranque, identidad, Supabase/salas, tienda/forja, progresión, combate, cierre). `tests/regression_test.gd` hereda de ese script y fuerza el modo completo; no dupliques cuerpo de pruebas, añade el check con `_comprobar(..., true)` si es crítico o sin el tercer argumento si es regresión.
+- Los bloques caros de regresión (anti-camping, tema, UI de tienda/pausa/iconos, auras, táctil, ajustes) están dentro de `if _completo():`. Un check crítico no debe depender de estado que solo crea un bloque de regresión.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
-- En `--headless` los fotogramas corren a miles por segundo: `await process_frame` no espera nada. Los tests esperan con `create_timer(0.01)` (`_esperar_hasta`) o `create_timer(segundos)`.
+- En `--headless` los fotogramas corren a miles por segundo con `process_frame`, pero `physics_frame` avanza a 60/s: las esperas de gameplay usan `_esperar_hasta(cond, max_fotogramas)` sondeando estado (oleada, vida del enemigo, `esta_congelado()`, snapshots), nunca un número fijo de fotogramas. En los tests de red `_esperar_hasta` espera 10 ms por vuelta y `_esperar_snapshots(red, n)` espera respuesta del servidor.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
 - `--script` mode does **not** register autoloads. `Sfx` is a static `RefCounted`; do not convert it to an autoload.
-- There is no unit-test framework. Add checks inside `tests/smoke_test.gd` or create another `SceneTree` script and run it with `--headless --script`.
-- Do not run smoke and wave sim concurrently; both instantiate the full arena.
+- There is no unit-test framework. Add checks inside `tests/smoke_test.gd` (marca `true` si son críticos) o crea otro script `SceneTree` y ejecútalo con `--headless --script`.
+- Las suites comparten código pero no proceso: `tools/pruebas.ps1` las lanza en paralelo con `APPDATA`/`HOME`/`TEMP` aislados por worker (los tests escriben `user://ajustes.cfg` y `user://perfil.cfg`). El import se hace una vez en serie antes de lanzar los jobs; no lances dos `--editor --quit` a la vez.
 - Captures are real-time: `--quit-after` can end the process before the capture timer. Use the capture command without it.
 
 ## Architecture invariants
@@ -92,10 +97,19 @@ godot -- --tactil --captura-ficha           # HUD táctil con la ficha del campe
 - `HTTPRequest` **no funciona en la build Web** (falla con código 0 sin llegar a la red): en `OS.has_feature("web")` hay que usar `JavaScriptBridge` + `fetch` (ver `Supabase._peticion_web` y `SalaRemota._crear_web`).
 - Supabase is optional infrastructure: client uses `anon` key + RLS to list `servidores`; only the headless server uses `SUPABASE_SERVICE_KEY` from env. Never put the service key or the Postgres connection string in the client, `project.godot` or git. Migration: `supabase/migrations/0001_coop.sql`.
 
+## Balance y contenido
+
+- Daño de ataque: `GladiatorStats.escalar_ataque_principal(arma, atributo)` = `(arma + atributo*0.45) * (1 + (nivel-1)*0.09) * MULT_DANO_POR_CLASE`; `rango_dano_ataque()` da mín/máx con `DANO_VARIANZA` (0.20) alrededor de esa media. `velocidad_ataque` = `clamp(0.15 + AGILIDAD*0.05 + (nivel-1)*0.025 + bono, 0.15, 2.20)`. No hardcodees medias: el smoke y `balance_report.gd` leen estas funciones.
+- 20 oleadas: `BalanceOlas.PERFILES` fija arquetipos, cantidades y jefes (5/10/15/20); `ArenaEnemy.ARQUETIPOS` da estadísticas y `ArenaEnemy.VISUALES` el modelo. Un arquetipo nuevo necesita entrada en las tres tablas o el smoke falla en "cada arquetipo tiene estadísticas y modelo visual".
+- Catálogo de objetos: 6 componentes, 6 intermedios (forja 80), 3 épicos (180) y 6 legendarios (forja 350–500). Sin ids repetidos y todo equipo con bonificaciones.
+- Auras: `ItemData.aura` es un diccionario (`dano_aliados`, `robo_vida_aliados`, `regeneracion_aliados`, `velocidad_ataque_aliados`); `GladiatorController.auras_cercanas()` suma las de los aliados a `RADIO_AURA` (10 m) y `InventoryComponent.auras()` las acumula por clave. El portador recibe la suya y las claves no se mezclan.
+- Deuda conocida: `Arena.gd` (~1650 líneas) y `GladiatorController.gd` (~1470) son god objects que mezclan mundo, economía, combate y UI. Antes de añadir lógica, mira si cabe en un nodo propio y no en `Arena`.
+
 ## UI / rendering gotchas
 
 - `ArenaHUD.ALTO_CONSOLA` is **185 px** and the README matches. Console layout is five modules: square minimap, live portrait + HP/MP, merged gladiator card (combat + attributes), 2×3 inventory, 4×3 command/ability grid. Buttons are icon-only by design; key badges sit top-left and ability ranks show as gold pips.
 - `IconStudio.gd` renders 64×64 `SubViewport` thumbnails with `UPDATE_ONCE` and caches them. `ItemModelFactory.gd` builds the original primitive models. In `--headless` they fall back to procedural icons, so smoke tests do not prove the visual result.
+- La fuente por defecto de Godot no dibuja ◆ (U+25C6), ✔ (U+2714) ni ✘ (U+2718): salen como cajas tofu. La UI usa • × · − y el smoke comprueba que `ShopPanel.gd`/`ArenaHUD.gd` no las reintroducen.
 - This project uses **GL Compatibility**. Do not use screen-space AA (FXAA/TAA) or Forward+/Mobile-only features; `screen_space_aa` caused browser console errors. MSAA is fine.
 - After UI changes, verify with a windowed `--captura-combate`; after export, verify in Edge with zero console errors.
 
@@ -122,12 +136,13 @@ playwright-cli.cmd open http://127.0.0.1:8137/ --browser msedge
 ## Verification gate
 
 1. `godot --headless --editor --quit`
-2. `godot --headless --script res://tests/smoke_test.gd` → 135/135
-3. `godot --headless --script res://tests/wave_sim.gd` → 3/3
-4. `godot --headless --quit-after 600` → no script/parse errors
-5. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`
-6. Web change → export, serve, Edge console 0 errors. The Web menu must connect to a live `--servidor`.
-7. Online change → run server + `net_smoke` + `net_smoke_b`; expect 11/11 and 12/12.
+2. `godot --headless --script res://tests/smoke_test.gd` → 15/15
+3. `godot --headless --script res://tests/regression_test.gd` → 135/135
+4. `godot --headless --script res://tests/wave_sim.gd` → 3/3
+5. `godot --headless --quit-after 600` → no script/parse errors
+6. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`
+7. Web change → export, serve, Edge console 0 errors. The Web menu must connect to a live `--servidor`.
+8. Online change → run server + `net_smoke` + `net_smoke_b`; expect 11/11 and 12/12.
 
 Commits use conventional Spanish messages (`feat(v2): …`, `feat(combate): …`) with no signatures. Do not commit generated builds, captures or `.godot/`.
 

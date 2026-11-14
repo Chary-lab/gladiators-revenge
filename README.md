@@ -341,7 +341,8 @@ scripts/
     ItemModelFactory.gd     modelos de objetos y comandos con primitivas
     GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
-  smoke_test.gd             prueba de humo headless (98 comprobaciones)
+  smoke_test.gd             smoke crítico headless (15 comprobaciones, ~2 s)
+  regression_test.gd        cobertura completa (135 comprobaciones)
   net_smoke.gd              cliente coop: conexión, compra y clase única
   net_smoke_b.gd            segundo cliente: clase única y revivir
   wave_sim.gd               simulación acelerada de las 20 oleadas
@@ -358,16 +359,28 @@ sistemas son nodos independientes y sustituibles.
 ## Pruebas
 
 ```powershell
+# Smoke crítico (arranque, identidad, datos, flujos de negocio): ~2 s
 godot --headless --path . --script res://tests/smoke_test.gd
+
+# Regresión completa: todo lo anterior + balance, jefe, UI, auras, anti-camping
+godot --headless --path . --script res://tests/regression_test.gd
+
+# Todas las suites en paralelo (un proceso Godot por suite, user:// aislado)
+./tools/pruebas.ps1 -Suite all
+./tools/pruebas.ps1 -Suite smoke        # bucle de desarrollo
+./tools/pruebas.ps1 -Suite red          # levanta servidor + A + B y limpia
 godot --headless --path . --script res://tests/wave_sim.gd
 
-# Red: servidor + cliente A + cliente B (ver docs/ONLINE.md)
+# Red a mano: servidor + cliente A + cliente B (ver docs/ONLINE.md)
 godot --headless -- --servidor --puerto=9080 --red-rapida
 godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9080 --esperar=40
 godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1:9080
 ```
 
-La prueba de humo cubre construcción de la arena, catálogo, compra, bonos,
+El smoke crítico comprueba que la arena arranca, el perfil del jugador se
+normaliza, Supabase y las salas responden, y que tienda, forja, progresión,
+oleada, ataque básico, estandarte y cierre de partida funcionan. La suite de
+regresión añade catálogo, bonos, talentos, auras, UI y balance.
 talentos con requisitos y rangos, habilidades (radio, invocación, sinergias),
 crecimiento por nivel, subida aleatoria de habilidades, clase única por partida,
 oleada, ataque básico, estandarte, fases del jefe, ciclo de la Furia del Público,

@@ -1,33 +1,61 @@
 extends SceneTree
-## Prueba de humo sin editor: construye la arena real y ejercita los sistemas
-## núcleo (armas, oleadas, combate automático, jefe, estandarte y anti-camping).
+## Prueba de humo sin editor. Por defecto corre el smoke crítico (15 checks:
+## arranque, identidad, datos y flujos de negocio) en pocos segundos; con
+## --suite=regression recorre las comprobaciones completas.
 ##
-## Uso: godot --headless --path . --script res://tests/smoke_test.gd
+## Uso:
+##   godot --headless --path . --script res://tests/smoke_test.gd
+##   godot --headless --path . --script res://tests/smoke_test.gd -- --suite=regression
+##   godot --headless --path . --script res://tests/regression_test.gd
 
 var _fallos := 0
 var _pruebas := 0
+var _modo := "smoke"
 
 
 func _initialize() -> void:
+	_modo = _suite_solicitada()
+	print("== Smoke test: Gladiators Revenge (suite: %s) ==" % _modo)
 	_ejecutar()
 
 
-func _comprobar(condicion: bool, texto: String) -> void:
-	_pruebas += 1
-	if condicion:
-		print("  OK    ", texto)
-	else:
-		_fallos += 1
-		printerr("  FALLO ", texto)
+## La suite pedida por consola (--suite=regression|all). Por defecto, smoke.
+func _suite_solicitada() -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--suite="):
+			var pedida := arg.substr("--suite=".length())
+			if pedida == "regression" or pedida == "all":
+				return "regression"
+	return "smoke"
 
 
-func _esperar_fisicas(cantidad: int) -> void:
-	for i in cantidad:
+func _completo() -> bool:
+	return _modo == "regression"
+
+
+## Registra una comprobación. En modo smoke solo se ejecutan e imprimen las
+## críticas: el resto se omite y se contabiliza para la suite de regresión.
+func _comprobar(condicion: bool, texto: String, critica := false) -> void:
+	if critica or _completo():
+		_pruebas += 1
+		if condicion:
+			print("  OK    ", texto)
+		else:
+			_fallos += 1
+			printerr("  FALLO ", texto)
+
+
+## Espera dinámica: sondea `condicion` hasta que se cumple o se agota el tope de
+## fotogramas de física (60 por segundo). Sustituye a los sleeps fijos.
+func _esperar_hasta(condicion: Callable, maximo_fotogramas := 600) -> bool:
+	for i in maximo_fotogramas:
+		if bool(condicion.call()):
+			return true
 		await physics_frame
+	return bool(condicion.call())
 
 
 func _ejecutar() -> void:
-	print("== Smoke test: Gladiators Revenge ==")
 	var sonidos_ok := true
 	for nombre in Sfx.RUTAS:
 		if not ResourceLoader.exists(Sfx.RUTAS[nombre]):
@@ -44,9 +72,9 @@ func _ejecutar() -> void:
 	var oleadas: WaveManager = escena.get("_oleadas")
 	var publico: AudienceFury = escena.get("_publico")
 
-	_comprobar(jugador != null and bandera != null and oleadas != null, "la arena construye jugador, estandarte y oleadas")
-	_comprobar(escena.get("_hud") != null and escena.get("_camara") != null, "HUD y cámara presentes")
-	_comprobar(oleadas.total_oleadas == 20, "el bucle tiene 20 oleadas")
+	_comprobar(jugador != null and bandera != null and oleadas != null, "la arena construye jugador, estandarte y oleadas", true)
+	_comprobar(escena.get("_hud") != null and escena.get("_camara") != null, "HUD y cámara presentes", true)
+	_comprobar(oleadas.total_oleadas == 20, "el bucle tiene 20 oleadas", true)
 
 	# --- Armas -------------------------------------------------------------
 	var catalogo := WeaponItem.crear_catalogo_base()
@@ -63,7 +91,8 @@ func _ejecutar() -> void:
 	escena._al_elegir_campeon(&"bastion")
 	_comprobar(
 		jugador.arma_actual != null and jugador.arma_actual.clase == WeaponItem.Clase.BASTION,
-		"elegir en la forja equipa el Bastión"
+		"elegir en la forja equipa el Bastión",
+		true
 	)
 	_comprobar(escena.oro == oro_antes, "elegir campeón no cuesta oro")
 	_comprobar(jugador.estadisticas.fuerza_total > fuerza_antes, "el arma aplica bonos de atributo")
@@ -92,7 +121,7 @@ func _ejecutar() -> void:
 	jugador.salud_actual = maxf(1.0, jugador.estadisticas.salud_maxima - 100.0)
 	var vida_antes_pocion := jugador.salud_actual
 	_comprobar(inventario.usar(0, jugador), "la poción de vida se usa")
-	_comprobar(jugador.salud_actual > vida_antes_pocion, "la poción cura al gladiador")
+	_comprobar(jugador.salud_actual > vida_antes_pocion, "la poción cura al gladiador", true)
 	_comprobar(not inventario.usar(0, jugador), "las pociones comparten enfriamiento")
 
 	escena.oro = 5000
@@ -101,11 +130,11 @@ func _ejecutar() -> void:
 	var piel := ItemCatalog.obtener(&"piel_basalto")
 	jugador.global_position = Vector3(26.0, 0, 8.0)
 	_comprobar(escena.comprar_objeto(brasa), "se compra un componente en la tienda")
-	_comprobar(inventario.tiene(&"brasa_forja"), "el componente entra en la mochila")
+	_comprobar(inventario.tiene(&"brasa_forja"), "el componente entra en la mochila", true)
 	_comprobar(escena.comprar_objeto(placa), "se compra el segundo componente")
 	_comprobar(inventario.tiene(&"nucleo_ferreo") and not inventario.tiene(&"brasa_forja"), "la forja automática crea el objeto intermedio")
 	_comprobar(escena.comprar_objeto(piel), "se compra la piel y se encadena la receta")
-	_comprobar(inventario.tiene(&"corazon_obsidiana"), "la cadena de forja llega al legendario")
+	_comprobar(inventario.tiene(&"corazon_obsidiana"), "la cadena de forja llega al legendario", true)
 	var indice_corazon := -1
 	for i in inventario.ranuras.size():
 		var ranura: Dictionary = inventario.ranuras[i]
@@ -218,7 +247,7 @@ func _ejecutar() -> void:
 		var hab := jugador.arma_actual.obtener_habilidad(indice)
 		if hab != null:
 			rangos_despues += jugador.rango_habilidad(hab.id)
-	_comprobar(jugador.estadisticas.nivel == nivel_previo + 1, "otorgar XP sube de nivel")
+	_comprobar(jugador.estadisticas.nivel == nivel_previo + 1, "otorgar XP sube de nivel", true)
 	_comprobar(
 		jugador.estadisticas.fuerza > fuerza_base_antes
 		and jugador.estadisticas.agilidad > agilidad_base_antes
@@ -227,12 +256,27 @@ func _ejecutar() -> void:
 	)
 	_comprobar(rangos_despues == rangos_antes + 1, "una habilidad sube de nivel al azar al subir de nivel")
 
+	# --- Estandarte --------------------------------------------------------
+	# El estandarte entra inmune 0,8 s al colocarse: se espera a que sea dañable
+	# en vez de asumir que ya lo es.
+	var danable := await _esperar_hasta(
+		func() -> bool: return not bandera.esta_inmune() and not bandera.esta_cargada(),
+		120
+	)
+	var vida_bandera := bandera.salud_actual
+	bandera.recibir_dano(120.0)
+	_comprobar(danable and bandera.salud_actual < vida_bandera, "el estandarte recibe daño", true)
+
 	# --- Oleada y combate automático --------------------------------------
+	# Sin esperas fijas: se sondea el estado real hasta que la oleada arranca.
 	oleadas.espera_inicial = 0.3
 	oleadas.duracion_entrada = 0.3
 	oleadas.set("_temporizador", 0.3)
-	await _esperar_fisicas(360)  # preparación + entrada + primer spawn
-	_comprobar(oleadas.oleada_actual == 1, "la oleada 1 arranca sola")
+	var arranco := await _esperar_hasta(
+		func() -> bool: return oleadas.oleada_actual == 1 and not get_nodes_in_group("enemigos").is_empty(),
+		360  # tope: preparación + entrada + primer spawn
+	)
+	_comprobar(arranco, "la oleada 1 arranca sola", true)
 	var enemigos := get_nodes_in_group("enemigos")
 	_comprobar(not enemigos.is_empty(), "la oleada genera enemigos")
 
@@ -244,13 +288,13 @@ func _ejecutar() -> void:
 		enemigo.salud_actual = 400.0
 		enemigo.global_position = jugador.global_position + Vector3(1.4, 0.0, 0.0)
 		var vida_antes := enemigo.salud_actual
-		await _esperar_fisicas(150)  # 2,5 s de ataque básico
-		_comprobar(enemigo.salud_actual < vida_antes or not enemigo.activo, "el ataque básico daña al enemigo")
+		# Se corta en cuanto entra el primer golpe (tope 3 s).
+		var golpeado := await _esperar_hasta(
+			func() -> bool: return enemigo.salud_actual < vida_antes or not enemigo.activo,
+			180
+		)
+		_comprobar(golpeado, "el ataque básico daña al enemigo", true)
 
-	# --- Estandarte --------------------------------------------------------
-	var vida_bandera := bandera.salud_actual
-	bandera.recibir_dano(120.0)
-	_comprobar(bandera.salud_actual < vida_bandera, "el estandarte recibe daño")
 
 	# --- Jefe: fases de furia ---------------------------------------------
 	var jefe := ArenaBossAI.crear()
@@ -277,15 +321,17 @@ func _ejecutar() -> void:
 	_comprobar(jefe.estado != ArenaBossAI.Estado.ATURDIDO, "Furia 2 ignora el aturdimiento")
 	_comprobar(niveles == [1, 2], "las fases se activan en orden")
 
-	# --- Anti-camping ------------------------------------------------------
-	publico.tiempo_limite = 0.6
-	publico.duracion_furia = 1.0
-	publico.establecer_combate(true)
-	await _esperar_fisicas(60)  # 1 s parado
-	_comprobar(escena.esta_congelado(), "la Furia del Público castiga el camping")
-	publico.tiempo_limite = 999.0  # evitar que se repita durante la comprobación
-	await _esperar_fisicas(90)
-	_comprobar(not escena.esta_congelado(), "el castigo termina y se puede volver a jugar")
+	# --- Anti-camping (solo regresión: mide el castigo completo) ----------
+	if _completo():
+		publico.tiempo_limite = 0.6
+		publico.duracion_furia = 1.0
+		publico.establecer_combate(true)
+		var congelado := await _esperar_hasta(func() -> bool: return escena.esta_congelado(), 120)
+		_comprobar(congelado, "la Furia del Público castiga el camping")
+		publico.tiempo_limite = 999.0  # evitar que se repita durante la comprobación
+		var descongelado := await _esperar_hasta(func() -> bool: return not escena.esta_congelado(), 180)
+		_comprobar(descongelado, "el castigo termina y se puede volver a jugar")
+
 
 	# --- Consola inferior e iconos ----------------------------------------
 	var hud = escena.get("_hud")
@@ -307,26 +353,27 @@ func _ejecutar() -> void:
 				glifos_ok = false
 	_comprobar(glifos_ok, "la UI no usa glifos que la fuente no dibuja")
 
-	# --- Sistema de diseño (ForjaTema) ------------------------------------
-	var tema := ForjaTema.tema_global()
-	_comprobar(
-		tema.has_stylebox("normal", "Button") and tema.has_icon("grabber", "HSlider"),
-		"el tema global estiliza botones y deslizadores"
-	)
-	var fuente_titulo := ForjaTema.fuente_titulo()
-	_comprobar(
-		fuente_titulo != null
-		and fuente_titulo.has_char("Á".unicode_at(0))
-		and fuente_titulo.has_char("ñ".unicode_at(0))
-		and fuente_titulo.has_char("·".unicode_at(0)),
-		"la tipografía de títulos cubre acentos, eñe y el punto medio"
-	)
-	_comprobar(
-		(hud.get("_barra_superior") as Panel) != null
-		and hud.get("_ficha_jugador") != null
-		and hud.get("_ficha_jugador").get_parent() == hud.get("_barra_superior"),
-		"la barra superior incluye la ficha del jugador"
-	)
+	if _completo():
+		# --- Sistema de diseño (ForjaTema) ------------------------------------
+		var tema := ForjaTema.tema_global()
+		_comprobar(
+			tema.has_stylebox("normal", "Button") and tema.has_icon("grabber", "HSlider"),
+			"el tema global estiliza botones y deslizadores"
+		)
+		var fuente_titulo := ForjaTema.fuente_titulo()
+		_comprobar(
+			fuente_titulo != null
+			and fuente_titulo.has_char("Á".unicode_at(0))
+			and fuente_titulo.has_char("ñ".unicode_at(0))
+			and fuente_titulo.has_char("·".unicode_at(0)),
+			"la tipografía de títulos cubre acentos, eñe y el punto medio"
+		)
+		_comprobar(
+			(hud.get("_barra_superior") as Panel) != null
+			and hud.get("_ficha_jugador") != null
+			and hud.get("_ficha_jugador").get_parent() == hud.get("_barra_superior"),
+			"la barra superior incluye la ficha del jugador"
+		)
 
 	# --- Sala de espera: elegir campeón acorta la cuenta atrás ------------
 	var olas := WaveManager.new()
@@ -343,7 +390,8 @@ func _ejecutar() -> void:
 	# --- Apodo y ficha del jugador ---------------------------------------
 	_comprobar(
 		Perfil.normalizar("  Orco  Épico  ") == "Orco Épico",
-		"el apodo se limpia y conserva acentos"
+		"el apodo se limpia y conserva acentos",
+		true
 	)
 	_comprobar(
 		Perfil.normalizar("a<b>c/d").find("<") == -1 and Perfil.normalizar("x").length() == 1,
@@ -355,56 +403,57 @@ func _ejecutar() -> void:
 	oleadas.al_morir_enemigo(0)
 	_comprobar(oleadas.bajas == bajas_antes + 1, "cada muerte suma una baja")
 
-	# --- Tienda simple: una lista y dos modos -----------------------------
-	hud.alternar_tienda()
-	await process_frame
-	var panel_tienda = hud.get("_tienda")
-	var grid: GridContainer = panel_tienda.get("_grid")
-	var cartas_mercado := grid.get_child_count()
-	_comprobar(cartas_mercado == ItemCatalog.vendibles().size(), "la tienda lista lo vendible en una sola cuadrícula")
-	_comprobar(panel_tienda.get("_chip_vender") != null, "la tienda tiene el modo VENDER")
-	panel_tienda._cambiar_modo(true)
-	await process_frame
-	var cartas_venta := grid.get_child_count()
-	_comprobar(cartas_venta >= 1, "el modo VENDER lista las ranuras con objeto")
-	panel_tienda._cambiar_modo(false)
-	await process_frame
+	if _completo():
+		# --- Tienda simple: una lista y dos modos -----------------------------
+		hud.alternar_tienda()
+		await process_frame
+		var panel_tienda = hud.get("_tienda")
+		var grid: GridContainer = panel_tienda.get("_grid")
+		var cartas_mercado := grid.get_child_count()
+		_comprobar(cartas_mercado == ItemCatalog.vendibles().size(), "la tienda lista lo vendible en una sola cuadrícula")
+		_comprobar(panel_tienda.get("_chip_vender") != null, "la tienda tiene el modo VENDER")
+		panel_tienda._cambiar_modo(true)
+		await process_frame
+		var cartas_venta := grid.get_child_count()
+		_comprobar(cartas_venta >= 1, "el modo VENDER lista las ranuras con objeto")
+		panel_tienda._cambiar_modo(false)
+		await process_frame
 
-	# --- Pausa: los paneles no dejan la partida congelada ------------------
-	hud.alternar_tienda()
-	await process_frame
-	hud.alternar_talentos()
-	await process_frame
-	hud.cerrar_talentos()
-	await process_frame
-	_comprobar(not paused and not Pausa.hay_paneles(), "los paneles no dejan la partida en pausa")
-	hud.alternar_tienda()
-	await process_frame
-	hud.cerrar_tienda()
-	await process_frame
-	hud.cerrar_tienda()
-	await process_frame
-	hud.alternar_tienda()
-	await process_frame
-	hud.cerrar_tienda()
-	await process_frame
-	_comprobar(not paused, "cerrar dos veces la tienda no descuadra la pausa")
+		# --- Pausa: los paneles no dejan la partida congelada ------------------
+		hud.alternar_tienda()
+		await process_frame
+		hud.alternar_talentos()
+		await process_frame
+		hud.cerrar_talentos()
+		await process_frame
+		_comprobar(not paused and not Pausa.hay_paneles(), "los paneles no dejan la partida en pausa")
+		hud.alternar_tienda()
+		await process_frame
+		hud.cerrar_tienda()
+		await process_frame
+		hud.cerrar_tienda()
+		await process_frame
+		hud.alternar_tienda()
+		await process_frame
+		hud.cerrar_tienda()
+		await process_frame
+		_comprobar(not paused, "cerrar dos veces la tienda no descuadra la pausa")
 
-	# --- Iconos 3D de los objetos nuevos ---
-	var nuevos := [&"armadura_brasas", &"anillo_vampiro", &"corazon_fenix", &"capa_comandante", &"guadana_verdugo_ancestral"]
-	var modelos_ok := true
-	for id in nuevos:
-		var modelo := ItemModelFactory.crear(id)
-		if _contar_mallas(modelo) < 3:
-			modelos_ok = false
-		modelo.free()
-	_comprobar(modelos_ok, "los objetos nuevos tienen miniatura 3D propia")
-	_comprobar(
-		is_equal_approx(IconStudio.color_para(IconStudio.CATEGORIA_OBJETO, &"capa_comandante").b, IconStudio.COLOR_LEGENDARIO.b),
-		"los legendarios nuevos usan el tinte dorado"
-	)
-	hud.cerrar_tienda()
-	await process_frame
+		# --- Iconos 3D de los objetos nuevos ---
+		var nuevos := [&"armadura_brasas", &"anillo_vampiro", &"corazon_fenix", &"capa_comandante", &"guadana_verdugo_ancestral"]
+		var modelos_ok := true
+		for id in nuevos:
+			var modelo := ItemModelFactory.crear(id)
+			if _contar_mallas(modelo) < 3:
+				modelos_ok = false
+			modelo.free()
+		_comprobar(modelos_ok, "los objetos nuevos tienen miniatura 3D propia")
+		_comprobar(
+			is_equal_approx(IconStudio.color_para(IconStudio.CATEGORIA_OBJETO, &"capa_comandante").b, IconStudio.COLOR_LEGENDARIO.b),
+			"los legendarios nuevos usan el tinte dorado"
+		)
+		hud.cerrar_tienda()
+		await process_frame
 
 	# --- Revivir cooperativo conserva el equipo ---------------------------
 	var pociones_antes := jugador.inventario.contar(&"pocion_vida")
@@ -417,54 +466,54 @@ func _ejecutar() -> void:
 		"revivir conserva el inventario"
 	)
 
-	# --- Auras de objetos épicos y legendarios -----------------------------
-	var epicos := 0
-	var auras_ok := true
-	for item in ItemCatalog.crear_catalogo():
-		if item.rareza == ItemData.Rareza.EPICO:
-			epicos += 1
-			if item.aura.is_empty():
-				auras_ok = false
-	_comprobar(epicos >= 3 and auras_ok, "el catálogo trae objetos épicos con aura")
+	if _completo():
+		# --- Auras de objetos épicos y legendarios -----------------------------
+		var epicos := 0
+		var auras_ok := true
+		for item in ItemCatalog.crear_catalogo():
+			if item.rareza == ItemData.Rareza.EPICO:
+				epicos += 1
+				if item.aura.is_empty():
+					auras_ok = false
+		_comprobar(epicos >= 3 and auras_ok, "el catálogo trae objetos épicos con aura")
 
-	var autorreceta := false
-	for receta in ItemCatalog.recetas():
-		if receta.receta.has(receta.id):
-			autorreceta = true
-	_comprobar(not autorreceta, "ninguna receta se pide a sí misma")
+		var autorreceta := false
+		for receta in ItemCatalog.recetas():
+			if receta.receta.has(receta.id):
+				autorreceta = true
+		_comprobar(not autorreceta, "ninguna receta se pide a sí misma")
 
-	var base_aura: Vector3 = jugador.global_position
-	var portador: GladiatorController = escena._instanciar_gladiador(base_aura + Vector3(2.0, 0.0, 0.0), 7)
-	var lejano: GladiatorController = escena._instanciar_gladiador(base_aura + Vector3(60.0, 0.0, 0.0), 8)
-	portador.inventario.agregar(ItemCatalog.obtener(&"anillo_vampiro"))
-	lejano.inventario.agregar(ItemCatalog.obtener(&"guadana_verdugo_ancestral"))
-	await process_frame
-	_comprobar(is_equal_approx(portador.bono_aura(&"robo_vida_aliados"), 0.05), "el portador recibe su propia aura")
-	_comprobar(is_equal_approx(portador.bono_aura(&"dano_aliados"), 0.0), "un aliado lejano no aporta su aura")
-	lejano.global_position = portador.global_position + Vector3(2.0, 0.0, 0.0)
-	await process_frame
-	_comprobar(is_equal_approx(portador.bono_aura(&"dano_aliados"), 0.20), "un aliado cercano aporta su aura")
-	_comprobar(is_equal_approx(portador.bono_aura(&"robo_vida_aliados"), 0.05), "las auras de distintas claves no se mezclan")
-	portador.queue_free()
-	lejano.queue_free()
-	await process_frame
+		var base_aura: Vector3 = jugador.global_position
+		var portador: GladiatorController = escena._instanciar_gladiador(base_aura + Vector3(2.0, 0.0, 0.0), 7)
+		var lejano: GladiatorController = escena._instanciar_gladiador(base_aura + Vector3(60.0, 0.0, 0.0), 8)
+		portador.inventario.agregar(ItemCatalog.obtener(&"anillo_vampiro"))
+		lejano.inventario.agregar(ItemCatalog.obtener(&"guadana_verdugo_ancestral"))
+		await process_frame
+		_comprobar(is_equal_approx(portador.bono_aura(&"robo_vida_aliados"), 0.05), "el portador recibe su propia aura")
+		_comprobar(is_equal_approx(portador.bono_aura(&"dano_aliados"), 0.0), "un aliado lejano no aporta su aura")
+		lejano.global_position = portador.global_position + Vector3(2.0, 0.0, 0.0)
+		await process_frame
+		_comprobar(is_equal_approx(portador.bono_aura(&"dano_aliados"), 0.20), "un aliado cercano aporta su aura")
+		_comprobar(is_equal_approx(portador.bono_aura(&"robo_vida_aliados"), 0.05), "las auras de distintas claves no se mezclan")
+		portador.queue_free()
+		lejano.queue_free()
+		await process_frame
 
-	# Cadena de forja: el último ingrediente crea la épica y su aura
-	var fabricante: GladiatorController = escena._instanciar_gladiador(Vector3(24.0, 0.0, 0.0), 9)
-	fabricante.inventario.agregar(ItemCatalog.obtener(&"nucleo_ferreo"))
-	escena.game_state.oro = 4000
-	var forjado: bool = escena.comprar_para(fabricante, ItemCatalog.obtener(&"raiz_savia"))
-	_comprobar(
-		forjado and fabricante.inventario.contar(&"armadura_brasas") == 1,
-		"comprar el último ingrediente forja la Armadura de Brasas"
-	)
-	_comprobar(
-		is_equal_approx(fabricante.bono_aura(&"dano_aliados"), 0.10),
-		"la épica forjada irradia su aura de daño"
-	)
-	fabricante.queue_free()
-	await process_frame
-
+		# Cadena de forja: el último ingrediente crea la épica y su aura
+		var fabricante: GladiatorController = escena._instanciar_gladiador(Vector3(24.0, 0.0, 0.0), 9)
+		fabricante.inventario.agregar(ItemCatalog.obtener(&"nucleo_ferreo"))
+		escena.game_state.oro = 4000
+		var forjado: bool = escena.comprar_para(fabricante, ItemCatalog.obtener(&"raiz_savia"))
+		_comprobar(
+			forjado and fabricante.inventario.contar(&"armadura_brasas") == 1,
+			"comprar el último ingrediente forja la Armadura de Brasas"
+		)
+		_comprobar(
+			is_equal_approx(fabricante.bono_aura(&"dano_aliados"), 0.10),
+			"la épica forjada irradia su aura de daño"
+		)
+		fabricante.queue_free()
+		await process_frame
 
 	# --- Balance: daño mín-máx, ritmo de ataque y arquetipos ---
 	var stats := GladiatorStats.new()
@@ -523,10 +572,17 @@ func _ejecutar() -> void:
 			arquetipos_ok = false
 	_comprobar(arquetipos_ok, "cada arquetipo tiene estadísticas y modelo visual")
 	# --- Fin de partida ----------------------------------------------------
-	escena._finalizar("DERROTA", "prueba de cierre")
-	_comprobar(escena.terminado, "terminar cierra la partida")
+	# En smoke no se abrió el panel de talentos (bloque de UI omitido): se abre
+	# para comprobar que el cierre de partida también apaga sus paneles.
 	var panel = escena.get("_hud").get("_talentos")
+	if panel == null:
+		escena.get("_hud").alternar_talentos()
+		await process_frame
+		panel = escena.get("_hud").get("_talentos")
+	escena._finalizar("DERROTA", "prueba de cierre")
+	_comprobar(escena.terminado, "terminar cierra la partida", true)
 	_comprobar(panel != null and not panel.visible, "el panel de talentos se cierra al terminar")
+
 
 	# --- Sala online (botón CREAR SALA) -----------------------------------
 	var menu := MenuRed.new()
@@ -540,68 +596,71 @@ func _ejecutar() -> void:
 		escena.get("_hud").has_method("establecer_lobby"),
 		"el HUD tiene la sala de espera con cuenta atrás"
 	)
-	# --- Controles táctiles -------------------------------------------------
-	var tactil := TouchControls.new()
-	tactil.configurar(null)
-	_comprobar(
-		tactil.has_signal("habilidad") and tactil.has_signal("interactuar") and tactil.has_signal("detener"),
-		"los controles táctiles exponen habilidades e interacción"
-	)
-	_comprobar(
-		(tactil.get("_botones") as Array).size() == 4,
-		"los controles táctiles dibujan Q/W/E/R"
-	)
-	_comprobar(
-		(tactil.get("_base") as Panel) != null and (tactil.get("_perilla") as Panel) != null,
-		"el joystick táctil dibuja base y perilla"
-	)
-	_comprobar(
-		(tactil.get("_aro") as ForjaTema.AroRunas) != null,
-		"el joystick dibuja el aro de runas"
-	)
-	_comprobar(
-		(tactil.get("_velos") as Array).size() == 4 and (tactil.get("_cd_textos") as Array).size() == 4,
-		"las habilidades táctiles muestran enfriamiento radial y segundos"
-	)
-	_comprobar(tactil.has_signal("pausa"), "el HUD táctil tiene botón de pausa")
-	var perfiles: Array = escena._perfiles_campeon()
-	_comprobar(perfiles.size() == 3, "la forja de campeones ofrece las tres clases")
-	var primer_perfil: Dictionary = perfiles[0]
-	_comprobar(
-		float(primer_perfil.get("vida", 0.0)) > 0.0 and float(primer_perfil.get("dano_max", 0.0)) > 0.0,
-		"cada campeón llega con estadísticas calculadas"
-	)
-	var seleccion := SeleccionCampeon.new()
-	escena.add_child(seleccion)
-	seleccion.configurar(perfiles, &"")
-	_comprobar(
-		(seleccion.get("_emblemas") as Array).size() == 3 and seleccion.get("_marca") != null,
-		"la pantalla de campeón monta emblemas y ficha"
-	)
-	_comprobar(
-		seleccion.get("_vitrina") != null and seleccion.get("_btn_elegir") != null,
-		"la pantalla de campeón tiene vitrina 3D y botón de elegir"
-	)
-	seleccion.free()
-	tactil.free()
+	if _completo():
+		# --- Controles táctiles -------------------------------------------------
+		var tactil := TouchControls.new()
+		tactil.configurar(null)
+		_comprobar(
+			tactil.has_signal("habilidad") and tactil.has_signal("interactuar") and tactil.has_signal("detener"),
+			"los controles táctiles exponen habilidades e interacción"
+		)
+		_comprobar(
+			(tactil.get("_botones") as Array).size() == 4,
+			"los controles táctiles dibujan Q/W/E/R"
+		)
+		_comprobar(
+			(tactil.get("_base") as Panel) != null and (tactil.get("_perilla") as Panel) != null,
+			"el joystick táctil dibuja base y perilla"
+		)
+		_comprobar(
+			(tactil.get("_aro") as ForjaTema.AroRunas) != null,
+			"el joystick dibuja el aro de runas"
+		)
+		_comprobar(
+			(tactil.get("_velos") as Array).size() == 4 and (tactil.get("_cd_textos") as Array).size() == 4,
+			"las habilidades táctiles muestran enfriamiento radial y segundos"
+		)
+		_comprobar(tactil.has_signal("pausa"), "el HUD táctil tiene botón de pausa")
+		var perfiles: Array = escena._perfiles_campeon()
+		_comprobar(perfiles.size() == 3, "la forja de campeones ofrece las tres clases")
+		var primer_perfil: Dictionary = perfiles[0]
+		_comprobar(
+			float(primer_perfil.get("vida", 0.0)) > 0.0 and float(primer_perfil.get("dano_max", 0.0)) > 0.0,
+			"cada campeón llega con estadísticas calculadas"
+		)
+		var seleccion := SeleccionCampeon.new()
+		escena.add_child(seleccion)
+		seleccion.configurar(perfiles, &"")
+		_comprobar(
+			(seleccion.get("_emblemas") as Array).size() == 3 and seleccion.get("_marca") != null,
+			"la pantalla de campeón monta emblemas y ficha"
+		)
+		_comprobar(
+			seleccion.get("_vitrina") != null and seleccion.get("_btn_elegir") != null,
+			"la pantalla de campeón tiene vitrina 3D y botón de elegir"
+		)
+		seleccion.free()
+		tactil.free()
+
 	var punto: Variant = escena._punto_habilidad()
 	_comprobar(punto is Vector3, "en táctil la habilidad apunta a un punto del mundo")
 
-	# --- Ajustes y actualizador --------------------------------------------
-	var ajustes := Ajustes.new()
-	ajustes.volumen = 0.5
-	ajustes.escala_tactil = 1.2
-	ajustes.guardar()
-	var releidos := Ajustes.cargar()
-	_comprobar(
-		is_equal_approx(releidos.volumen, 0.5) and is_equal_approx(releidos.escala_tactil, 1.2),
-		"los ajustes se guardan y se vuelven a leer"
-	)
-	var actualizador := Actualizador.new()
-	_comprobar(actualizador._es_mas_nueva("1.6.0", "1.5.0"), "el actualizador detecta una versión más nueva")
-	_comprobar(not actualizador._es_mas_nueva("1.5.0", "1.5.0"), "el actualizador no molesta si ya está al día")
-	_comprobar(not actualizador._es_mas_nueva("1.4.9", "1.5.0"), "el actualizador no retrocede de versión")
-	actualizador.free()
+	if _completo():
+		# --- Ajustes y actualizador --------------------------------------------
+		var ajustes := Ajustes.new()
+		ajustes.volumen = 0.5
+		ajustes.escala_tactil = 1.2
+		ajustes.guardar()
+		var releidos := Ajustes.cargar()
+		_comprobar(
+			is_equal_approx(releidos.volumen, 0.5) and is_equal_approx(releidos.escala_tactil, 1.2),
+			"los ajustes se guardan y se vuelven a leer"
+		)
+		var actualizador := Actualizador.new()
+		_comprobar(actualizador._es_mas_nueva("1.6.0", "1.5.0"), "el actualizador detecta una versión más nueva")
+		_comprobar(not actualizador._es_mas_nueva("1.5.0", "1.5.0"), "el actualizador no molesta si ya está al día")
+		_comprobar(not actualizador._es_mas_nueva("1.4.9", "1.5.0"), "el actualizador no retrocede de versión")
+		actualizador.free()
 
 	var gestor_oleadas = escena.get("_oleadas")
 	_comprobar(
@@ -620,7 +679,8 @@ func _ejecutar() -> void:
 	var supabase := Supabase.new()
 	_comprobar(
 		supabase.configurado_cliente(),
-		"Supabase queda configurado al construirse, sin esperar un fotograma"
+		"Supabase queda configurado al construirse, sin esperar un fotograma",
+		true
 	)
 	supabase.free()
 
@@ -633,7 +693,8 @@ func _ejecutar() -> void:
 	remota.crear()
 	_comprobar(
 		str(caja[0]).contains("servidor de salas"),
-		"sin servidor de salas, crear sala avisa del error"
+		"sin servidor de salas, crear sala avisa del error",
+		true
 	)
 	remota.free()
 	var maestro := MaestroSalas.new()
@@ -654,7 +715,10 @@ func _ejecutar() -> void:
 	)
 	maestro.free()
 
-	print("== %d pruebas, %d fallos ==" % [_pruebas, _fallos])
+	if _completo():
+		print("== regression: %d comprobaciones, %d fallos ==" % [_pruebas, _fallos])
+	else:
+		print("== smoke: %d críticas, %d fallos · cobertura completa en tests/regression_test.gd ==" % [_pruebas, _fallos])
 	Sfx.liberar()
 	quit(1 if _fallos > 0 else 0)
 
