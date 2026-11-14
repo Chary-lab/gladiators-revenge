@@ -60,7 +60,7 @@ func aplicar_estado_red(datos: Array) -> void:
 			if id != &"":
 				item = ItemCatalog.obtener(id)
 			cantidad = int(fila.get("cantidad", 0))
-			cd = float(fila.get("cd", 0.0))
+			cd = float(fila.get("cd", _cooldowns[i]))
 		var anterior: ItemData = ranuras[i].get("item")
 		var id_anterior: StringName = anterior.id if anterior != null else &""
 		var id_nuevo: StringName = item.id if item != null else &""

@@ -1456,34 +1456,14 @@ func aplicar_skin(tinte: Color) -> void:
 
 ## Aplica el estado autoritativo que llega del servidor a un espejo local.
 func aplicar_estado_red(datos: Dictionary) -> void:
+	# Parte dinámica: cambia en casi todos los ticks.
 	_pos_objetivo_red = datos.get("pos", global_position)
 	rotation.y = float(datos.get("rot", rotation.y))
-
-	var e := estadisticas
-	var base: Dictionary = datos.get("base", {})
-	e.fuerza = int(base.get("fuerza", e.fuerza))
-	e.agilidad = int(base.get("agilidad", e.agilidad))
-	e.inteligencia = int(base.get("inteligencia", e.inteligencia))
-	e.nivel = int(datos.get("nivel", e.nivel))
-	e.experiencia = int(datos.get("xp", e.experiencia))
-	e.puntos_libres = int(datos.get("puntos_libres", e.puntos_libres))
-	puntos_rojos = int(datos.get("puntos_rojos", puntos_rojos))
-
-	var totales: Dictionary = datos.get("totales", {})
-	e._bonos_equipo = {
-		"fuerza": float(totales.get("fuerza", e.fuerza)) - float(e.fuerza),
-		"agilidad": float(totales.get("agilidad", e.agilidad)) - float(e.agilidad),
-		"inteligencia": float(totales.get("inteligencia", e.inteligencia)) - float(e.inteligencia),
-	}
-	var salud_max := float(datos.get("salud_max", e.salud_maxima))
-	var mana_max := float(datos.get("mana_max", e.mana_maximo))
-	e._bonos_equipo["vida"] = salud_max - (GladiatorStats.VIDA_BASE + e.fuerza_total * GladiatorStats.VIDA_POR_FUERZA)
-	e._bonos_equipo["mana"] = mana_max - (GladiatorStats.MANA_BASE + e.inteligencia_total * GladiatorStats.MANA_POR_INT)
-	e.atributos_cambiados.emit()
+	estadisticas.experiencia = int(datos.get("xp", estadisticas.experiencia))
 
 	salud_actual = float(datos.get("salud", salud_actual))
 	mana_actual = float(datos.get("mana", mana_actual))
-	escudo_actual = float(datos.get("escudo", 0.0))
+	escudo_actual = float(datos.get("escudo", escudo_actual))
 	revive_en = float(datos.get("revive_en", 0.0))
 	dano_infligido = float(datos.get("dano", dano_infligido))
 	dano_recibido = float(datos.get("recibido", dano_recibido))
@@ -1494,21 +1474,52 @@ func aplicar_estado_red(datos: Dictionary) -> void:
 		if combat != null:
 			combat.set_cooldown(i, float(cds[i]))
 
+	# Parte estática (atributos, nivel, rangos, talentos): el servidor solo la
+	# manda cuando cambia. Antes se reescribía cada tick y el cliente recalculaba
+	# bonos y emitía señales de UI 15 veces por segundo.
+	if datos.has("est"):
+		_aplicar_estatico_red(datos["est"])
+
+	_aplicar_muerte_espejo(bool(datos.get("muerto", false)))
+
+
+func _aplicar_estatico_red(est: Dictionary) -> void:
+	var e := estadisticas
+	var base: Dictionary = est.get("base", {})
+	e.fuerza = int(base.get("fuerza", e.fuerza))
+	e.agilidad = int(base.get("agilidad", e.agilidad))
+	e.inteligencia = int(base.get("inteligencia", e.inteligencia))
+	e.nivel = int(est.get("nivel", e.nivel))
+	e.puntos_libres = int(est.get("puntos_libres", e.puntos_libres))
+	puntos_rojos = int(est.get("puntos_rojos", puntos_rojos))
+
+	var totales: Dictionary = est.get("totales", {})
+	e._bonos_equipo = {
+		"fuerza": float(totales.get("fuerza", e.fuerza)) - float(e.fuerza),
+		"agilidad": float(totales.get("agilidad", e.agilidad)) - float(e.agilidad),
+		"inteligencia": float(totales.get("inteligencia", e.inteligencia)) - float(e.inteligencia),
+	}
+	var salud_max := float(est.get("salud_max", e.salud_maxima))
+	var mana_max := float(est.get("mana_max", e.mana_maximo))
+	e._bonos_equipo["vida"] = salud_max - (GladiatorStats.VIDA_BASE + e.fuerza_total * GladiatorStats.VIDA_POR_FUERZA)
+	e._bonos_equipo["mana"] = mana_max - (GladiatorStats.MANA_BASE + e.inteligencia_total * GladiatorStats.MANA_POR_INT)
+	e.atributos_cambiados.emit()
+
 	var rangos_antes := _rangos_habilidad.duplicate()
 	_rangos_habilidad.clear()
-	var rangos: Dictionary = datos.get("rangos", {})
+	var rangos: Dictionary = est.get("rangos", {})
 	for id in rangos:
 		_rangos_habilidad[StringName(id)] = int(rangos[id])
 
 	var desbloqueadas_antes := _habilidades_desbloqueadas.duplicate()
 	_habilidades_desbloqueadas.clear()
-	var desbloqueadas: Dictionary = datos.get("desbloqueadas", {})
+	var desbloqueadas: Dictionary = est.get("desbloqueadas", {})
 	for id in desbloqueadas:
 		_habilidades_desbloqueadas[StringName(id)] = bool(desbloqueadas[id])
 
 	var talentos_antes := _talentos_activos.duplicate()
 	_talentos_activos.clear()
-	var talentos: Dictionary = datos.get("talentos", {})
+	var talentos: Dictionary = est.get("talentos", {})
 	for id in talentos:
 		_talentos_activos[StringName(id)] = int(talentos[id])
 
@@ -1516,8 +1527,6 @@ func aplicar_estado_red(datos: Dictionary) -> void:
 		habilidades_cambiadas.emit()
 	if talentos_antes != _talentos_activos:
 		talentos_cambiados.emit()
-
-	_aplicar_muerte_espejo(bool(datos.get("muerto", false)))
 
 
 func _aplicar_muerte_espejo(muerto: bool) -> void:

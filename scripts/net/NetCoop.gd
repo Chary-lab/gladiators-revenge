@@ -14,7 +14,8 @@ signal partida_terminada(titulo: String, detalle: String)
 
 enum Estado { DESCONECTADO, CONECTANDO, CONECTADO, SERVIDOR }
 
-const VERSION_RED := 1
+## 2: el estado estático del jugador viaja solo cuando cambia (bloque «est»).
+const VERSION_RED := 2
 const PUERTO_POR_DEFECTO := 9080
 const TAM_BUFFER := 1 << 20
 ## Reintentos al abrir la conexión: la máquina de Fly puede estar despertando y

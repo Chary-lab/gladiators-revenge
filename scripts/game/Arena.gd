@@ -102,6 +102,8 @@ var _terminado_red := false
 var _resultado_red := ""
 var _log_snapshot := false
 var _eventos_red: Array = []
+## peer -> último bloque estático («est») enviado, para no repetirlo cada tick.
+var _estatico_jugador: Dictionary = {}
 var _estaba_muerto := false
 var _supabase: Supabase
 var _menu: MenuRed
@@ -375,9 +377,12 @@ func _iniciar_local() -> void:
 func _process(delta: float) -> void:
 	_actualizar_pista()
 	if es_servidor:
+		# Acumulador con resta, no a cero: con frames de 16,6 ms (cap de 60 fps) el
+		# umbral de 66,6 ms no se alcanzaba hasta el quinto frame y el tick caía a
+		# 12 Hz. Restando se conserva el sobrante y la media vuelve a 15 Hz.
 		_tiempo_snapshot += delta
-		if _tiempo_snapshot >= 1.0 / 15.0:
-			_tiempo_snapshot = 0.0
+		while _tiempo_snapshot >= 1.0 / 15.0:
+			_tiempo_snapshot -= 1.0 / 15.0
 			_enviar_snapshot()
 		_actualizar_revives(delta)
 		_curar_en_zona_segura(delta)
@@ -504,6 +509,10 @@ func _crear_jugador_mirror() -> void:
 func agregar_jugador_red(peer: int) -> void:
 	if not es_servidor or jugadores_red.has(peer):
 		return
+	# El bloque estático viaja solo cuando cambia y el snapshot se difunde a todos:
+	# al entrar alguien hay que reenviar el de todos o el nuevo cliente se queda
+	# sin las clases/atributos de los que ya estaban.
+	_estatico_jugador.clear()
 	var indice := jugadores_red.size()
 	var posiciones := [Vector3(24.0, 0, 0), Vector3(24.0, 0, 4.0), Vector3(24.0, 0, -4.0)]
 	var cuerpo := _instanciar_gladiador(posiciones[indice % posiciones.size()], indice)
@@ -537,6 +546,7 @@ func quitar_jugador_red(peer: int) -> void:
 	if cuerpo == null:
 		return
 	jugadores_red.erase(peer)
+	_estatico_jugador.erase(peer)
 	jugadores.erase(cuerpo)
 	if _oleadas != null:
 		_oleadas.quitar_jugador(cuerpo)
@@ -901,13 +911,31 @@ func _datos_jugador(peer: int, cuerpo: GladiatorController) -> Dictionary:
 				"cantidad": int(ranura.get("cantidad", 0)),
 				"cd": cuerpo.inventario.energia_restante(i),
 			})
-	var clase := &"prisionero"
-	if cuerpo.arma_actual != null:
-		clase = cuerpo.arma_actual.id_clase()
-	return {
+	var fila := {
 		"id": peer,
 		"pos": cuerpo.global_position,
 		"rot": cuerpo.rotation.y,
+		"salud": cuerpo.salud_actual,
+		"mana": cuerpo.mana_actual,
+		"escudo": cuerpo.escudo_actual,
+		"revive_en": cuerpo.revive_en,
+		"cooldowns": [
+			cuerpo._cooldowns[0], cuerpo._cooldowns[1],
+			cuerpo._cooldowns[2], cuerpo._cooldowns[3],
+		],
+		"inv": inventario,
+		"xp": cuerpo.estadisticas.experiencia,
+		"dano": cuerpo.dano_infligido,
+		"recibido": cuerpo.dano_recibido,
+		"muerto": cuerpo.esta_muerto,
+	}
+	# Lo que solo cambia al subir de nivel, comprar o gastar talentos se manda
+	# cuando cambia: eran ~700 B por jugador y por tick (más de la mitad del
+	# snapshot con 3 jugadores).
+	var clase := &"prisionero"
+	if cuerpo.arma_actual != null:
+		clase = cuerpo.arma_actual.id_clase()
+	var est := {
 		"clase": clase,
 		"base": {
 			"fuerza": cuerpo.estadisticas.fuerza,
@@ -919,28 +947,19 @@ func _datos_jugador(peer: int, cuerpo: GladiatorController) -> Dictionary:
 			"agilidad": cuerpo.estadisticas.agilidad_total,
 			"inteligencia": cuerpo.estadisticas.inteligencia_total,
 		},
-		"salud": cuerpo.salud_actual,
 		"salud_max": cuerpo.estadisticas.salud_maxima,
-		"mana": cuerpo.mana_actual,
 		"mana_max": cuerpo.estadisticas.mana_maximo,
-		"escudo": cuerpo.escudo_actual,
 		"nivel": cuerpo.estadisticas.nivel,
-		"xp": cuerpo.estadisticas.experiencia,
 		"puntos_libres": cuerpo.estadisticas.puntos_libres,
 		"puntos_rojos": cuerpo.puntos_rojos,
-		"revive_en": cuerpo.revive_en,
-		"cooldowns": [
-			cuerpo._cooldowns[0], cuerpo._cooldowns[1],
-			cuerpo._cooldowns[2], cuerpo._cooldowns[3],
-		],
 		"rangos": cuerpo._rangos_habilidad.duplicate(),
 		"desbloqueadas": cuerpo._habilidades_desbloqueadas.duplicate(),
 		"talentos": cuerpo._talentos_activos.duplicate(),
-		"inv": inventario,
-		"dano": cuerpo.dano_infligido,
-		"recibido": cuerpo.dano_recibido,
-		"muerto": cuerpo.esta_muerto,
 	}
+	if _estatico_jugador.get(peer, {}) != est:
+		_estatico_jugador[peer] = est
+		fila["est"] = est
+	return fila
 
 
 func _al_recibir_bienvenida(peer: int) -> void:
@@ -1029,7 +1048,8 @@ func _aplicar_snapshot(datos: Dictionary) -> void:
 			cuerpo.red = red
 			_jugadores_remotos[id] = cuerpo
 			jugadores.append(cuerpo)
-		_aplicar_clase_mirror(cuerpo, StringName(fila.get("clase", &"prisionero")))
+		if fila.has("est"):
+			_aplicar_clase_mirror(cuerpo, StringName(fila["est"].get("clase", &"prisionero")))
 		cuerpo.aplicar_estado_red(fila)
 		if cuerpo.inventario != null:
 			cuerpo.inventario.aplicar_estado_red(fila.get("inv", []))
