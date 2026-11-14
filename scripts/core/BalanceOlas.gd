@@ -13,8 +13,13 @@ const ARQUERO := &"arquero"
 const HECHICERO := &"hechicero"
 const TANQUE := &"tanque"
 const ELITE := &"elite"
+const SABUESO := &"sabueso"
+const BRUTO := &"bruto"
+const NIGROMANTE := &"nigromante"
 
-const TIPOS_VALIDOS: Array[StringName] = [ESQUELETO, ESPECTRO, ARQUERO, HECHICERO, TANQUE, ELITE]
+const TIPOS_VALIDOS: Array[StringName] = [
+	ESQUELETO, ESPECTRO, ARQUERO, HECHICERO, TANQUE, ELITE, SABUESO, BRUTO, NIGROMANTE
+]
 
 ## Perfiles por número de oleada (1..20). `tipos` son pesos relativos de
 ## aparición; `vida` y `dano` multiplican las estadísticas base del enemigo.
@@ -26,20 +31,20 @@ const PERFILES := [
 	{"titulo": "Círculo de magos", "tipos": {HECHICERO: 0.7, ESQUELETO: 0.3}, "vida": 1.0, "dano": 1.0, "jefe": &""},
 	{"titulo": "El Campeón del Imperio", "tipos": {ESQUELETO: 1.0}, "vida": 1.05, "dano": 1.0, "jefe": &"caballero"},
 	{"titulo": "Muro de bárbaros", "tipos": {TANQUE: 0.6, ESQUELETO: 0.4}, "vida": 1.05, "dano": 1.0, "jefe": &""},
-	{"titulo": "Hostigadores", "tipos": {ESPECTRO: 0.5, ARQUERO: 0.5}, "vida": 1.0, "dano": 1.05, "jefe": &""},
-	{"titulo": "Magos y huesos", "tipos": {HECHICERO: 0.5, ESQUELETO: 0.5}, "vida": 1.05, "dano": 1.05, "jefe": &""},
-	{"titulo": "Asedio mixto", "tipos": {TANQUE: 0.35, ARQUERO: 0.35, ESPECTRO: 0.3}, "vida": 1.1, "dano": 1.1, "jefe": &""},
+	{"titulo": "Jauría de sabuesos", "tipos": {SABUESO: 0.75, ESQUELETO: 0.25}, "vida": 1.0, "dano": 1.05, "jefe": &""},
+	{"titulo": "Hostigadores", "tipos": {ESPECTRO: 0.4, ARQUERO: 0.4, SABUESO: 0.2}, "vida": 1.0, "dano": 1.05, "jefe": &""},
+	{"titulo": "Magos y huesos", "tipos": {HECHICERO: 0.45, ESQUELETO: 0.4, NIGROMANTE: 0.15}, "vida": 1.05, "dano": 1.05, "jefe": &""},
 	{"titulo": "El Liche de la Arena", "tipos": {HECHICERO: 0.6, ESQUELETO: 0.4}, "vida": 1.1, "dano": 1.1, "jefe": &"liche"},
-	{"titulo": "Falange imperial", "tipos": {TANQUE: 0.5, ARQUERO: 0.3, ESQUELETO: 0.2}, "vida": 1.1, "dano": 1.1, "jefe": &""},
-	{"titulo": "Vendaval de espectros", "tipos": {ESPECTRO: 0.7, ARQUERO: 0.3}, "vida": 1.1, "dano": 1.15, "jefe": &""},
-	{"titulo": "Concilio oscuro", "tipos": {HECHICERO: 0.8, TANQUE: 0.2}, "vida": 1.15, "dano": 1.15, "jefe": &""},
-	{"titulo": "Sangre y acero", "tipos": {TANQUE: 0.3, ESPECTRO: 0.3, ARQUERO: 0.2, HECHICERO: 0.2}, "vida": 1.15, "dano": 1.2, "jefe": &""},
+	{"titulo": "Brutos de la mina", "tipos": {BRUTO: 0.55, TANQUE: 0.25, ESQUELETO: 0.2}, "vida": 1.1, "dano": 1.1, "jefe": &""},
+	{"titulo": "Vendaval de espectros", "tipos": {ESPECTRO: 0.6, ARQUERO: 0.25, SABUESO: 0.15}, "vida": 1.1, "dano": 1.15, "jefe": &""},
+	{"titulo": "Concilio oscuro", "tipos": {NIGROMANTE: 0.6, HECHICERO: 0.4}, "vida": 1.15, "dano": 1.15, "jefe": &""},
+	{"titulo": "Sangre y acero", "tipos": {TANQUE: 0.3, ESPECTRO: 0.25, ARQUERO: 0.2, BRUTO: 0.25}, "vida": 1.15, "dano": 1.2, "jefe": &""},
 	{"titulo": "La guardia pretoriana", "tipos": {ELITE: 0.25, ESQUELETO: 0.75}, "vida": 1.15, "dano": 1.15, "jefe": &"caballero"},
-	{"titulo": "Bárbaros y magos", "tipos": {TANQUE: 0.5, HECHICERO: 0.5}, "vida": 1.2, "dano": 1.2, "jefe": &""},
-	{"titulo": "Flechas sin fin", "tipos": {ARQUERO: 0.8, ESPECTRO: 0.2}, "vida": 1.2, "dano": 1.2, "jefe": &""},
-	{"titulo": "El asedio final", "tipos": {TANQUE: 0.3, ARQUERO: 0.3, HECHICERO: 0.2, ESPECTRO: 0.2}, "vida": 1.25, "dano": 1.25, "jefe": &""},
-	{"titulo": "Última muralla", "tipos": {TANQUE: 0.35, ELITE: 0.2, ARQUERO: 0.25, HECHICERO: 0.2}, "vida": 1.3, "dano": 1.3, "jefe": &""},
-	{"titulo": "El Emperador de Hierro", "tipos": {TANQUE: 0.3, ESPECTRO: 0.3, ARQUERO: 0.2, HECHICERO: 0.2}, "vida": 1.35, "dano": 1.35, "jefe": &"liche"},
+	{"titulo": "Bárbaros y magos", "tipos": {BRUTO: 0.35, NIGROMANTE: 0.35, TANQUE: 0.3}, "vida": 1.2, "dano": 1.2, "jefe": &""},
+	{"titulo": "Flechas sin fin", "tipos": {ARQUERO: 0.7, ESPECTRO: 0.15, SABUESO: 0.15}, "vida": 1.2, "dano": 1.2, "jefe": &""},
+	{"titulo": "El asedio final", "tipos": {TANQUE: 0.25, ARQUERO: 0.2, NIGROMANTE: 0.2, BRUTO: 0.2, SABUESO: 0.15}, "vida": 1.25, "dano": 1.25, "jefe": &""},
+	{"titulo": "Última muralla", "tipos": {TANQUE: 0.3, BRUTO: 0.25, ARQUERO: 0.2, NIGROMANTE: 0.25}, "vida": 1.3, "dano": 1.3, "jefe": &""},
+	{"titulo": "El Emperador de Hierro", "tipos": {TANQUE: 0.3, ESPECTRO: 0.25, ARQUERO: 0.2, BRUTO: 0.25}, "vida": 1.35, "dano": 1.35, "jefe": &"liche"},
 ]
 
 

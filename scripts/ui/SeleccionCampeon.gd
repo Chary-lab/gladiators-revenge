@@ -105,26 +105,32 @@ func _crear_cabecera() -> Control:
 	return fila
 
 
-## Riel de clases: rombos verticales, como los sellos de una orden.
+## Riel de clases: rombos verticales, como los sellos de una orden. Con más de
+## cuatro campeones el rombo se encoge para que la columna siga cabiendo en 720
+## px de alto sin scroll (5 clases: 96 px por sello).
 func _crear_riel() -> Control:
 	var riel := VBoxContainer.new()
-	riel.custom_minimum_size = Vector2(112, 0)
+	var varias := _perfiles.size() > 4
+	var lado := 96.0 if varias else 112.0
+	var emblema_lado := 82.0 if varias else 96.0
+	riel.custom_minimum_size = Vector2(lado, 0)
 	riel.alignment = BoxContainer.ALIGNMENT_CENTER
-	riel.add_theme_constant_override("separation", 14)
+	riel.add_theme_constant_override("separation", 10 if varias else 14)
 
 	for i in _perfiles.size():
 		var perfil: Dictionary = _perfiles[i]
 		var clase := StringName(perfil.get("clase", ""))
 		var boton := Button.new()
-		boton.custom_minimum_size = Vector2(112, 112)
+		boton.custom_minimum_size = Vector2(lado, lado)
 		boton.focus_mode = Control.FOCUS_NONE
 		boton.text = ""
 		boton.flat = true
 		var vacio := StyleBoxEmpty.new()
 		for estado in ["normal", "hover", "pressed", "focus", "disabled"]:
 			boton.add_theme_stylebox_override(estado, vacio)
-		var emblema := ForjaTema.Emblema.new(clase, 96.0)
-		emblema.position = Vector2(8, 6)
+		var emblema := ForjaTema.Emblema.new(clase, emblema_lado)
+		var margen := (lado - emblema_lado) * 0.5
+		emblema.position = Vector2(margen, margen * 0.6)
 		boton.add_child(emblema)
 		_emblemas.append(emblema)
 		boton.pressed.connect(_seleccionar.bind(i))
@@ -361,7 +367,10 @@ func _crear_pie() -> Control:
 	_volver.pressed.connect(_cerrar)
 	fila.add_child(_volver)
 	var tactil := OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	var texto_ayuda := "Tocá una clase y confirmá" if tactil else "1 · 2 · 3 cambian de clase   ·   Enter confirma   ·   Esc cierra"
+	var teclas := ""
+	for i in _perfiles.size():
+		teclas += ("" if i == 0 else " · ") + str(i + 1)
+	var texto_ayuda := "Tocá una clase y confirmá" if tactil else "%s cambian de clase   ·   Enter confirma   ·   Esc cierra" % teclas
 	var ayuda := ForjaTema.etiqueta(texto_ayuda, 10, ForjaTema.TENUE)
 	ayuda.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	fila.add_child(ayuda)
@@ -581,7 +590,7 @@ func _input(evento: InputEvent) -> void:
 	if not (evento is InputEventKey) or not evento.pressed or evento.echo:
 		return
 	match (evento as InputEventKey).keycode:
-		KEY_1, KEY_2, KEY_3:
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
 			_seleccionar((evento as InputEventKey).keycode - KEY_1)
 		KEY_ENTER, KEY_KP_ENTER:
 			_confirmar()

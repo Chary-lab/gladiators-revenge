@@ -158,7 +158,7 @@ func _ready() -> void:
 		_iniciar_local()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-ficha" in args or "--captura-inicio" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-ficha" in args or "--captura-inicio" in args or "--captura-arquetipos" in args:
 		_capturar()
 
 	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
@@ -800,6 +800,10 @@ func _al_confirmar_apodo(apodo: String) -> void:
 
 
 func _al_elegir_campeon(clase: StringName) -> void:
+	# Si la elección llega por código (red o pruebas) el modal no se cierra solo:
+	# sin esto la forja se quedaba dibujada encima de la arena.
+	if _seleccion != null and is_instance_valid(_seleccion):
+		_seleccion.queue_free()
 	_seleccion = null
 	if es_cliente:
 		if red != null:
@@ -2497,7 +2501,16 @@ func _capturar() -> void:
 	var menu_red := "--captura-menu" in args
 	var capturar_apodo := "--captura-apodo" in args
 	var capturar_ficha := "--captura-ficha" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha
+	var arquetipos := "--captura-arquetipos" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos
+	# Permite fotografiar cualquier campeón: --captura-cerca --clase=saeta.
+	var clase_forzada := ""
+	for arg in args:
+		var texto := String(arg)
+		if texto.begins_with("--clase="):
+			clase_forzada = texto.trim_prefix("--clase=")
+	if clase_forzada != "":
+		_al_elegir_campeon(StringName(clase_forzada))
 	if combate:
 		var sin_arma: bool = _jugador != null and _jugador.arma_actual != null and _jugador.arma_actual.clase == WeaponItem.Clase.PRISIONERO
 		if sin_arma:
@@ -2530,6 +2543,23 @@ func _capturar() -> void:
 			_hud.alternar_tienda()
 		elif cerca and _camara != null:
 			_camara.size = 7.0
+		if arquetipos:
+			# Foto de familia de los arquetipos nuevos: sabueso, bruto y
+			# nigromante delante del gladiador con su barra de vida visible.
+			var tipos: Array[StringName] = [&"sabueso", &"bruto", &"nigromante"]
+			var indice := 0
+			var pool := _oleadas.get("_pool") as ObjectPool
+			for tipo in tipos:
+				var enemigo := ArenaEnemy.crear()
+				add_child(enemigo)
+				enemigo.global_position = _jugador.global_position + Vector3(-2.6 + indice * 2.6, 0.0, -2.8)
+				enemigo.preparar(12, false, _jugador, _bandera, _oleadas, pool, 0, tipo, 1.0, 1.0)
+				enemigo.set_physics_process(false)
+				enemigo.salud_actual = enemigo.salud_maxima * 0.55
+				enemigo.call("_actualizar_barra_vida")
+				indice += 1
+			if _camara != null:
+				_camara.size = 11.0
 		if capturar_ficha and _tactil != null:
 			_tactil.alternar_ficha()
 			await get_tree().create_timer(0.6).timeout
@@ -2545,7 +2575,7 @@ func _capturar() -> void:
 		if fin:
 			_finalizar("DERROTA", "Los gladiadores han caído en la arena.")
 			await get_tree().create_timer(1.2).timeout
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha) else 8.5).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -2572,6 +2602,8 @@ func _capturar() -> void:
 		ruta = "res://captura_apodo.png"
 	elif capturar_ficha:
 		ruta = "res://captura_ficha.png"
+	elif arquetipos:
+		ruta = "res://captura_arquetipos.png"
 	elif combate:
 		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))

@@ -78,10 +78,32 @@ func _ejecutar() -> void:
 
 	# --- Armas -------------------------------------------------------------
 	var catalogo := WeaponItem.crear_catalogo_base()
-	_comprobar(catalogo.size() == 3, "catálogo base con 3 armas")
+	_comprobar(catalogo.size() == 5, "catálogo base con 5 armas (Bastión, Filo, Cetro, Hoplita, Saetera)")
 	for arma in catalogo:
 		_comprobar(arma.es_valida(), "arma válida: %s" % arma.nombre)
 	_comprobar(WeaponItem.crear_prisionero().es_valida(), "kit de prisionero válido")
+
+	# Las dos clases nuevas escalan con su atributo y traen las cuatro teclas.
+	var lanza: WeaponItem = null
+	var saeta: WeaponItem = null
+	for arma in catalogo:
+		if arma.id_clase() == &"lanza":
+			lanza = arma
+		elif arma.id_clase() == &"saeta":
+			saeta = arma
+	_comprobar(lanza != null and lanza.atributo_principal == &"fuerza", "el Hoplita escala con Fuerza")
+	_comprobar(saeta != null and saeta.atributo_principal == &"agilidad", "la Saetera escala con Agilidad")
+	var kits_ok := lanza != null and saeta != null
+	for arma in [lanza, saeta]:
+		if arma == null or arma.habilidades.size() != 4:
+			kits_ok = false
+			continue
+		if arma.habilidades[3] == null or arma.habilidades[3].rango_maximo != 3:
+			kits_ok = false
+		for habilidad in arma.habilidades:
+			if habilidad == null or habilidad.id == &"" or habilidad.mejoras_rango.is_empty():
+				kits_ok = false
+	_comprobar(kits_ok, "Hoplita y Saetera traen 4 habilidades con rangos y definitiva a rango 3")
 
 	# --- Forja de campeones: la clase se elige en su pantalla --------------
 	var pedestales: Array = escena.get("_pedestales")
@@ -294,6 +316,15 @@ func _ejecutar() -> void:
 			180
 		)
 		_comprobar(golpeado, "el ataque básico daña al enemigo", true)
+		var barra := enemigo.get("_barra_raiz") as Node3D
+		_comprobar(
+			barra != null and barra.visible,
+			"el enemigo herido muestra su barra de vida en el mundo"
+		)
+		_comprobar(
+			enemigo.get("es_arquero") != null,
+			"el enemigo expone su arquetipo para la UI y la red"
+		)
 
 
 	# --- Jefe: fases de furia ---------------------------------------------
@@ -408,21 +439,39 @@ func _ejecutar() -> void:
 		hud.alternar_tienda()
 		await process_frame
 		var panel_tienda = hud.get("_tienda")
-		var grid: GridContainer = panel_tienda.get("_grid")
-		var cartas_mercado := grid.get_child_count()
+		var grids: Array = panel_tienda.get("_cuadriculas")
+		var cartas_mercado := 0
 		var forjables := 0
-		for carta in grid.get_children():
-			if carta is Button and carta.has_meta(&"forjable"):
-				forjables += 1
+		for grid in grids:
+			cartas_mercado += (grid as GridContainer).get_child_count()
+			for carta in grid.get_children():
+				if carta is Button and carta.has_meta(&"forjable"):
+					forjables += 1
 		_comprobar(
 			cartas_mercado == ItemCatalog.vendibles().size() + ItemCatalog.recetas().size()
 			and forjables == ItemCatalog.recetas().size(),
-			"la tienda lista lo vendible y los forjables con su receta en una sola cuadrícula"
+			"la tienda lista lo vendible y los forjables con su receta en secciones"
 		)
 		_comprobar(panel_tienda.get("_chip_vender") != null, "la tienda tiene el modo VENDER")
+		# La ficha lateral se rellena al elegir y la búsqueda filtra la lista.
+		var ficha_accion: Button = panel_tienda.get("_ficha_accion")
+		var primer_vendible: ItemData = ItemCatalog.vendibles()[0]
+		panel_tienda._seleccionar_item(primer_vendible, -1, false)
+		await process_frame
+		_comprobar(
+			ficha_accion != null and (panel_tienda.get("_ficha_nombre") as Label).text == primer_vendible.nombre,
+			"la ficha lateral muestra el objeto elegido y su botón"
+		)
+		panel_tienda._al_buscar("zzz")
+		await process_frame
+		_comprobar((panel_tienda.get("_cuadriculas") as Array).is_empty(), "la búsqueda filtra la lista")
+		panel_tienda._al_buscar("")
+		await process_frame
 		panel_tienda._cambiar_modo(true)
 		await process_frame
-		var cartas_venta := grid.get_child_count()
+		var cartas_venta := 0
+		for grid in panel_tienda.get("_cuadriculas"):
+			cartas_venta += (grid as GridContainer).get_child_count()
 		_comprobar(cartas_venta >= 1, "el modo VENDER lista las ranuras con objeto")
 		panel_tienda._cambiar_modo(false)
 		await process_frame
@@ -579,6 +628,17 @@ func _ejecutar() -> void:
 		if not ArenaEnemy.ARQUETIPOS.has(tipo) or not ArenaEnemy.VISUALES.has(tipo):
 			arquetipos_ok = false
 	_comprobar(arquetipos_ok, "cada arquetipo tiene estadísticas y modelo visual")
+	_comprobar(
+		BalanceOlas.perfil(7)["tipos"].has(BalanceOlas.SABUESO)
+		and BalanceOlas.perfil(11)["tipos"].has(BalanceOlas.BRUTO)
+		and BalanceOlas.perfil(13)["tipos"].has(BalanceOlas.NIGROMANTE),
+		"las oleadas nuevas meten sabuesos, brutos y nigromantes"
+	)
+	_comprobar(
+		float(ArenaEnemy.ARQUETIPOS[&"bruto"].get("armadura", 0.0)) > 0.0
+		and float(ArenaEnemy.VISUALES[&"bruto"]["escala"]) > 1.0,
+		"el bruto es más grande y aguanta el daño físico"
+	)
 	# --- Lo que el snapshot debe llevar vivo ------------------------------
 	# El enfriamiento se leía del array del controlador, que nadie descuenta: el
 	# cliente recibía siempre el valor del lanzamiento y su CD quedaba congelado.
@@ -641,7 +701,7 @@ func _ejecutar() -> void:
 		)
 		_comprobar(tactil.has_signal("pausa"), "el HUD táctil tiene botón de pausa")
 		var perfiles: Array = escena._perfiles_campeon()
-		_comprobar(perfiles.size() == 3, "la forja de campeones ofrece las tres clases")
+		_comprobar(perfiles.size() == 5, "la forja de campeones ofrece las cinco clases")
 		var primer_perfil: Dictionary = perfiles[0]
 		_comprobar(
 			float(primer_perfil.get("vida", 0.0)) > 0.0 and float(primer_perfil.get("dano_max", 0.0)) > 0.0,
@@ -651,8 +711,8 @@ func _ejecutar() -> void:
 		escena.add_child(seleccion)
 		seleccion.configurar(perfiles, &"")
 		_comprobar(
-			(seleccion.get("_emblemas") as Array).size() == 3 and seleccion.get("_marca") != null,
-			"la pantalla de campeón monta emblemas y ficha"
+			(seleccion.get("_emblemas") as Array).size() == perfiles.size() and seleccion.get("_marca") != null,
+			"la pantalla de campeón monta un emblema por clase y la ficha"
 		)
 		_comprobar(
 			seleccion.get("_vitrina") != null and seleccion.get("_btn_elegir") != null,

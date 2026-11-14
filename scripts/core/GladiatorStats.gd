@@ -36,6 +36,8 @@ const MULT_DANO_POR_CLASE := {
 	&"bastion": 1.00,
 	&"filo": 1.12,
 	&"cetro": 0.92,
+	&"lanza": 1.05,
+	&"saeta": 1.10,
 }
 
 ## Crecimiento automático por nivel según la clase (FUE, AGI, INT). Los
@@ -45,6 +47,8 @@ const CRECIMIENTO_POR_CLASE := {
 	&"bastion": Vector3(3, 1, 1),
 	&"filo": Vector3(1, 3, 1),
 	&"cetro": Vector3(1, 1, 3),
+	&"lanza": Vector3(3, 2, 1),
+	&"saeta": Vector3(1, 4, 1),
 }
 
 # --- Fuerza ---------------------------------------------------------------

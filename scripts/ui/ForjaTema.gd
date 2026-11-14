@@ -51,6 +51,8 @@ const NOMBRE_EMBLEMA := {
 	&"bastion": "BASTION",
 	&"filo": "FILO",
 	&"cetro": "CETRO",
+	&"lanza": "HOPLITA",
+	&"saeta": "SAETERA",
 	&"prisionero": "PRISIONERO",
 }
 
@@ -58,6 +60,8 @@ const LEMA_CLASE := {
 	&"bastion": "Muro de la arena. Aguanta y devuelve el golpe.",
 	&"filo": "Filo veloz. Mata antes de que te toquen.",
 	&"cetro": "Voluntad arcana. Quema desde la distancia.",
+	&"lanza": "La falange no retrocede. La marea rompe y se retira.",
+	&"saeta": "Un aliento, una flecha. El enemigo cae antes de verte.",
 	&"prisionero": "Sin gloria. Sin armas. Solo furia.",
 }
 
@@ -65,6 +69,8 @@ const ROL_CLASE := {
 	&"bastion": "TANQUE",
 	&"filo": "VERDUGO",
 	&"cetro": "CONVOCADOR",
+	&"lanza": "TANQUE",
+	&"saeta": "TIRADOR",
 	&"prisionero": "SIN CLASE",
 }
 
@@ -72,6 +78,8 @@ const DESCRIPCION_CLASE := {
 	&"bastion": "Aguanta el centro de la arena con escudo, provocación y golpes sísmicos.",
 	&"filo": "Entra y sale del combate: dash, sangrado y crítico alto.",
 	&"cetro": "Controla la distancia con proyectiles, espíritus y quemadura arcana.",
+	&"lanza": "Sostiene la línea con estocadas largas, muros de picas y una formación que absorbe el asedio.",
+	&"saeta": "Castiga desde la distancia: lluvia de púas, saltos cortos y una ultimate que marca a todo el enjambre.",
 }
 
 # --- Tipografía -------------------------------------------------------------
@@ -505,6 +513,27 @@ class Emblema:
 						c - Vector2(0, r * 0.22) + Vector2(cos(a), sin(a)) * r * 0.86,
 						Color(color.r, color.g, color.b, 0.75), 1.4
 					)
+			&"lanza":
+				# Pica: asta larga, punta y regatón.
+				draw_line(c + Vector2(0, -r * 0.98), c + Vector2(0, r * 0.86), color, 2.8)
+				draw_colored_polygon(PackedVector2Array([
+					c + Vector2(0, -r * 1.04), c + Vector2(r * 0.26, -r * 0.62),
+					c + Vector2(-r * 0.26, -r * 0.62),
+				]), color)
+				draw_line(c + Vector2(-r * 0.30, r * 0.32), c + Vector2(r * 0.30, r * 0.32), color, 2.2)
+			&"saeta":
+				# Arco: media luna con cuerda y flecha.
+				draw_arc(c, r * 0.72, -PI * 0.55, PI * 0.55, 20, color, 2.6)
+				draw_line(
+					c + Vector2(cos(-PI * 0.55), sin(-PI * 0.55)) * r * 0.72,
+					c + Vector2(cos(PI * 0.55), sin(PI * 0.55)) * r * 0.72,
+					Color(color.r, color.g, color.b, 0.8), 1.8
+				)
+				draw_line(c + Vector2(-r * 0.50, 0), c + Vector2(r * 0.72, 0), color, 2.4)
+				draw_colored_polygon(PackedVector2Array([
+					c + Vector2(r * 0.94, 0), c + Vector2(r * 0.58, -r * 0.20),
+					c + Vector2(r * 0.58, r * 0.20),
+				]), color)
 			_:
 				draw_arc(c, r * 0.5, 0.0, TAU, 24, color, 2.0)
 

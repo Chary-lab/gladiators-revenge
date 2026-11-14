@@ -52,6 +52,20 @@ var es_tanque := false
 var escudo_tanque_actual := 0.0
 var escudo_tanque_maxima := 0.0
 var _tiempo_recarga_escudo := 0.0
+## Sabueso: hostigador veloz de vida baja que muerde en rápida sucesión.
+var es_sabueso := false
+## Bruto: golpeador lento y pesado con armadura que recorta el daño físico.
+var es_bruto := false
+## Nigromante: mago que sostiene a la horda con un ritual de curación en área.
+var es_nigromante := false
+var _reduccion_fisica := 0.0
+var _ritual_restante := 0.0
+var _escala_base := 1.0
+## Barra de vida en el mundo: se construye la primera vez y solo se muestra
+## cuando el enemigo está herido o es una amenaza (élite, bruto, tanque).
+var _barra_raiz: Node3D
+var _barra_relleno: MeshInstance3D
+var _barra_fondo: MeshInstance3D
 var recompensa := 8
 var xp_recompensa := 0
 var visual: CharacterVisual
@@ -92,12 +106,15 @@ func _construir() -> void:
 
 ## Ruta, tinte y perfil de animación de cada arquetipo de enemigo.
 const VISUALES := {
-	&"esqueleto": {"ruta": RUTA_ESQUELETO, "tinte": Color(0.82, 0.95, 0.90), "perfil": "esqueleto"},
-	&"espectro": {"ruta": RUTA_ESPECTRO, "tinte": Color(0.74, 0.86, 1.0), "perfil": "esqueleto"},
-	&"arquero": {"ruta": RUTA_ESPECTRO, "tinte": Color(0.95, 0.45, 0.40), "perfil": "esqueleto"},
-	&"hechicero": {"ruta": RUTA_MAGO, "tinte": Color(0.80, 0.40, 1.00), "perfil": "esqueleto"},
-	&"tanque": {"ruta": RUTA_BARBARO, "tinte": Color(0.70, 0.70, 0.80), "perfil": "barbaro"},
-	&"elite": {"ruta": RUTA_CABALLERO, "tinte": Color(1.0, 0.72, 0.66), "perfil": "caballero"},
+	&"esqueleto": {"ruta": RUTA_ESQUELETO, "tinte": Color(0.82, 0.95, 0.90), "perfil": "esqueleto", "escala": 1.0},
+	&"espectro": {"ruta": RUTA_ESPECTRO, "tinte": Color(0.74, 0.86, 1.0), "perfil": "esqueleto", "escala": 1.0},
+	&"arquero": {"ruta": RUTA_ESPECTRO, "tinte": Color(0.95, 0.45, 0.40), "perfil": "esqueleto", "escala": 1.0},
+	&"hechicero": {"ruta": RUTA_MAGO, "tinte": Color(0.80, 0.40, 1.00), "perfil": "esqueleto", "escala": 1.0},
+	&"tanque": {"ruta": RUTA_BARBARO, "tinte": Color(0.70, 0.70, 0.80), "perfil": "barbaro", "escala": 1.0},
+	&"elite": {"ruta": RUTA_CABALLERO, "tinte": Color(1.0, 0.72, 0.66), "perfil": "caballero", "escala": 1.25},
+	&"sabueso": {"ruta": RUTA_ESPECTRO, "tinte": Color(0.62, 0.32, 0.24), "perfil": "esqueleto", "escala": 0.82},
+	&"bruto": {"ruta": RUTA_BARBARO, "tinte": Color(0.95, 0.62, 0.32), "perfil": "barbaro", "escala": 1.42},
+	&"nigromante": {"ruta": RUTA_MAGO, "tinte": Color(0.42, 0.88, 0.46), "perfil": "mago", "escala": 1.05},
 }
 
 
@@ -129,6 +146,8 @@ const DANO_BASE := 6.0
 const DANO_POR_RONDA := 2.0
 
 ## Modificadores por arquetipo: vida, daño, movimiento y cadencia.
+## `armadura` reduce el daño físico recibido (fracción); `ritual` activa el
+## pulso de curación en área del nigromante.
 const ARQUETIPOS := {
 	&"esqueleto": {"vida": 1.00, "dano": 1.00, "vel": 1.00, "cadencia": 1.00, "escudo": false},
 	&"espectro": {"vida": 0.75, "dano": 0.90, "vel": 1.30, "cadencia": 0.85, "escudo": false},
@@ -136,6 +155,9 @@ const ARQUETIPOS := {
 	&"hechicero": {"vida": 0.65, "dano": 1.25, "vel": 0.85, "cadencia": 1.10, "escudo": false},
 	&"tanque": {"vida": 2.00, "dano": 1.40, "vel": 0.65, "cadencia": 1.35, "escudo": true},
 	&"elite": {"vida": 2.40, "dano": 1.50, "vel": 1.00, "cadencia": 1.00, "escudo": false},
+	&"sabueso": {"vida": 0.55, "dano": 0.75, "vel": 1.45, "cadencia": 0.70, "escudo": false},
+	&"bruto": {"vida": 2.20, "dano": 1.55, "vel": 0.72, "cadencia": 1.28, "escudo": false, "armadura": 0.22},
+	&"nigromante": {"vida": 0.95, "dano": 1.05, "vel": 0.82, "cadencia": 1.20, "escudo": false, "ritual": true},
 }
 
 
@@ -177,10 +199,16 @@ func preparar(
 		arquetipo = &"elite"
 
 	var mods: Dictionary = ARQUETIPOS[arquetipo]
-	es_ligero = arquetipo == &"espectro"
+	es_ligero = arquetipo == &"espectro" or arquetipo == &"sabueso"
 	es_arquero = arquetipo == &"arquero"
-	es_hechicero = arquetipo == &"hechicero"
+	es_hechicero = arquetipo == &"hechicero" or arquetipo == &"nigromante"
 	es_tanque = arquetipo == &"tanque"
+	es_sabueso = arquetipo == &"sabueso"
+	es_bruto = arquetipo == &"bruto"
+	es_nigromante = arquetipo == &"nigromante"
+	_reduccion_fisica = float(mods.get("armadura", 0.0))
+	_ritual_restante = 3.0 if es_nigromante else 0.0
+	_escala_base = float(VISUALES.get(arquetipo, VISUALES[&"esqueleto"]).get("escala", 1.0))
 
 	var factor_elite := 2.4 if elite else 1.0
 	salud_maxima = (VIDA_BASE + ronda * VIDA_POR_RONDA) * factor_elite * vida_mult * float(mods["vida"])
@@ -208,8 +236,12 @@ func preparar(
 	_vulnerable_magico = 0.0
 	_aturdido = 0.0
 	_configurar_visual(arquetipo)
-	scale = Vector3.ONE * (1.25 if elite else 1.0)
+	scale = Vector3.ONE * _escala_base
+	if _barra_raiz != null:
+		_barra_raiz.visible = false
+	_actualizar_barra_vida()
 	add_to_group(GRUPO)
+	_aparecer()
 	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
 	if tracker != null:
 		tracker.registrar(self)
@@ -218,6 +250,9 @@ func preparar(
 func al_obtener() -> void:
 	activo = false
 	_tiempo_muerte = 0.0
+	_aturdido = 0.0
+	if _barra_raiz != null:
+		_barra_raiz.visible = false
 	if visual != null:
 		visual.revivir()
 
@@ -253,6 +288,7 @@ func aplicar_remoto(posicion: Vector3, rotacion: float, vida: float, vida_max: f
 ## Espejo de red: el servidor manda 15 posiciones por segundo; sin esto el
 ## enemigo avanza a saltos de ~1 m y en el móvil se siente trabado.
 func _process(delta: float) -> void:
+	_sincronizar_barra()
 	if not _es_remoto:
 		return
 	var peso := clampf(16.0 * delta, 0.0, 1.0)
@@ -288,7 +324,14 @@ func _physics_process(delta: float) -> void:
 
 	var distancia := global_position.distance_to(objetivo.global_position)
 
-	# Arquero: mantener distancia y disparar proyectiles
+	# Nigromante: ritual oscuro periódico que sostiene a la horda.
+	if es_nigromante:
+		_ritual_restante -= delta
+		if _ritual_restante <= 0.0:
+			_ritual_restante = 6.5
+			_ritual_oscuro()
+
+	# Arquero: mantener distancia y disparar proyectiles.
 	if es_arquero:
 		if distancia > rango_ataque_distancia:
 			var direccion := objetivo.global_position - global_position
@@ -300,7 +343,6 @@ func _physics_process(delta: float) -> void:
 				move_and_slide()
 				if visual != null:
 					visual.mover(velocity.length())
-			return
 		else:
 			velocity = Vector3.ZERO
 			if visual != null:
@@ -309,21 +351,20 @@ func _physics_process(delta: float) -> void:
 			if _tiempo_disparo <= 0.0:
 				_tiempo_disparo = cadencia_disparo
 				_disparar_proyectil(objetivo)
-			return
+		return
 
-		# Hechicero: mantener distancia y lanzar magia de área
-		if es_hechicero:
-			if distancia > rango_ataque_magia:
-				var direccion := objetivo.global_position - global_position
-				direccion.y = 0.0
-				if direccion.length_squared() > 0.0004:
-					direccion = direccion.normalized()
-					velocity = direccion * velocidad
-					rotation.y = lerp_angle(rotation.y, atan2(direccion.x, direccion.z), 10.0 * delta)
-					move_and_slide()
-					if visual != null:
-						visual.mover(velocity.length())
-			return
+	# Hechicero / nigromante: mantener distancia y lanzar magia de área.
+	if es_hechicero:
+		if distancia > rango_ataque_magia:
+			var direccion := objetivo.global_position - global_position
+			direccion.y = 0.0
+			if direccion.length_squared() > 0.0004:
+				direccion = direccion.normalized()
+				velocity = direccion * velocidad
+				rotation.y = lerp_angle(rotation.y, atan2(direccion.x, direccion.z), 10.0 * delta)
+				move_and_slide()
+				if visual != null:
+					visual.mover(velocity.length())
 		else:
 			velocity = Vector3.ZERO
 			if visual != null:
@@ -332,7 +373,7 @@ func _physics_process(delta: float) -> void:
 			if _tiempo_magia <= 0.0:
 				_tiempo_magia = cadencia_magia
 				_disparar_magia(objetivo)
-			return
+		return
 
 	if distancia > rango:
 		var direccion := objetivo.global_position - global_position
@@ -353,6 +394,7 @@ func _physics_process(delta: float) -> void:
 	if _temporizador <= 0.0:
 		_temporizador = cadencia
 		if visual != null:
+			visual.ajustar_ritmo(1.7 / maxf(cadencia, 0.2))
 			visual.atacar()
 		if objetivo.has_method("recibir_dano"):
 			objetivo.recibir_dano(dano, &"fisico", self)
@@ -389,15 +431,23 @@ func _disparar_magia(objetivo: Node3D) -> void:
 	tween.tween_property(material, "albedo_color:a", 0.0, 0.25)
 	tween.tween_callback(rayo.queue_free)
 
-	# Daño en área mágica alrededor del objetivo
+	# Telegráfico: el área se marca en el suelo 0,45 s antes del impacto, así el
+	# jugador puede salir del círculo. Sin esto, el mago golpeaba a ciegas y la
+	# muerte parecía injusta (y en móvil, con el pulgar tapando el suelo, peor).
+	var destino: Vector3 = objetivo.global_position
+	_avisar_area(destino, radio_magia, Color(0.85, 0.35, 1.0, 0.55))
+	Sfx.reproducir("magia", -10.0)
+	await get_tree().create_timer(0.45).timeout
+	if not is_instance_valid(self):
+		return
 	for nodo in get_tree().get_nodes_in_group("gladiadores"):
 		var gladiador := nodo as Node3D
 		if gladiador == null or not is_instance_valid(gladiador):
 			continue
-		if gladiador.global_position.distance_to(objetivo.global_position) <= radio_magia:
+		if gladiador.global_position.distance_to(destino) <= radio_magia:
 			if gladiador.has_method("recibir_dano"):
 				gladiador.recibir_dano(dano_magia, GladiatorStats.TIPO_MAGICO, self)
-	Sfx.reproducir("magia", -10.0)
+	_explosion_aviso(destino, radio_magia, Color(0.8, 0.35, 1.0))
 
 
 func _disparar_proyectil(objetivo: Node3D) -> void:
@@ -489,6 +539,9 @@ func recibir_dano(cantidad: float, tipo: StringName = &"fisico", _fuente: Node =
 		return
 	if tipo == GladiatorStats.TIPO_MAGICO and _vulnerable_magico > 0.0:
 		cantidad *= 1.35
+	# Bruto: la coraza recorta el daño físico, no el mágico.
+	if _reduccion_fisica > 0.0 and tipo != GladiatorStats.TIPO_MAGICO:
+		cantidad *= 1.0 - _reduccion_fisica
 
 	# Tanque: el escudo absorbe daño primero
 	if es_tanque and escudo_tanque_actual > 0.0:
@@ -497,17 +550,15 @@ func recibir_dano(cantidad: float, tipo: StringName = &"fisico", _fuente: Node =
 		cantidad -= absorbido
 		NumerosDano.mostrar(global_position + Vector3(0, 1.8, 0), absorbido, GladiatorStats.TIPO_VERDADERO, false, true)
 		if cantidad <= 0.0:
-			_flash = 0.08
-			if visual != null:
-				visual.recibir_golpe()
+			_golpe_visual()
+			_actualizar_barra_vida()
 			Sfx.reproducir("escudo", -8.0)
 			return
 
 	salud_actual = maxf(0.0, salud_actual - cantidad)
-	_flash = 0.08
 	NumerosDano.mostrar(global_position + Vector3(0, 1.3, 0), cantidad, tipo, critico)
-	if visual != null:
-		visual.recibir_golpe()
+	_golpe_visual()
+	_actualizar_barra_vida()
 
 	if salud_actual <= 0.0:
 		_morir()
@@ -517,6 +568,8 @@ func _morir() -> void:
 	if not activo:
 		return
 	activo = false
+	if _barra_raiz != null:
+		_barra_raiz.visible = false
 	var tracker = get_tree().get_first_node_in_group("enemy_tracker")
 	if tracker != null:
 		tracker.desregistrar(self)
@@ -549,3 +602,247 @@ func _morir() -> void:
 		tp.tween_property(p, "global_position", global_position + d * 2.5, 0.6).set_ease(Tween.EASE_OUT)
 		tp.tween_property(mat, "emission_energy_multiplier", 0.0, 0.6)
 		tp.chain().tween_callback(p.queue_free)
+
+
+# --- Visibilidad: barra de vida, telegráficos y reacciones -----------------
+
+const BARRA_ALTO := 1.95
+
+
+## Aparición con rebote al salir del pool: sin esto los enemigos brotaban de
+## golpe y en oleadas densas era imposible leer de dónde venía la presión.
+func _aparecer() -> void:
+	if not is_inside_tree():
+		return
+	scale = Vector3.ONE * (_escala_base * 0.72)
+	var tween := create_tween()
+	tween.tween_property(self, "scale", Vector3.ONE * _escala_base, 0.18) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Golpe recibido: animación del modelo + pulso de escala corto (el `_flash`
+## anterior solo guardaba un contador que nadie leía).
+func _golpe_visual() -> void:
+	if visual != null:
+		visual.recibir_golpe()
+	if _escala_base <= 0.0:
+		return
+	var tween := create_tween()
+	tween.tween_property(self, "scale", Vector3.ONE * (_escala_base * 1.09), 0.05)
+	tween.tween_property(self, "scale", Vector3.ONE * _escala_base, 0.10)
+
+
+func _barra_color() -> Color:
+	if es_elite:
+		return Color(1.0, 0.80, 0.30)
+	if es_bruto:
+		return Color(0.95, 0.55, 0.22)
+	if es_tanque:
+		return Color(0.55, 0.72, 1.0)
+	if es_nigromante:
+		return Color(0.42, 0.95, 0.52)
+	if es_sabueso:
+		return Color(0.92, 0.42, 0.28)
+	if es_arquero:
+		return Color(1.0, 0.52, 0.45)
+	if es_hechicero:
+		return Color(0.78, 0.48, 1.0)
+	return Color(0.92, 0.35, 0.32)
+
+
+func _material_barra(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
+
+
+func _construir_barra() -> void:
+	if _barra_raiz != null:
+		return
+	var raiz := Node3D.new()
+	raiz.name = "BarraVida"
+	raiz.position = Vector3(0, BARRA_ALTO, 0)
+	add_child(raiz)
+	_barra_raiz = raiz
+
+	var cuadro := QuadMesh.new()
+	cuadro.size = Vector2(1.0, 0.11)
+
+	var fondo := MeshInstance3D.new()
+	fondo.mesh = cuadro
+	fondo.scale = Vector3(1.08, 2.0, 1.0)
+	fondo.material_override = _material_barra(Color(0.02, 0.02, 0.02, 0.72))
+	raiz.add_child(fondo)
+	_barra_fondo = fondo
+
+	var relleno := MeshInstance3D.new()
+	relleno.mesh = cuadro
+	relleno.material_override = _material_barra(_barra_color())
+	raiz.add_child(relleno)
+	_barra_relleno = relleno
+
+
+## La barra solo aparece cuando aporta información: enemigo herido o amenaza
+## (élite, bruto, tanque, nigromante). Así la arena no se llena de barras.
+func _barra_visible(frac: float) -> bool:
+	return frac < 0.999 or es_elite or es_bruto or es_tanque or es_nigromante
+
+
+func _actualizar_barra_vida() -> void:
+	if _barra_raiz == null:
+		_construir_barra()
+	var frac := clampf(salud_actual / maxf(1.0, salud_maxima), 0.0, 1.0)
+	if _barra_relleno != null:
+		_barra_relleno.scale.x = maxf(0.001, frac)
+		_barra_relleno.position.x = -(1.0 - frac) * 0.5
+		var material := _barra_relleno.material_override as StandardMaterial3D
+		if material != null:
+			material.albedo_color = _barra_color()
+	_barra_raiz.visible = activo and _barra_visible(frac)
+
+
+## El enemigo se escala por arquetipo (bruto 1.42, sabueso 0.82): la barra se
+## contrarresta para que todas midan lo mismo en pantalla y queden a la altura
+## de la cabeza.
+func _sincronizar_barra() -> void:
+	if _barra_raiz == null:
+		return
+	var factor := maxf(scale.x, 0.01)
+	_barra_raiz.scale = Vector3.ONE / factor
+	_barra_raiz.position = Vector3(0, BARRA_ALTO / factor, 0)
+
+
+## Nigromante: cura un 12 % de la vida máxima a los enemigos en 6 m.
+func _ritual_oscuro() -> void:
+	var curados := 0
+	for nodo in get_tree().get_nodes_in_group(GRUPO):
+		var otro := nodo as ArenaEnemy
+		if otro == null or otro == self or not is_instance_valid(otro) or not otro.activo:
+			continue
+		if otro.global_position.distance_to(global_position) > 6.0:
+			continue
+		if otro.salud_actual >= otro.salud_maxima:
+			continue
+		var curacion := otro.salud_maxima * 0.12
+		otro.salud_actual = minf(otro.salud_maxima, otro.salud_actual + curacion)
+		otro._actualizar_barra_vida()
+		NumerosDano.mostrar(
+			otro.global_position + Vector3(0, 1.5, 0), curacion,
+			GladiatorStats.TIPO_VERDADERO, false, true
+		)
+		curados += 1
+	_marca_suelo(Color(0.35, 0.95, 0.45), 6.0, 0.65)
+	if curados > 0:
+		Sfx.reproducir("magia", -12.0)
+
+
+## Marca un círculo en el suelo (aviso de área). Se ancla al mundo, no al mago,
+## para que no se mueva si el lanzador retrocede mientras carga.
+func _marca_suelo(color: Color, radio: float, duracion: float) -> void:
+	var padre := get_parent()
+	if padre == null:
+		return
+	var ancla := Node3D.new()
+	padre.add_child(ancla)
+	ancla.global_position = Vector3(global_position.x, 0.07, global_position.z)
+
+	var disco := MeshInstance3D.new()
+	var cilindro := CylinderMesh.new()
+	cilindro.top_radius = radio
+	cilindro.bottom_radius = radio
+	cilindro.height = 0.02
+	cilindro.radial_segments = 28
+	disco.mesh = cilindro
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(color.r, color.g, color.b, 0.28)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = 1.2
+	disco.material_override = material
+	ancla.add_child(disco)
+
+	var borde := MeshInstance3D.new()
+	var aro := TorusMesh.new()
+	aro.inner_radius = maxf(0.05, radio - 0.10)
+	aro.outer_radius = radio
+	aro.rings = 32
+	aro.ring_segments = 6
+	borde.mesh = aro
+	borde.material_override = material
+	ancla.add_child(borde)
+
+	var tween := ancla.create_tween()
+	tween.tween_property(material, "albedo_color:a", 0.0, duracion)
+	tween.tween_callback(ancla.queue_free)
+
+
+## Aviso previo al impacto mágico.
+func _avisar_area(destino: Vector3, radio: float, color: Color) -> void:
+	var padre := get_parent()
+	if padre == null:
+		return
+	var ancla := Node3D.new()
+	padre.add_child(ancla)
+	ancla.global_position = Vector3(destino.x, 0.07, destino.z)
+
+	var disco := MeshInstance3D.new()
+	var cilindro := CylinderMesh.new()
+	cilindro.top_radius = radio
+	cilindro.bottom_radius = radio
+	cilindro.height = 0.02
+	cilindro.radial_segments = 28
+	disco.mesh = cilindro
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = Color(color.r, color.g, color.b)
+	material.emission_energy_multiplier = 1.8
+	disco.material_override = material
+	disco.scale = Vector3(0.35, 1.0, 0.35)
+	ancla.add_child(disco)
+
+	var tween := ancla.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(disco, "scale", Vector3.ONE, 0.40).set_ease(Tween.EASE_OUT)
+	tween.tween_property(material, "albedo_color:a", 0.10, 0.40)
+	tween.chain().tween_callback(ancla.queue_free)
+
+
+## Destello del impacto real, para que el área se lea también al recibir.
+func _explosion_aviso(destino: Vector3, radio: float, color: Color) -> void:
+	var padre := get_parent()
+	if padre == null:
+		return
+	var ancla := Node3D.new()
+	padre.add_child(ancla)
+	ancla.global_position = Vector3(destino.x, 0.09, destino.z)
+	var borde := MeshInstance3D.new()
+	var aro := TorusMesh.new()
+	aro.inner_radius = 0.85
+	aro.outer_radius = 1.0
+	aro.rings = 32
+	aro.ring_segments = 6
+	borde.mesh = aro
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = 3.0
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	borde.material_override = material
+	ancla.add_child(borde)
+	var tween := ancla.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(borde, "scale", Vector3(radio, 1.0, radio), 0.35).set_ease(Tween.EASE_OUT)
+	tween.tween_property(material, "albedo_color:a", 0.0, 0.35)
+	tween.chain().tween_callback(ancla.queue_free)

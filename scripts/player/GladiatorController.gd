@@ -1282,6 +1282,9 @@ func _atacar_basico() -> void:
 	direccion.y = 0.0
 	_orientar(direccion.normalized(), 1.0)
 	if visual != null:
+		# El clip se acelera con la cadencia real del arma: a más velocidad de
+		# ataque, el golpe visual acompaña al daño en vez de llegar tarde.
+		visual.ajustar_ritmo(estadisticas.velocidad_ataque / 0.6)
 		visual.atacar()
 
 	if objetivo.has_method("recibir_dano"):

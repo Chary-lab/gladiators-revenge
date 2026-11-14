@@ -28,6 +28,7 @@ var mano_izquierda: BoneAttachment3D
 var _raiz: Node3D
 var _anim_idle: StringName = ANIM_IDLE
 var _anim_run: StringName = ANIM_RUN
+var _anim_caminar: StringName = &"Walking_A"
 var _anim_ataque: StringName = ANIM_ATTACK_2H
 var _anim_lanzar: StringName = ANIM_CAST
 var _anim_muerte: StringName = ANIM_DEATH
@@ -197,11 +198,23 @@ func aplicar_skin(tinte: Color) -> void:
 func mover(velocidad: float) -> void:
 	if _muerto or _en_accion:
 		return
-	var objetivo := _anim_run if velocidad > 0.2 else _anim_idle
+	var objetivo := _anim_idle
+	if velocidad > 2.8:
+		objetivo = _anim_run
+	elif velocidad > 0.2:
+		objetivo = _anim_caminar
 	if not animador.has_animation(objetivo):
 		objetivo = _anim_idle
 	if animador.current_animation != objetivo:
 		_reproducir(objetivo, 0.15, true)
+
+
+## Sincroniza la velocidad del clip con la cadencia real: un verdugo con dos
+## ataques por segundo reproducía el mismo golpe lento y el impacto visual
+## llegaba después del daño.
+func ajustar_ritmo(factor: float) -> void:
+	if animador != null:
+		animador.speed_scale = clampf(factor, 0.65, 1.9)
 
 
 ## Elige el clip de ataque según el arma equipada (pesada o ligera).
