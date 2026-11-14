@@ -462,6 +462,19 @@ func _ejecutar() -> void:
 			ficha_accion != null and (panel_tienda.get("_ficha_nombre") as Label).text == primer_vendible.nombre,
 			"la ficha lateral muestra el objeto elegido y su botón"
 		)
+		# Árbol de construcción: con qué se forja y en qué se convierte.
+		panel_tienda._seleccionar_por_id(&"nucleo_ferreo")
+		await process_frame
+		_comprobar(
+			(panel_tienda.get("_arbol_entra") as HBoxContainer).get_child_count() > 0,
+			"la ficha muestra con qué se forja el objeto"
+		)
+		panel_tienda._seleccionar_por_id(&"brasa_forja")
+		await process_frame
+		_comprobar(
+			(panel_tienda.get("_arbol_sale") as HBoxContainer).get_child_count() > 0,
+			"la ficha muestra en qué objetos se construye el ingrediente"
+		)
 		panel_tienda._al_buscar("zzz")
 		await process_frame
 		_comprobar((panel_tienda.get("_cuadriculas") as Array).is_empty(), "la búsqueda filtra la lista")

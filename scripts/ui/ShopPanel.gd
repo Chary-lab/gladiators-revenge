@@ -49,6 +49,13 @@ var _ficha_precio: Label
 var _ficha_accion: Button
 var _ficha_vacia: Label
 var _ficha_caja: VBoxContainer
+## Árbol de construcción: qué ingredientes pide y en qué objetos se convierte.
+var _rotulo_entra: Label
+var _rotulo_sale: Label
+var _arbol_entra: HBoxContainer
+var _arbol_sale: HBoxContainer
+## Índice inverso `ingrediente -> [objetos que lo usan]`, compartido entre paneles.
+static var _padres: Dictionary = {}
 
 
 func _ready() -> void:
@@ -177,9 +184,22 @@ func _crear_ficha() -> Control:
 	margen.add_theme_constant_override("margin_bottom", 12)
 	panel.add_child(margen)
 
+	# Columna con scroll para que el árbol de construcción nunca recorte la ficha;
+	# el precio y el botón quedan fijos abajo, siempre visibles.
+	var columna_ficha := VBoxContainer.new()
+	columna_ficha.add_theme_constant_override("separation", 6)
+	margen.add_child(columna_ficha)
+
+	var scroll_ficha := ScrollContainer.new()
+	scroll_ficha.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_ficha.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_ficha.add_theme_constant_override("scrollbar_width", 6)
+	columna_ficha.add_child(scroll_ficha)
+
 	_ficha_caja = VBoxContainer.new()
+	_ficha_caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_ficha_caja.add_theme_constant_override("separation", 6)
-	margen.add_child(_ficha_caja)
+	scroll_ficha.add_child(_ficha_caja)
 
 	_ficha_vacia = ForjaTema.etiqueta(
 		"Elegí un objeto de la lista para ver sus bonificaciones, su receta y comprarlo.",
@@ -189,7 +209,7 @@ func _crear_ficha() -> Control:
 	_ficha_caja.add_child(_ficha_vacia)
 
 	_ficha_icono = TextureRect.new()
-	_ficha_icono.custom_minimum_size = Vector2(96, 96)
+	_ficha_icono.custom_minimum_size = Vector2(76, 76)
 	_ficha_icono.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_ficha_icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_ficha_icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -212,6 +232,26 @@ func _crear_ficha() -> Control:
 	_ficha_tipo.visible = false
 	_ficha_caja.add_child(_ficha_tipo)
 
+	# --- Árbol de construcción (se forja con / se construye en) -------------
+	var separador := ForjaTema.regla(ANCHO_FICHA - 24.0)
+	_ficha_caja.add_child(separador)
+
+	_rotulo_entra = ForjaTema.rotulo("SE FORJA CON", 10, ForjaTema.ORO)
+	_rotulo_entra.visible = false
+	_ficha_caja.add_child(_rotulo_entra)
+	_arbol_entra = HBoxContainer.new()
+	_arbol_entra.add_theme_constant_override("separation", 6)
+	_arbol_entra.visible = false
+	_ficha_caja.add_child(_arbol_entra)
+
+	_rotulo_sale = ForjaTema.rotulo("SE CONSTRUYE EN", 10, ForjaTema.ORO)
+	_rotulo_sale.visible = false
+	_ficha_caja.add_child(_rotulo_sale)
+	_arbol_sale = HBoxContainer.new()
+	_arbol_sale.add_theme_constant_override("separation", 6)
+	_arbol_sale.visible = false
+	_ficha_caja.add_child(_arbol_sale)
+
 	_ficha_bonos = ForjaTema.etiqueta("", 12, ForjaTema.TEXTO)
 	_ficha_bonos.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_ficha_bonos.visible = false
@@ -226,16 +266,22 @@ func _crear_ficha() -> Control:
 	relleno.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_ficha_caja.add_child(relleno)
 
+	columna_ficha.add_child(ForjaTema.regla(ANCHO_FICHA - 24.0))
+
 	_ficha_precio = ForjaTema.titulo("", 20, ForjaTema.ORO)
 	_ficha_precio.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_ficha_precio.visible = false
-	_ficha_caja.add_child(_ficha_precio)
+	columna_ficha.add_child(_ficha_precio)
 
 	_ficha_accion = ForjaTema.boton("COMPRAR", 15, true)
 	_ficha_accion.custom_minimum_size = Vector2(0, 42)
 	_ficha_accion.visible = false
 	_ficha_accion.pressed.connect(_accion_ficha)
-	_ficha_caja.add_child(_ficha_accion)
+	columna_ficha.add_child(_ficha_accion)
+
+	# La descripción va después del árbol: "se forja con / se construye en" queda
+	# arriba y se ve sin hacer scroll en la ficha.
+	_ficha_caja.move_child(_ficha_tipo, _ficha_bonos.get_index())
 	return panel
 
 
@@ -615,6 +661,10 @@ func _actualizar_ficha() -> void:
 	_ficha_accion.visible = hay
 	if not hay:
 		_ficha_receta.visible = false
+		_rotulo_entra.visible = false
+		_rotulo_sale.visible = false
+		_arbol_entra.visible = false
+		_arbol_sale.visible = false
 		return
 
 	var item := _seleccionado
@@ -623,24 +673,18 @@ func _actualizar_ficha() -> void:
 	IconStudio.escuchar(item.id, Callable(self, "_icono_listo").bind(_ficha_icono))
 	_ficha_nombre.text = item.nombre
 	_ficha_nombre.add_theme_color_override("font_color", acento)
-	_ficha_rareza.text = "%s · %s" % [_nombre_rareza(item), _nombre_tipo(item)]
+	_ficha_rareza.text = "%s · %s" % [_nombre_rareza(item), _nombre_tipo(item)] if _nombre_rareza(item) != _nombre_tipo(item).to_upper() else _nombre_rareza(item)
 	_ficha_rareza.add_theme_color_override("font_color", acento)
 	_ficha_tipo.text = item.descripcion
 
 	var bonos := item.descripcion_bonos()
 	_ficha_bonos.text = bonos if not bonos.is_empty() else "Sin bonificaciones de equipo."
 
-	# Receta: qué ingredientes pide y cuántos tenés de cada uno.
-	var receta_lineas: Array[String] = []
-	for id in item.receta:
-		var ingrediente := ItemCatalog.obtener(id)
-		var nombre := ingrediente.nombre if ingrediente != null else String(id)
-		receta_lineas.append("%s (%d)" % [nombre, _en_mochila(id)])
+	# Receta: el árbol de construcción muestra ingredientes y objetos padre.
+	_actualizar_arbol(item)
+	_ficha_receta.visible = item.precio_forja > 0
 	if item.precio_forja > 0:
-		receta_lineas.append("Forja: %d de oro" % item.precio_forja)
-	_ficha_receta.visible = not receta_lineas.is_empty()
-	if not receta_lineas.is_empty():
-		_ficha_receta.text = "Receta: " + ", ".join(receta_lineas)
+		_ficha_receta.text = "Coste de forja: %d de oro" % item.precio_forja
 
 	if _seleccion_forjable:
 		_ficha_precio.text = "%d de oro" % item.precio_forja
@@ -666,6 +710,127 @@ func _accion_ficha() -> void:
 		_vender_ranura(_seleccion_indice)
 	else:
 		_comprar(_seleccionado)
+
+
+# --- Árbol de construcción --------------------------------------------------
+
+## Rellena "SE FORJA CON" (ingredientes que pide) y "SE CONSTRUYE EN" (objetos
+## que lo usan como pieza). Cada chip es un botón: tocarlo salta a ese objeto,
+## así se navega la cadena de forja sin volver a buscar en la lista.
+func _actualizar_arbol(item: ItemData) -> void:
+	_construir_padres()
+	for caja in [_arbol_entra, _arbol_sale]:
+		for hijo in caja.get_children():
+			caja.remove_child(hijo)
+			hijo.queue_free()
+
+	var receta := item.receta
+	var vistos: Array[StringName] = []
+	for id in receta:
+		if vistos.has(id):
+			continue
+		vistos.append(id)
+		if _arbol_entra.get_child_count() >= 4:
+			break
+		_arbol_entra.add_child(_chip_arbol(id, receta.count(id)))
+	var hay_entra := not vistos.is_empty()
+	_rotulo_entra.visible = hay_entra
+	_arbol_entra.visible = hay_entra
+
+	var padres: Array = _padres.get(item.id, [])
+	for i in mini(padres.size(), 4):
+		_arbol_sale.add_child(_chip_arbol(StringName(padres[i]), 0))
+	var hay_sale := not padres.is_empty()
+	_rotulo_sale.visible = hay_sale
+	_arbol_sale.visible = hay_sale
+
+
+## Chip 70×74 con icono, precio (o `tienes/necesitas`) y color de rareza.
+func _chip_arbol(id: StringName, requerido: int) -> Button:
+	var boton := Button.new()
+	boton.custom_minimum_size = Vector2(70, 68)
+	boton.focus_mode = Control.FOCUS_NONE
+	boton.text = ""
+	var item := ItemCatalog.obtener(id)
+	if item == null:
+		boton.disabled = true
+		return boton
+	boton.tooltip_text = "%s · %s" % [item.nombre, _nombre_rareza(item)]
+	var acento := _rareza_color(item)
+	_pintar_carta(boton, acento, false)
+
+	var columna := VBoxContainer.new()
+	columna.set_anchors_preset(Control.PRESET_FULL_RECT)
+	columna.offset_left = 3
+	columna.offset_right = -3
+	columna.offset_top = 3
+	columna.offset_bottom = -3
+	columna.add_theme_constant_override("separation", 0)
+	columna.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boton.add_child(columna)
+
+	var icono := TextureRect.new()
+	icono.custom_minimum_size = Vector2(0, 38)
+	icono.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icono.texture = IconStudio.obtener(item.id, IconStudio.CATEGORIA_OBJETO)
+	IconStudio.escuchar(item.id, Callable(self, "_icono_listo").bind(icono))
+	columna.add_child(icono)
+
+	var texto := ""
+	var color_pie := ForjaTema.ORO
+	if requerido > 0:
+		var tiene := mini(_en_mochila(id), 99)
+		texto = "%d/%d" % [tiene, requerido]
+		color_pie = Color(0.45, 0.90, 0.55) if tiene >= requerido else Color(0.95, 0.55, 0.45)
+	else:
+		texto = str(item.precio_forja if item.precio_forja > 0 else item.precio)
+	var pie := ForjaTema.rotulo(texto, 10, color_pie)
+	pie.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pie.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	columna.add_child(pie)
+
+	boton.pressed.connect(_seleccionar_por_id.bind(id))
+	return boton
+
+
+func _seleccionar_por_id(id: StringName) -> void:
+	var item := ItemCatalog.obtener(id)
+	if item == null:
+		return
+	var indice := -1
+	if _jugador != null and _jugador.inventario != null:
+		for i in _jugador.inventario.ranuras.size():
+			var ranura: Dictionary = _jugador.inventario.ranuras[i]
+			var en_ranura: ItemData = ranura.get("item")
+			if en_ranura != null and en_ranura.id == id:
+				indice = i
+				break
+	_seleccionar_item(item, indice, _es_solo_forja(item))
+
+
+func _es_solo_forja(item: ItemData) -> bool:
+	for otro in ItemCatalog.recetas():
+		if otro.id == item.id:
+			return true
+	return false
+
+
+## Índice inverso: para cada ingrediente, los objetos que lo piden. Se construye
+## una vez y se comparte entre paneles (la tienda se abre muchas veces).
+static func _construir_padres() -> void:
+	if not _padres.is_empty():
+		return
+	for item in ItemCatalog.crear_catalogo():
+		for id in item.receta:
+			if not _padres.has(id):
+				_padres[id] = []
+			var lista: Array = _padres[id]
+			if not lista.has(item.id):
+				lista.append(item.id)
+			_padres[id] = lista
 
 
 # --- Acciones de compra/venta ------------------------------------------------

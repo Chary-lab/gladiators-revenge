@@ -2541,6 +2541,12 @@ func _capturar() -> void:
 			oro = 1600
 			_jugador.inventario.agregar(ItemCatalog.obtener(&"brasa_forja"))
 			_hud.alternar_tienda()
+			# La captura elige un intermedio para que se vean las dos mitades del
+			# árbol: con qué se forja y en qué objetos se construye.
+			await get_tree().process_frame
+			var panel_tienda = _hud.get("_tienda")
+			if panel_tienda != null:
+				panel_tienda.call("_seleccionar_por_id", &"nucleo_ferreo")
 		elif cerca and _camara != null:
 			_camara.size = 7.0
 		if arquetipos:
