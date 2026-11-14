@@ -35,6 +35,9 @@ var _reservas: Dictionary = {}    # numero -> ms en que se reservó (crear sala)
 
 
 func iniciar() -> bool:
+	# El maestro no dibuja nada: sin límite corre a cientos de fps y le roba CPU a
+	# las salas y a los relays. 60 basta para atender peticiones y bombear datos.
+	Engine.max_fps = 60
 	_leer_opciones()
 	_tcp = TCPServer.new()
 	var error := _tcp.listen(_puerto)

@@ -392,6 +392,9 @@ func _process(delta: float) -> void:
 # --- Red cooperativa ------------------------------------------------------
 
 func _iniciar_servidor() -> void:
+	# El servidor no dibuja: con el frame libre corre a 145 fps y gasta un 23 % de
+	# núcleo para nada. La física ya va a 60 Hz fija, así que se limita el bucle.
+	Engine.max_fps = 60
 	_crear_estado_partida()
 	red = NetCoop.new()
 	red.name = "Red"
