@@ -291,7 +291,9 @@ func _procesar_mensaje_cliente(texto: String) -> void:
 	match str(mensaje.get("t", "")):
 		"bienvenida":
 			if int(mensaje.get("v", 0)) != VERSION_RED:
-				conexion_cambiada.emit("error", "Versión de red incompatible")
+				# Suele pasar tras un despliegue: el navegador sirve el cliente
+				# cacheado y el servidor ya habla otro formato.
+				conexion_cambiada.emit("error", "Versión de red incompatible: recargá la página (Ctrl+F5)")
 				return
 			peer_local = int(mensaje.get("id", 1))
 			estado = Estado.CONECTADO
