@@ -13,11 +13,19 @@ config/description="Arena de supervivencia cooperativa isométrica para Web (God
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
+[autoload]
+
+godot_mcp_runtime="*res://addons/godot-mcp/runtime_bridge.gd"
+
 [display]
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot-mcp/plugin.cfg")
 
 [red]
 
@@ -25,14 +33,14 @@ servidor_url=""
 servidor_publico_url=""
 api_url="https://gladiators-revenge-server.fly.dev"
 
-[supabase]
-
-url="https://ntmxmaxaprmqmvhsxtmd.supabase.co"
-anon_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50bXhtYXhhcHJtcW12aHN4dG1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0MzQ4OTUsImV4cCI6MjExMDAxMDg5NX0.G9DlSHkjFUncREHSSWm4pcNgdrnKeE647vW97MVPbJw"
-region="local"
-
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
+
+[supabase]
+
+url="https://ntmxmaxaprmqmvhsxtmd.supabase.co"
+anon_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50bXhtYXhhcHJtcW12aHN4dG1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ0MzQ4OTUsImV4cCI6MjExMDAxMDg5NX0.G9DlSHkjFUncREHSSWm4pcNgdrnKeE647vW97MVPbJw"
+region="local"
