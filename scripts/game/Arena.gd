@@ -1582,6 +1582,13 @@ func _crear_controles_tactiles() -> void:
 	# partida arrancaba con la consola de escritorio, sin joystick). En móvil
 	# siempre hay capa táctil.
 	var pantalla_tactil := OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	if not pantalla_tactil and OS.has_feature("web"):
+		# La web se puede forzar con ?tactil=1 (tablets, portátiles táctiles y las
+		# pruebas automatizadas del HUD móvil).
+		var consulta = JavaScriptBridge.eval(
+			"(new URLSearchParams(window.location.search)).get('tactil') || ''"
+		)
+		pantalla_tactil = consulta is String and consulta == "1"
 	if not pantalla_tactil and not ("--tactil" in OS.get_cmdline_user_args()):
 		return
 	_tactil = TouchControls.new()
@@ -1645,11 +1652,14 @@ func _al_mover_tactil(direccion: Vector2) -> void:
 			if _tactil_moviendo:
 				_tactil_moviendo = false
 				red.enviar_accion(&"detener", {})
+				_jugador.mover_tactil(Vector2.ZERO)
 			return
 		if ahora - _tactil_ultimo_envio < 120:
 			return
 		_tactil_ultimo_envio = ahora
 		_tactil_moviendo = true
+		# Predicción: el avatar se mueve ya con el dedo; el servidor confirma.
+		_jugador.mover_tactil(direccion)
 		var punto := _jugador.global_position + Vector3(direccion.x, 0.0, direccion.y) * 5.0
 		red.enviar_accion(&"mover", {"punto": punto})
 		return

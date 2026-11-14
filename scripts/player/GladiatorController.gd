@@ -81,6 +81,9 @@ var _pos_objetivo_red := Vector3.ZERO
 var revive_en := 0.0
 ## Dirección del joystick táctil (x, z); cero cuando no se usa.
 var direccion_tactil := Vector2.ZERO
+## Destino predicho en cliente (clic o toque para moverse): el avatar camina ya
+## y el servidor corrige después. Sin esto el propio jugador esperaba el RTT.
+var _destino_predicho := Vector3.INF
 
 var salud_actual := 0.0
 var mana_actual := 0.0
@@ -270,14 +273,47 @@ func _physics_process(delta: float) -> void:
 	esta_muerto = combat.esta_muerto
 
 
-## Los espejos de red interpolan la posición autoritativa del servidor.
+## Espejos: el propio jugador se predice en local (responde al instante) y los
+## demás se interpolan hacia la posición del servidor.
 func _process(delta: float) -> void:
 	if not es_espejo:
 		return
 	var antes := global_position
-	global_position = global_position.lerp(_pos_objetivo_red, clampf(18.0 * delta, 0.0, 1.0))
+	if es_local_red:
+		_predecir_local(delta)
+	else:
+		global_position = global_position.lerp(_pos_objetivo_red, clampf(18.0 * delta, 0.0, 1.0))
 	if visual != null:
 		visual.mover(antes.distance_to(global_position) / maxf(0.001, delta))
+
+
+## Predicción: el cuerpo propio se mueve al momento con el joystick o el destino
+## tocado; el snapshot sólo corrige cuando la diferencia es grande (paredes,
+## empujones, revivir). Sin esto todo el input esperaba a la red.
+func _predecir_local(delta: float) -> void:
+	if esta_muerto:
+		direccion_tactil = Vector2.ZERO
+		_destino_predicho = Vector3.INF
+		return
+	var velocidad := estadisticas.velocidad_movimiento * _multiplicador_velocidad
+	var paso := Vector3.ZERO
+	if direccion_tactil.length_squared() > 0.04:
+		paso = Vector3(direccion_tactil.x, 0.0, direccion_tactil.y).normalized() * velocidad * delta
+	elif _destino_predicho != Vector3.INF:
+		var hacia := _destino_predicho - global_position
+		hacia.y = 0.0
+		if hacia.length() > 0.2:
+			paso = hacia.normalized() * minf(hacia.length(), velocidad * delta)
+			rotation.y = lerp_angle(rotation.y, atan2(hacia.x, hacia.z), clampf(12.0 * delta, 0.0, 1.0))
+		else:
+			_destino_predicho = Vector3.INF
+	if paso != Vector3.ZERO:
+		global_position += paso
+	var error := global_position.distance_to(_pos_objetivo_red)
+	if error > 4.0:
+		global_position = _pos_objetivo_red
+	elif error > 0.8:
+		global_position = global_position.lerp(_pos_objetivo_red, clampf(2.5 * delta, 0.0, 1.0))
 
 
 # --- Entrada --------------------------------------------------------------
@@ -293,12 +329,14 @@ func _procesar_input_red(evento: InputEvent) -> bool:
 			var punto = _punto_bajo_raton(clic.position)
 			if punto != null:
 				red.enviar_accion(&"mover", {"punto": punto})
+				_destino_predicho = punto
 				_animar_destino(punto, _marcador_movimiento, 1.1)
 			return true
 		if clic.button_index == MOUSE_BUTTON_LEFT:
 			var punto_izq = _punto_bajo_raton(clic.position)
 			if punto_izq != null:
 				red.enviar_accion(&"atacar_mover", {"punto": punto_izq})
+				_destino_predicho = punto_izq
 				_animar_destino(punto_izq, _marcador_ataque, 1.5)
 			return true
 		return true
@@ -315,6 +353,7 @@ func _procesar_input_red(evento: InputEvent) -> bool:
 		match codigo:
 			KEY_S:
 				red.enviar_accion(&"detener", {})
+				_destino_predicho = Vector3.INF
 			KEY_H:
 				red.enviar_accion(&"mantener", {})
 			KEY_A:

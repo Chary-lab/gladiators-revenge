@@ -21,6 +21,10 @@ const RUTA_MAGO := "res://assets/kaykit/skeletons/Skeleton_Mage.glb"
 const RUTA_BARBARO := "res://assets/kaykit/adventurers/Barbarian.glb"
 
 var es_elite := false
+## Espejo de red (cliente): posición autoritativa que llega en cada snapshot.
+var _es_remoto := false
+var _pos_red := Vector3.ZERO
+var _rot_red := 0.0
 var es_ligero := false
 var activo := false
 var salud_maxima := 30.0
@@ -226,6 +230,7 @@ func al_devolver() -> void:
 
 ## Enemigo de solo lectura para clientes: sin IA, sin daño, sin pool.
 func configurar_remoto(elite: bool, ligero := false) -> void:
+	_es_remoto = true
 	es_elite = elite
 	es_ligero = ligero
 	activo = true
@@ -236,11 +241,23 @@ func configurar_remoto(elite: bool, ligero := false) -> void:
 
 
 func aplicar_remoto(posicion: Vector3, rotacion: float, vida: float, vida_max: float) -> void:
+	_pos_red = posicion
+	_rot_red = rotacion
 	global_position = posicion
 	rotation.y = rotacion
 	salud_maxima = maxf(1.0, vida_max)
 	salud_actual = maxf(0.0, vida)
 	activo = salud_actual > 0.0
+
+
+## Espejo de red: el servidor manda 15 posiciones por segundo; sin esto el
+## enemigo avanza a saltos de ~1 m y en el móvil se siente trabado.
+func _process(delta: float) -> void:
+	if not _es_remoto:
+		return
+	var peso := clampf(16.0 * delta, 0.0, 1.0)
+	global_position = global_position.lerp(_pos_red, peso)
+	rotation.y = lerp_angle(rotation.y, _rot_red, peso)
 
 
 func _physics_process(delta: float) -> void:
