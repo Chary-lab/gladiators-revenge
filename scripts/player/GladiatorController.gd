@@ -310,10 +310,12 @@ func _predecir_local(delta: float) -> void:
 	if paso != Vector3.ZERO:
 		global_position += paso
 	var error := global_position.distance_to(_pos_objetivo_red)
-	if error > 4.0:
+	if error > 2.5:
+		# Sólo se corrige de golpe cuando de verdad hay un salto (pared, empujón,
+		# revivir). Con 4 m y un lerp lento el avatar "brincaba" al soltar el dedo.
 		global_position = _pos_objetivo_red
-	elif error > 0.8:
-		global_position = global_position.lerp(_pos_objetivo_red, clampf(2.5 * delta, 0.0, 1.0))
+	elif error > 0.35:
+		global_position = global_position.lerp(_pos_objetivo_red, clampf(6.0 * delta, 0.0, 1.0))
 
 
 # --- Entrada --------------------------------------------------------------

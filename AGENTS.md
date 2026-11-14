@@ -32,7 +32,7 @@ godot -- --captura-apodo                   # modal de apodo
 godot -- --tactil --captura-ficha           # HUD táctil con la ficha del campeón abierta
 ```
 
-- Expected baseline: smoke **133/133**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **135/135**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
 - En `--headless` los fotogramas corren a miles por segundo: `await process_frame` no espera nada. Los tests esperan con `create_timer(0.01)` (`_esperar_hasta`) o `create_timer(segundos)`.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
@@ -122,7 +122,7 @@ playwright-cli.cmd open http://127.0.0.1:8137/ --browser msedge
 ## Verification gate
 
 1. `godot --headless --editor --quit`
-2. `godot --headless --script res://tests/smoke_test.gd` → 133/133
+2. `godot --headless --script res://tests/smoke_test.gd` → 135/135
 3. `godot --headless --script res://tests/wave_sim.gd` → 3/3
 4. `godot --headless --quit-after 600` → no script/parse errors
 5. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`

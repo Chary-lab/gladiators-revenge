@@ -7,6 +7,7 @@ const ANCHO := 760.0
 const ALTO := 500.0
 
 var _jugador: GladiatorController
+var _pausado := false
 var _lista: VBoxContainer
 var _puntos: Label
 
@@ -91,14 +92,19 @@ func alternar() -> void:
 	visible = true
 	_reconstruir()
 	move_to_front()
-	get_tree().paused = true
+	if not _pausado:
+		_pausado = true
+		Pausa.abrir()
 	Sfx.reproducir(&"click", -12.0)
 
 
 func cerrar_panel() -> void:
+	if not visible and not _pausado:
+		return
 	visible = false
-	if is_inside_tree():
-		get_tree().paused = false
+	if _pausado:
+		_pausado = false
+		Pausa.cerrar()
 
 
 ## ESC y T cierran el panel incluso con el árbol en pausa.

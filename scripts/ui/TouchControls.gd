@@ -57,6 +57,8 @@ var _panel_ficha: PanelContainer
 var _texto_ficha: RichTextLabel
 var _ficha_abierta := false
 var _tiempo_ficha := 0.0
+## Callable que cierra tienda/talentos (paneles que pausan) al abrir otro.
+var al_abrir_panel: Callable
 
 
 func configurar(jugador: GladiatorController) -> void:
@@ -291,6 +293,8 @@ func alternar_mochila() -> void:
 	if _mochila_abierta:
 		cerrar_mochila()
 		return
+	if al_abrir_panel.is_valid():
+		al_abrir_panel.call()
 	_mochila_abierta = true
 	_panel_mochila.visible = true
 	_panel_mochila.move_to_front()
@@ -382,6 +386,8 @@ func alternar_ficha() -> void:
 	if _ficha_abierta:
 		cerrar_ficha()
 		return
+	if al_abrir_panel.is_valid():
+		al_abrir_panel.call()
 	_ficha_abierta = true
 	_panel_ficha.visible = true
 	_panel_ficha.move_to_front()

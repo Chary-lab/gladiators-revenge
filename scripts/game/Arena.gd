@@ -126,7 +126,7 @@ var _hora_inicio_partida := 0.0
 
 
 func _ready() -> void:
-	get_tree().paused = false
+	Pausa.reanudar()
 	# Sistema de diseño compartido: todo Control del árbol hereda la paleta, la
 	# tipografía y los estilos de ForjaTema.
 	get_tree().root.theme = ForjaTema.tema_global()
@@ -1603,11 +1603,21 @@ func _crear_controles_tactiles() -> void:
 	_tactil.interactuar.connect(_interactuar_cercano)
 	_tactil.detener.connect(_al_detener_tactil)
 	_tactil.tienda.connect(_al_tienda_tactil)
+	# Mochila y ficha no pausan, pero si hay una tienda abierta (que sí pausa)
+	# quedaría detrás: al abrir cualquiera de ellas se cierran los paneles.
+	_tactil.al_abrir_panel = Callable(self, "_cerrar_paneles_juego")
 	_tactil.talentos.connect(_al_talentos_tactil)
 	# En móvil manda el HUD táctil: se apaga la consola de escritorio (comandos
 	# QWER, ficha y estadísticas) para dejar la arena despejada.
 	if _hud != null:
 		_hud.establecer_modo_tactil(true)
+
+
+## Cierra tienda y talentos (deja el árbol jugable) antes de abrir otro panel.
+func _cerrar_paneles_juego() -> void:
+	if _hud != null:
+		_hud.cerrar_tienda()
+		_hud.cerrar_talentos()
 
 
 func _al_tienda_tactil() -> void:
@@ -1660,7 +1670,7 @@ func _al_mover_tactil(direccion: Vector2) -> void:
 		_tactil_moviendo = true
 		# Predicción: el avatar se mueve ya con el dedo; el servidor confirma.
 		_jugador.mover_tactil(direccion)
-		var punto := _jugador.global_position + Vector3(direccion.x, 0.0, direccion.y) * 5.0
+		var punto := _jugador.global_position + Vector3(direccion.x, 0.0, direccion.y) * 3.0
 		red.enviar_accion(&"mover", {"punto": punto})
 		return
 	_jugador.mover_tactil(direccion)

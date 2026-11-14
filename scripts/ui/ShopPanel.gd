@@ -18,6 +18,7 @@ var _aviso: Label
 var _chip_comprar: Button
 var _chip_vender: Button
 var _vender := false
+var _pausado := false
 
 
 func _ready() -> void:
@@ -124,18 +125,22 @@ func alternar() -> void:
 	visible = true
 	modo_abierto()
 	_reconstruir()
-	get_tree().paused = true
+	if not _pausado:
+		_pausado = true
+		Pausa.abrir()
 	move_to_front()
 	Sfx.reproducir(&"click", -12.0)
 
 
 func cerrar_panel() -> void:
-	if not visible:
+	if not visible and not _pausado:
 		return
 	visible = false
 	if _hud != null:
 		_hud.forzar_ocultar_tooltip()
-	get_tree().paused = false
+	if _pausado:
+		_pausado = false
+		Pausa.cerrar()
 
 
 func modo_abierto() -> void:

@@ -49,6 +49,7 @@ var _nivel_jugador: Label
 var _bajas_jugador: Label
 var _bajas := 0
 var _oro_mostrado := 0.0
+var _tiempo_pausa_colgada := 0.0
 var _oro_objetivo := 0
 var _barra_bandera: ProgressBar
 
@@ -672,6 +673,7 @@ func _actualizar_revive() -> void:
 func _process(_delta: float) -> void:
 	if _jugador == null:
 		return
+	_vigilar_pausa(_delta)
 	_actualizar_ficha()
 	_actualizar_estadisticas()
 	_actualizar_habilidades()
@@ -681,6 +683,28 @@ func _process(_delta: float) -> void:
 	_actualizar_aviso()
 	_actualizar_revive()
 	_actualizar_comandos()
+
+
+## Red de seguridad: si el árbol queda en pausa y no hay ningún panel que la
+## justifique (un cierre por una vía inesperada), se reanuda. Sin esto la
+## partida se quedaba congelada con los enfriamientos parados.
+func _vigilar_pausa(delta: float) -> void:
+	var arbol := get_tree()
+	if arbol == null:
+		return
+	if not arbol.paused:
+		_tiempo_pausa_colgada = 0.0
+		return
+	_tiempo_pausa_colgada += delta
+	if _tiempo_pausa_colgada < 0.7:
+		return
+	_tiempo_pausa_colgada = 0.0
+	if Pausa.hay_paneles():
+		return
+	if (_tienda != null and _tienda.visible) or (_talentos != null and _talentos.visible):
+		return
+	Pausa.reanudar()
+	push_warning("[HUD] pausa sin panel visible: se reanuda la partida")
 
 
 func _actualizar_ficha() -> void:

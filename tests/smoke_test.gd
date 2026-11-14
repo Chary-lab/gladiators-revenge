@@ -370,6 +370,26 @@ func _ejecutar() -> void:
 	panel_tienda._cambiar_modo(false)
 	await process_frame
 
+	# --- Pausa: los paneles no dejan la partida congelada ------------------
+	hud.alternar_tienda()
+	await process_frame
+	hud.alternar_talentos()
+	await process_frame
+	hud.cerrar_talentos()
+	await process_frame
+	_comprobar(not paused and not Pausa.hay_paneles(), "los paneles no dejan la partida en pausa")
+	hud.alternar_tienda()
+	await process_frame
+	hud.cerrar_tienda()
+	await process_frame
+	hud.cerrar_tienda()
+	await process_frame
+	hud.alternar_tienda()
+	await process_frame
+	hud.cerrar_tienda()
+	await process_frame
+	_comprobar(not paused, "cerrar dos veces la tienda no descuadra la pausa")
+
 	# --- Iconos 3D de los objetos nuevos ---
 	var nuevos := [&"armadura_brasas", &"anillo_vampiro", &"corazon_fenix", &"capa_comandante", &"guadana_verdugo_ancestral"]
 	var modelos_ok := true
