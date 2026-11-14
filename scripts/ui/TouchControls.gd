@@ -12,15 +12,19 @@ signal habilidad(slot: int)
 signal interactuar
 signal detener
 signal pausa
+signal tienda
+signal talentos
 
 const CLAVES := ["Q", "W", "E", "R"]
 const CENTRO_JOY := Vector2(172, 438)
 const RADIO_JOY := 98.0
-const CENTRO_ABANICO := Vector2(1102, 424)
-const RADIO_ABANICO := 158.0
-const LADO_BOTON := 96.0
-## Ángulos del abanico de habilidades (grados: 180 = izquierda, 270 = arriba).
-const ANGULOS := [186.0, 218.0, 250.0, 282.0]
+## Rueda de habilidades: INTERACTUAR ocupa el centro y Q/W/E/R la rodean, con
+## un hueco abajo para el pulgar. Los ángulos van en grados (270 = arriba).
+const CENTRO_RUEDA := Vector2(1072, 500)
+const RADIO_RUEDA := 150.0
+const LADO_HABILIDAD := 92.0
+const LADO_INTERACTUAR := 128.0
+const ANGULOS := [200.0, 246.0, 292.0, 338.0]
 
 var _raiz: Control
 var _base: Panel
@@ -40,6 +44,12 @@ var _jugador: GladiatorController
 ## Multiplicador de tamaño configurable desde Ajustes.
 var escala := 1.0
 var _arrastrando := false
+## Mochila táctil: en móvil la consola de escritorio se apaga, así que los seis
+## objetos usables viven en este panel desplegable.
+var _panel_mochila: PanelContainer
+var _slots_mochila: Array = []
+var _mochila_abierta := false
+var _boton_interactuar: Button
 
 
 func configurar(jugador: GladiatorController) -> void:
@@ -54,10 +64,12 @@ func configurar(jugador: GladiatorController) -> void:
 	add_child(_raiz)
 
 	_crear_vitales()
+	_crear_accesos()
+	_crear_mochila()
 	_crear_joystick()
 
 	for i in CLAVES.size():
-		var boton := _crear_boton(CLAVES[i], _posicion_abanico(i), LADO_BOTON, 26, true)
+		var boton := _crear_boton(CLAVES[i], _posicion_rueda(i), LADO_HABILIDAD, 26, true)
 		boton.pressed.connect(func() -> void: habilidad.emit(i))
 		var velo := ForjaTema.VeloRadial.new()
 		velo.visible = false
@@ -72,11 +84,20 @@ func configurar(jugador: GladiatorController) -> void:
 		_cd_textos.append(cd)
 		_botones.append(boton)
 
-	var interactuar_btn := _crear_boton("INTERACTUAR", Vector2(1150, 622), 128, 13, false)
-	interactuar_btn.pressed.connect(func() -> void: interactuar.emit())
-
-	var detener_btn := _crear_boton("DETENER", Vector2(998, 632), 104, 13, false)
-	detener_btn.pressed.connect(func() -> void: detener.emit())
+	# INTERACTUAR en el centro de la rueda: el pulgar cae ahí sin soltar el móvil.
+	_boton_interactuar = _crear_boton("INTERACTUAR", Vector2.ZERO, LADO_INTERACTUAR, 11, true)
+	var estilo_hub := StyleBoxFlat.new()
+	estilo_hub.bg_color = Color(0.16, 0.10, 0.05, 0.92)
+	estilo_hub.border_color = ForjaTema.ORO
+	estilo_hub.set_border_width_all(3)
+	estilo_hub.set_corner_radius_all(int(LADO_INTERACTUAR * 0.5))
+	_boton_interactuar.add_theme_stylebox_override("normal", estilo_hub)
+	var hub_pulsado := estilo_hub.duplicate() as StyleBoxFlat
+	hub_pulsado.bg_color = Color(0.34, 0.22, 0.09, 0.96)
+	hub_pulsado.border_color = ForjaTema.ORO_CLARO
+	_boton_interactuar.add_theme_stylebox_override("pressed", hub_pulsado)
+	_boton_interactuar.add_theme_stylebox_override("hover", estilo_hub)
+	_boton_interactuar.pressed.connect(func() -> void: interactuar.emit())
 
 	_boton_pausa = ForjaTema.boton("II", 18)
 	_boton_pausa.position = Vector2(1216, 96)
@@ -88,10 +109,26 @@ func configurar(jugador: GladiatorController) -> void:
 	aplicar_escala(escala)
 
 
-func _posicion_abanico(indice: int) -> Vector2:
+## Factor de radio: al agrandar los botones el anillo crece menos que ellos,
+## así el conjunto sigue entrando en la esquina.
+func _factor_radio() -> float:
+	return 0.55 + 0.45 * escala
+
+
+func _centro_rueda() -> Vector2:
+	var radio := RADIO_RUEDA * _factor_radio()
+	var lado := LADO_HABILIDAD * escala
+	var centro := CENTRO_RUEDA
+	centro.x = minf(centro.x, 1280.0 - 22.0 - radio - lado * 0.5)
+	centro.y = minf(centro.y, 720.0 - 22.0 - radio - lado * 0.5)
+	return centro
+
+
+func _posicion_rueda(indice: int) -> Vector2:
 	var grados: float = ANGULOS[clampi(indice, 0, ANGULOS.size() - 1)]
 	var rad := deg_to_rad(grados)
-	return CENTRO_ABANICO + Vector2(cos(rad), sin(rad)) * RADIO_ABANICO - Vector2(LADO_BOTON, LADO_BOTON) * 0.5
+	var lado := LADO_HABILIDAD * escala
+	return _centro_rueda() + Vector2(cos(rad), sin(rad)) * RADIO_RUEDA * _factor_radio() - Vector2(lado, lado) * 0.5
 
 
 ## Vida, maná y nivel en una pastilla compacta arriba a la izquierda: en el
@@ -144,6 +181,135 @@ func _crear_vitales() -> void:
 			_texto_mana = valor
 
 
+## Accesos directos que en escritorio viven en la parrilla de comandos: sin
+## teclado, el jugador necesita tocar mercader, talentos y mochila.
+func _crear_accesos() -> void:
+	var columna := VBoxContainer.new()
+	columna.position = Vector2(16, 186)
+	columna.add_theme_constant_override("separation", 7)
+	_raiz.add_child(columna)
+
+	var mercader := _crear_boton("MERCADER", Vector2.ZERO, 0, 14, false, columna)
+	mercader.custom_minimum_size = Vector2(196, 48)
+	mercader.size = Vector2(196, 48)
+	mercader.pressed.connect(func() -> void: tienda.emit())
+	columna.add_child(mercader)
+
+	var talentos := _crear_boton("TALENTOS", Vector2.ZERO, 0, 14, false, columna)
+	talentos.custom_minimum_size = Vector2(196, 48)
+	talentos.size = Vector2(196, 48)
+	talentos.pressed.connect(func() -> void: talentos.emit())
+	columna.add_child(talentos)
+
+	var mochila := _crear_boton("MOCHILA", Vector2.ZERO, 0, 14, false, columna)
+	mochila.custom_minimum_size = Vector2(196, 48)
+	mochila.size = Vector2(196, 48)
+	mochila.pressed.connect(alternar_mochila)
+	columna.add_child(mochila)
+
+
+func _crear_mochila() -> void:
+	_panel_mochila = PanelContainer.new()
+	_panel_mochila.visible = false
+	_panel_mochila.position = Vector2(430, 196)
+	_panel_mochila.custom_minimum_size = Vector2(420, 0)
+	_panel_mochila.add_theme_stylebox_override("panel", ForjaTema.estilo_ventana())
+	_raiz.add_child(_panel_mochila)
+
+	var columna := VBoxContainer.new()
+	columna.add_theme_constant_override("separation", 8)
+	_panel_mochila.add_child(columna)
+
+	var cabecera := HBoxContainer.new()
+	columna.add_child(cabecera)
+	var titulo := ForjaTema.titulo("MOCHILA", 20, ForjaTema.ORO_CLARO)
+	titulo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cabecera.add_child(titulo)
+	var cerrar := ForjaTema.boton("CERRAR", 12)
+	cerrar.custom_minimum_size = Vector2(104, 34)
+	cerrar.pressed.connect(cerrar_mochila)
+	cabecera.add_child(cerrar)
+
+	columna.add_child(ForjaTema.etiqueta(
+		"Tocá un objeto para usarlo. Los enfriamientos bajan solos.", 11, ForjaTema.TENUE
+	))
+
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	columna.add_child(grid)
+
+	for i in InventoryComponent.RANURAS:
+		var boton := Button.new()
+		boton.custom_minimum_size = Vector2(120, 84)
+		boton.focus_mode = Control.FOCUS_NONE
+		boton.text = ""
+		boton.expand_icon = true
+		boton.add_theme_stylebox_override("normal", ForjaTema.estilo_tarjeta(ForjaTema.ORO_OSCURO, false, true))
+		boton.add_theme_stylebox_override("hover", ForjaTema.estilo_tarjeta(ForjaTema.ORO, true))
+		boton.add_theme_stylebox_override("pressed", ForjaTema.estilo_tarjeta(ForjaTema.ORO_CLARO, true))
+		boton.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		boton.pressed.connect(_usar_mochila.bind(i))
+		var tecla := ForjaTema.rotulo(["Z", "X", "C", "V", "B", "N"][i], 9, ForjaTema.ORO)
+		tecla.position = Vector2(4, 3)
+		tecla.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		boton.add_child(tecla)
+		var cantidad := ForjaTema.etiqueta("", 11, ForjaTema.TEXTO_FUERTE)
+		cantidad.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		cantidad.position = Vector2(78, 62)
+		cantidad.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		cantidad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		boton.add_child(cantidad)
+		grid.add_child(boton)
+		_slots_mochila.append([boton, cantidad])
+
+
+func alternar_mochila() -> void:
+	if _mochila_abierta:
+		cerrar_mochila()
+		return
+	_mochila_abierta = true
+	_panel_mochila.visible = true
+	_panel_mochila.move_to_front()
+	_refrescar_mochila()
+
+
+func cerrar_mochila() -> void:
+	_mochila_abierta = false
+	if _panel_mochila != null:
+		_panel_mochila.visible = false
+
+
+func _usar_mochila(indice: int) -> void:
+	if _jugador == null:
+		return
+	_jugador.usar_objeto(indice)
+	_refrescar_mochila()
+
+
+func _refrescar_mochila() -> void:
+	if not _mochila_abierta or _jugador == null or _jugador.inventario == null:
+		return
+	var inventario := _jugador.inventario
+	for i in _slots_mochila.size():
+		var par: Array = _slots_mochila[i]
+		var boton: Button = par[0]
+		var cantidad: Label = par[1]
+		var ranura: Dictionary = inventario.ranuras[i]
+		var item: ItemData = ranura.get("item")
+		if item == null:
+			boton.icon = null
+			boton.disabled = true
+			cantidad.text = ""
+			continue
+		boton.icon = IconStudio.obtener(item.id, IconStudio.CATEGORIA_OBJETO)
+		var restante := inventario.energia_restante(i)
+		var cuantos := int(ranura.get("cantidad", 1))
+		cantidad.text = ("%ds" % int(ceil(restante))) if restante > 0.5 else (("x%d" % cuantos) if cuantos > 1 else "")
+		boton.disabled = restante > 0.0
+
+
 func _crear_joystick() -> void:
 	_base = Panel.new()
 	_base.size = Vector2(RADIO_JOY, RADIO_JOY) * 2.0
@@ -174,7 +340,9 @@ func _crear_joystick() -> void:
 	_raiz.add_child(_perilla)
 
 
-func _crear_boton(texto: String, posicion: Vector2, tamano: float, letra: int, circular: bool) -> Button:
+func _crear_boton(
+	texto: String, posicion: Vector2, tamano: float, letra: int, circular: bool, contenedor: Node = null
+) -> Button:
 	var boton := Button.new()
 	boton.text = texto
 	boton.position = posicion
@@ -202,7 +370,10 @@ func _crear_boton(texto: String, posicion: Vector2, tamano: float, letra: int, c
 	boton.add_theme_stylebox_override("hover", estilo)
 	boton.add_theme_stylebox_override("disabled", estilo)
 	boton.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	_raiz.add_child(boton)
+	# `add_child` una sola vez: re-parentarlo después imprime "already has a
+	# parent" y el botón queda en el sitio equivocado.
+	var padre := contenedor if contenedor != null else _raiz
+	padre.add_child(boton)
 	return boton
 
 
@@ -221,10 +392,15 @@ func aplicar_escala(nueva: float) -> void:
 		_perilla.position = CENTRO_JOY - _perilla.size * 0.5
 	for i in _botones.size():
 		var boton: Button = _botones[i]
-		var centro := _posicion_abanico(i) + Vector2(LADO_BOTON, LADO_BOTON) * 0.5
-		boton.size = Vector2(LADO_BOTON, LADO_BOTON) * escala
+		boton.size = Vector2(LADO_HABILIDAD, LADO_HABILIDAD) * escala
 		boton.custom_minimum_size = boton.size
-		boton.position = centro - boton.size * 0.5
+		boton.position = _posicion_rueda(i)
+		boton.add_theme_font_size_override("font_size", int(26 * escala))
+	if _boton_interactuar != null:
+		_boton_interactuar.size = Vector2(LADO_INTERACTUAR, LADO_INTERACTUAR) * escala
+		_boton_interactuar.custom_minimum_size = _boton_interactuar.size
+		_boton_interactuar.position = _centro_rueda() - _boton_interactuar.size * 0.5
+		_boton_interactuar.add_theme_font_size_override("font_size", int(11 * escala))
 
 
 func _input(evento: InputEvent) -> void:
@@ -296,6 +472,8 @@ func _soltar_joystick() -> void:
 func _process(_delta: float) -> void:
 	if _jugador == null:
 		return
+	if _mochila_abierta:
+		_refrescar_mochila()
 	var vida_max := maxf(1.0, _jugador.estadisticas.salud_maxima)
 	_barra_vida.valor = clampf(_jugador.salud_actual / vida_max, 0.0, 1.0)
 	_barra_vida.queue_redraw()

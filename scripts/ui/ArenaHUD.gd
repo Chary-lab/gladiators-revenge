@@ -23,6 +23,8 @@ var _arena: Node
 var _raiz: Control
 var _hud_arriba: Control
 var _barra_superior: Panel
+## En móvil la consola de escritorio se apaga: manda el HUD táctil.
+var modo_tactil := false
 var _consola: Panel
 var _mensaje: Label
 var _pista: Label
@@ -31,7 +33,8 @@ var _final_titulo: Label
 var _final_detalle: Label
 var _boton_reintentar: Button
 var _boton_lobby: Button
-var _lobby: PanelContainer
+var _lobby: Control
+var _lobby_titulo: Label
 var _lobby_tiempo: Label
 var _lobby_detalle: Label
 var _aviso: Label
@@ -39,7 +42,14 @@ var _oleada: Label
 var _oro: Label
 var _enemigos: Label
 var _tiempo_oleada: Label
-var _texto_puntos: Label
+## Ficha del jugador en la barra: apodo, nivel, abatidos y oro.
+var _ficha_jugador: PanelContainer
+var _nombre_jugador: Label
+var _nivel_jugador: Label
+var _bajas_jugador: Label
+var _bajas := 0
+var _oro_mostrado := 0.0
+var _oro_objetivo := 0
 var _barra_bandera: ProgressBar
 
 var _barra_vida: ProgressBar
@@ -86,14 +96,6 @@ signal terminar_partida
 signal reintentar
 signal salir_lobby
 var _cd_antes: Array = [0.0, 0.0, 0.0, 0.0]
-var _overlay: Panel
-var _overlay_detalle: VBoxContainer
-var _overlay_titulo: Button
-var _overlay_vida: Label
-var _overlay_mana: Label
-var _overlay_dano: Label
-var _overlay_recibido: Label
-var _overlay_expandido := true
 var _talentos: TalentPanel
 var _tienda: ShopPanel
 
@@ -174,6 +176,29 @@ func construir() -> void:
 	add_child(_capa_tooltip)
 	_tooltip = TooltipRico.new()
 	_capa_tooltip.add_child(_tooltip)
+
+
+## Modo táctil: la pantalla se despeja. Se oculta la consola inferior entera
+## (minimapa, retrato, ficha, inventario y parrilla de comandos QWER) y la
+## lengüeta de estadísticas; el HUD táctil cubre vida, maná, habilidades,
+## mercader, talentos y mochila.
+func establecer_modo_tactil(activo: bool) -> void:
+	modo_tactil = activo
+	if _consola != null:
+		_consola.visible = not activo
+	if _pista != null:
+		_pista.visible = not activo
+	# Los módulos de la consola son hijos absolutos de `_raiz` en la franja
+	# inferior: se apagan por posición en lugar de mantener otra lista.
+	for hijo in _raiz.get_children():
+		if hijo is Control and not (hijo is CanvasLayer):
+			var c := hijo as Control
+			if c.position.y >= 500.0:
+				c.visible = not activo
+	if activo and _mensaje != null:
+		_mensaje.position = Vector2(200, 180)
+	elif _mensaje != null:
+		_mensaje.position = Vector2(240, 250)
 
 
 func _crear_minimapa() -> void:
@@ -295,7 +320,7 @@ func _crear_habilidades() -> void:
 		["atributos", "1/2/3", "Subir el atributo principal. Usa 1, 2 o 3 para elegir.", _comando_atributos],
 		["talentos", "T", "Árbol de talentos y rangos de habilidad.", _comando_talentos],
 		["tienda", "F", "Abrir el mercader de la rebelión.", _comando_tienda],
-		["estadisticas", "-", "Mostrar u ocultar estadísticas de combate.", _comando_estadisticas],
+		["campeon", "-", "Abrir la forja de campeones para repasar tu clase.", _comando_campeon],
 	]
 	_comandos_datos = comandos
 	for i in comandos.size():
@@ -405,48 +430,126 @@ func _crear_barra_superior() -> void:
 	div_der.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_barra_superior.add_child(div_der)
 
-	# --- Zona derecha: oro y puntos ---
-	_oro = _texto(_barra_superior, "", Vector2(1014, 6), Vector2(232, 24), 16, ORO)
-	_oro.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_oro.add_theme_font_override("font", ForjaTema.fuente_titulo())
-	_texto_puntos = _texto(_barra_superior, "", Vector2(1014, 32), Vector2(232, 18), 12, ForjaTema.TEXTO)
-	_texto_puntos.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	# --- Zona derecha: ficha del jugador (apodo, nivel, abatidos y oro) ---
+	_crear_ficha_jugador()
 
 	# Aviso de furia del público: bajo la barra, centrado y en ascua.
 	_aviso = _texto(_hud_arriba, "", Vector2(330, 96), Vector2(620, 26), 18, Color(1.0, 0.45, 0.25))
 	_aviso.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	# La lengüeta de estadísticas cuelga de la barra (abajo a la izquierda, para
-	# no tapar la economía ni el estandarte).
-	_crear_overlay()
+
+## Ficha del jugador dentro de la barra: apodo, nivel, enemigos abatidos y oro.
+## Los números se animan solos (el oro cuenta hacia arriba y las bajas dan un
+## pulso), así la barra no se siente congelada.
+func _crear_ficha_jugador() -> void:
+	_ficha_jugador = PanelContainer.new()
+	_ficha_jugador.position = Vector2(992, 4)
+	_ficha_jugador.custom_minimum_size = Vector2(256, 70)
+	_ficha_jugador.size = Vector2(256, 70)
+	_ficha_jugador.pivot_offset = _ficha_jugador.size * 0.5
+	var estilo := ForjaTema.estilo_tarjeta(ForjaTema.ORO_OSCURO, false, true)
+	estilo.content_margin_left = 12
+	estilo.content_margin_right = 12
+	estilo.content_margin_top = 5
+	estilo.content_margin_bottom = 5
+	_ficha_jugador.add_theme_stylebox_override("panel", estilo)
+	_barra_superior.add_child(_ficha_jugador)
+
+	var columna := VBoxContainer.new()
+	columna.add_theme_constant_override("separation", 1)
+	_ficha_jugador.add_child(columna)
+
+	var cabecera := HBoxContainer.new()
+	cabecera.add_theme_constant_override("separation", 6)
+	columna.add_child(cabecera)
+
+	_nombre_jugador = ForjaTema.titulo("GLADIADOR", 16, ForjaTema.ORO_CLARO)
+	_nombre_jugador.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_nombre_jugador.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	cabecera.add_child(_nombre_jugador)
+
+	_nivel_jugador = ForjaTema.rotulo("Nv 1", 11, ForjaTema.TEXTO_FUERTE)
+	_nivel_jugador.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cabecera.add_child(_nivel_jugador)
+
+	var datos := HBoxContainer.new()
+	datos.add_theme_constant_override("separation", 4)
+	columna.add_child(datos)
+
+	var icono_bajas := ForjaTema.IconoStat.new(&"dano", 13.0, ForjaTema.SANGRE)
+	icono_bajas.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	datos.add_child(icono_bajas)
+	var rotulo_bajas := ForjaTema.rotulo("ABATIDOS", 9, ForjaTema.TENUE)
+	rotulo_bajas.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	datos.add_child(rotulo_bajas)
+	_bajas_jugador = ForjaTema.titulo("0", 14, ForjaTema.TEXTO_FUERTE)
+	_bajas_jugador.pivot_offset = Vector2(8, 10)
+	datos.add_child(_bajas_jugador)
+
+	var relleno := Control.new()
+	relleno.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	relleno.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	datos.add_child(relleno)
+
+	var icono_oro := ForjaTema.IconoStat.new(&"oro", 13.0, ForjaTema.ORO)
+	icono_oro.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	datos.add_child(icono_oro)
+	_oro = ForjaTema.titulo("0", 15, ForjaTema.ORO)
+	_oro.pivot_offset = Vector2(10, 10)
+	datos.add_child(_oro)
 
 
-func _crear_overlay() -> void:
-	var barra := _barra_superior if _barra_superior != null else _hud_arriba
-	_overlay = _panel(Vector2(12, 86), Vector2(240, 140), Color(0.07, 0.06, 0.055, 0.97), ForjaTema.ORO_OSCURO)
-	_overlay.add_theme_stylebox_override("panel", ForjaTema.estilo_ventana(ForjaTema.ORO_OSCURO, 0.97))
-	barra.add_child(_overlay)
-	_overlay_titulo = Button.new()
-	_overlay_titulo.text = "ESTADÍSTICAS  -"
-	_overlay_titulo.position = Vector2(4, 3)
-	_overlay_titulo.size = Vector2(232, 24)
-	_overlay_titulo.flat = true
-	_overlay_titulo.add_theme_font_size_override("font_size", 12)
-	_overlay_titulo.add_theme_font_override("font", ForjaTema.fuente_etiqueta())
-	_overlay_titulo.add_theme_color_override("font_color", ORO)
-	_overlay_titulo.focus_mode = Control.FOCUS_NONE
-	_overlay_titulo.pressed.connect(_alternar_overlay)
-	_overlay.add_child(_overlay_titulo)
+## El apodo lo pone la arena al arrancar (Perfil.apodo()).
+func establecer_jugador(nombre: String) -> void:
+	if _nombre_jugador == null:
+		return
+	_nombre_jugador.text = nombre.to_upper() if not nombre.strip_edges().is_empty() else "GLADIADOR"
 
-	_overlay_detalle = VBoxContainer.new()
-	_overlay_detalle.position = Vector2(12, 28)
-	_overlay_detalle.size = Vector2(216, 100)
-	_overlay_detalle.add_theme_constant_override("separation", 1)
-	_overlay.add_child(_overlay_detalle)
-	_overlay_vida = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(212, 18), 12, ForjaTema.TEXTO)
-	_overlay_mana = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(212, 18), 12, ForjaTema.TEXTO)
-	_overlay_dano = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(212, 18), 12, ForjaTema.TEXTO)
-	_overlay_recibido = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(212, 18), 12, ForjaTema.TEXTO)
+
+## Enemigos abatidos: pulso dorado cuando sube la cuenta.
+func establecer_bajas(total: int) -> void:
+	if _bajas_jugador == null or total == _bajas:
+		return
+	var sube := total > _bajas
+	_bajas = total
+	_bajas_jugador.text = str(total)
+	if not sube:
+		return
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_bajas_jugador.scale = Vector2(1.45, 1.45)
+	_bajas_jugador.add_theme_color_override("font_color", ForjaTema.ORO_CLARO)
+	tween.set_parallel(true)
+	tween.tween_property(_bajas_jugador, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(_bajas_jugador, "modulate", Color(1, 1, 1, 1), 0.35)
+	tween.chain().tween_callback(_devolver_color_bajas)
+
+
+func _devolver_color_bajas() -> void:
+	if _bajas_jugador != null:
+		_bajas_jugador.add_theme_color_override("font_color", ForjaTema.TEXTO_FUERTE)
+
+
+## Anima el oro hacia el valor real y da un pulso a la ficha cuando cambia.
+func _animar_oro(delta: float) -> void:
+	if _oro == null:
+		return
+	var objetivo := float(_oro_objetivo)
+	if absf(objetivo - _oro_mostrado) < 0.6:
+		_oro_mostrado = objetivo
+	else:
+		_oro_mostrado = lerpf(_oro_mostrado, objetivo, 1.0 - exp(-9.0 * delta))
+	_oro.text = "%d" % int(round(_oro_mostrado))
+
+
+func _pulso_ficha() -> void:
+	if _ficha_jugador == null:
+		return
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_ficha_jugador.pivot_offset = _ficha_jugador.size * 0.5
+	_ficha_jugador.scale = Vector2(1.025, 1.02)
+	tween.tween_property(_ficha_jugador, "scale", Vector2.ONE, 0.30).set_trans(Tween.TRANS_QUAD)
 
 
 func _crear_mensajes() -> void:
@@ -463,50 +566,43 @@ func _crear_mensajes() -> void:
 
 ## Panel central de la sala de espera (cuenta atrás antes de la primera oleada).
 func _crear_lobby() -> void:
-	_lobby = PanelContainer.new()
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.07, 0.06, 0.05, 0.94)
-	estilo.border_color = BRONCE
-	estilo.set_border_width_all(2)
-	estilo.set_corner_radius_all(8)
-	estilo.content_margin_left = 26
-	estilo.content_margin_right = 26
-	estilo.content_margin_top = 14
-	estilo.content_margin_bottom = 14
-	_lobby.add_theme_stylebox_override("panel", estilo)
+	# Sin fondo: la cuenta atrás ocupa una esquina central y deja ver la arena.
+	_lobby = VBoxContainer.new()
 	_lobby.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_lobby.visible = false
+	_lobby.add_theme_constant_override("separation", 0)
+	_lobby.alignment = BoxContainer.ALIGNMENT_CENTER
+	_lobby.position = Vector2(380, 96)
+	_lobby.custom_minimum_size = Vector2(520, 0)
 	_raiz.add_child(_lobby)
 
-	var columna := VBoxContainer.new()
-	columna.add_theme_constant_override("separation", 4)
-	_lobby.add_child(columna)
-
-	var titulo := Label.new()
-	titulo.text = "SALA DE ESPERA"
-	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	titulo.add_theme_font_size_override("font_size", 18)
-	titulo.add_theme_color_override("font_color", Color(0.92, 0.72, 0.35))
-	titulo.add_theme_constant_override("outline_size", 6)
-	columna.add_child(titulo)
+	_lobby_titulo = Label.new()
+	_lobby_titulo.text = "PREPÁRATE"
+	_lobby_titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_lobby_titulo.add_theme_font_override("font", ForjaTema.fuente_titulo())
+	_lobby_titulo.add_theme_font_size_override("font_size", 18)
+	_lobby_titulo.add_theme_color_override("font_color", ForjaTema.ORO_CLARO)
+	_lobby_titulo.add_theme_constant_override("outline_size", 8)
+	_lobby_titulo.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02, 0.92))
+	_lobby.add_child(_lobby_titulo)
 
 	_lobby_tiempo = Label.new()
 	_lobby_tiempo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_lobby_tiempo.add_theme_font_size_override("font_size", 40)
-	_lobby_tiempo.add_theme_color_override("font_color", TEXTO)
-	_lobby_tiempo.add_theme_constant_override("outline_size", 10)
-	columna.add_child(_lobby_tiempo)
+	_lobby_tiempo.add_theme_font_override("font", ForjaTema.fuente_titulo())
+	_lobby_tiempo.add_theme_font_size_override("font_size", 46)
+	_lobby_tiempo.add_theme_color_override("font_color", ForjaTema.TEXTO_FUERTE)
+	_lobby_tiempo.add_theme_constant_override("outline_size", 12)
+	_lobby_tiempo.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02, 0.92))
+	_lobby.add_child(_lobby_tiempo)
 
 	_lobby_detalle = Label.new()
 	_lobby_detalle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_lobby_detalle.add_theme_font_size_override("font_size", 13)
-	_lobby_detalle.add_theme_color_override("font_color", Color(0.78, 0.72, 0.6))
-	columna.add_child(_lobby_detalle)
-
-	# Franja centrada bajo la barra superior (el HUD trabaja en 1280x720).
-	# Deja libre la lengüeta de estadísticas de la izquierda.
-	_lobby.custom_minimum_size = Vector2(740, 118)
-	_lobby.position = Vector2(268, 92)
+	_lobby_detalle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_lobby_detalle.add_theme_font_size_override("font_size", 12)
+	_lobby_detalle.add_theme_color_override("font_color", ForjaTema.TEXTO)
+	_lobby_detalle.add_theme_constant_override("outline_size", 8)
+	_lobby_detalle.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02, 0.9))
+	_lobby.add_child(_lobby_detalle)
 
 
 func establecer_lobby(visible: bool, segundos: float, jugadores: int, maximo: int, es_local: bool) -> void:
@@ -517,12 +613,14 @@ func establecer_lobby(visible: bool, segundos: float, jugadores: int, maximo: in
 		return
 	var total := int(ceil(maxf(0.0, segundos)))
 	_lobby_tiempo.text = "%d:%02d" % [total / 60, total % 60]
+	if _lobby_titulo != null:
+		_lobby_titulo.text = "PREPÁRATE PARA LA SIGUIENTE OLEADA"
 	if es_local:
-		_lobby_detalle.text = "Preparación · elegí tu campeón en la armería"
+		_lobby_detalle.text = "La oleada empieza en unos segundos"
 	elif jugadores <= 1:
-		_lobby_detalle.text = "Esperando gladiadores… 1/%d · elegí tu campeón" % maximo
+		_lobby_detalle.text = "Esperando gladiadores 1/%d" % maximo
 	else:
-		_lobby_detalle.text = "%d/%d gladiadores · elegí tu campeón en la armería" % [jugadores, maximo]
+		_lobby_detalle.text = "%d/%d gladiadores" % [jugadores, maximo]
 
 
 func _crear_revive() -> void:
@@ -578,8 +676,8 @@ func _process(_delta: float) -> void:
 	_actualizar_estadisticas()
 	_actualizar_habilidades()
 	_actualizar_inventario()
-	_actualizar_overlay()
 	_actualizar_superior()
+	_animar_oro(_delta)
 	_actualizar_aviso()
 	_actualizar_revive()
 	_actualizar_comandos()
@@ -604,6 +702,8 @@ func _actualizar_ficha() -> void:
 		nombre_clase = NOMBRES_CLASE[arma.clase] if arma.clase < NOMBRES_CLASE.size() else "GLADIADOR"
 	var nivel := _jugador.estadisticas.nivel
 	_clase.text = "%s  ·  Nv %d  ·  Piel: %s" % [nombre_clase, nivel, _nombre_skin()]
+	if _nivel_jugador != null:
+		_nivel_jugador.text = "Nv %d" % nivel
 
 	var estados: Array[String] = []
 	if _jugador.escudo_actual > 0.0:
@@ -771,15 +871,6 @@ func _limpiar_seleccion_swap() -> void:
 	_ranura_seleccionada_swap = -1
 
 
-func _actualizar_overlay() -> void:
-	var salud_max := maxf(1.0, _jugador.estadisticas.salud_maxima)
-	var mana_max := maxf(1.0, _jugador.estadisticas.mana_maximo)
-	_overlay_vida.text = "Vida      %d %%" % int(round(_jugador.salud_actual / salud_max * 100.0))
-	_overlay_mana.text = "Maná      %d %%" % int(round(_jugador.mana_actual / mana_max * 100.0))
-	_overlay_dano.text = "Infligido %d" % int(round(_jugador.dano_infligido))
-	_overlay_recibido.text = "Recibido  %d" % int(round(_jugador.dano_recibido))
-
-
 func _actualizar_superior() -> void:
 	if _oleadas != null:
 		_oleada.text = "OLEADA %d / 20" % _oleadas.oleada_actual
@@ -791,8 +882,11 @@ func _actualizar_superior() -> void:
 			_tiempo_oleada.text = "Tiempo: %d s" % int(ceil(tiempo))
 		else:
 			_tiempo_oleada.text = ""
-	_oro.text = "ORO %d" % _oro_arena()
-	_texto_puntos.text = "PUNTOS %d" % _puntos_atributo()
+	var oro := _oro_arena()
+	if oro != _oro_objetivo:
+		if oro > _oro_objetivo and _oro_objetivo > 0:
+			_pulso_ficha()
+		_oro_objetivo = oro
 	if _bandera != null:
 		_barra_bandera.max_value = maxf(1.0, _bandera.salud_maxima)
 		_barra_bandera.value = _bandera.salud_actual
@@ -962,13 +1056,6 @@ func _lanzar_habilidad(slot: int) -> void:
 		_jugador.intentar_habilidad(slot)
 
 
-func _alternar_overlay() -> void:
-	_overlay_expandido = not _overlay_expandido
-	_overlay_detalle.visible = _overlay_expandido
-	_overlay.size = Vector2(232, 140 if _overlay_expandido else 30)
-	_overlay_titulo.text = "ESTADÍSTICAS  %s" % ("-" if _overlay_expandido else "+")
-
-
 # --- Utilidades -----------------------------------------------------------
 
 func _tooltip_habilidad(habilidad: AbilityData, slot: int) -> String:
@@ -1075,7 +1162,7 @@ func _panel(pos: Vector2, tam: Vector2, color: Color, borde: Color) -> Panel:
 	var estilo := StyleBoxFlat.new()
 	estilo.bg_color = color
 	estilo.border_color = borde
-	estilo.set_border_width_all(2)
+	estilo.set_border_width_all(1)
 	estilo.corner_radius_top_left = 4
 	estilo.corner_radius_top_right = 4
 	estilo.corner_radius_bottom_left = 4
@@ -1298,8 +1385,9 @@ func _comando_tienda() -> void:
 	alternar_tienda()
 
 
-func _comando_estadisticas() -> void:
-	_alternar_overlay()
+func _comando_campeon() -> void:
+	if _arena != null and _arena.has_method("_mostrar_seleccion_campeon"):
+		_arena.call("_mostrar_seleccion_campeon", true)
 
 
 # --- Tooltips ricos -------------------------------------------------------
@@ -1450,7 +1538,7 @@ func _nombre_comando(id: String) -> String:
 		"atributos": return "Subir atributo"
 		"talentos": return "Talentos"
 		"tienda": return "Mercader"
-		"estadisticas": return "Estadísticas"
+		"campeon": return "Forja de campeones"
 	return id.capitalize()
 
 
@@ -1468,9 +1556,15 @@ func _estado_comando(id: String) -> String:
 			return "Puntos rojos: %d" % _jugador.puntos_rojos
 		"tienda":
 			return "Oro: %d" % _oro_arena()
-		"estadisticas":
-			return "Infligido %d  ·  Recibido %d" % [int(_jugador.dano_infligido), int(_jugador.dano_recibido)]
+		"campeon":
+			return "Clase: %s" % _nombre_clase_actual()
 	return ""
+
+
+func _nombre_clase_actual() -> String:
+	if _jugador == null or _jugador.arma_actual == null:
+		return "sin campeón"
+	return NOMBRES_CLASE[_jugador.arma_actual.clase] if _jugador.arma_actual.clase < NOMBRES_CLASE.size() else "GLADIADOR"
 
 
 func _nombre_atributo(atributo: StringName) -> String:

@@ -29,6 +29,7 @@ var _vitrina: VitrinaCampeon
 var _indice_heroe := 0
 var _reloj := 0.0
 var _insignia_red: Label
+var _boton_refrescar: Button
 
 ## Tinte del campeón en el lobby (el mismo de la piel "Tierra Baldía").
 const TINTE_HEROE := Color(0.72, 0.95, 0.55)
@@ -177,10 +178,10 @@ func _crear_navegacion() -> Control:
 	rotulo_lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rotulo_lista.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cabecera.add_child(rotulo_lista)
-	var refrescar := ForjaTema.boton("ACTUALIZAR", 11)
-	refrescar.custom_minimum_size = Vector2(104, 28)
-	refrescar.pressed.connect(_actualizar_servidores)
-	cabecera.add_child(refrescar)
+	_boton_refrescar = ForjaTema.boton("ACTUALIZAR", 11)
+	_boton_refrescar.custom_minimum_size = Vector2(120, 30)
+	_boton_refrescar.pressed.connect(_actualizar_servidores)
+	cabecera.add_child(_boton_refrescar)
 
 	_estado_servidores = ForjaTema.etiqueta("Buscando salas…", 11, ForjaTema.TENUE)
 	_estado_servidores.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -189,7 +190,10 @@ func _crear_navegacion() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.custom_minimum_size = Vector2(0, 96)
+	scroll.custom_minimum_size = Vector2(0, 150)
+	# En el teléfono no hay rueda: la barra visible es la única pista de que hay
+	# más salas abajo.
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	columna.add_child(scroll)
 
 	_lista_servidores = VBoxContainer.new()
@@ -264,12 +268,17 @@ func _crear_escenario() -> Control:
 	contenido.add_theme_constant_override("separation", 4)
 	tarjeta.add_child(contenido)
 	contenido.add_child(ForjaTema.rotulo("CÓMO SE JUEGA", 11))
-	for linea in [
-		"Ratón: clic para atacar-mover · Q W E R habilidades",
-		"Móvil: joystick abajo a la izquierda y habilidades a la derecha",
-		"F mercader · T talentos · Z X C V B N objetos",
+	var tactil := DisplayServer.is_touchscreen_available()
+	var lineas := [
+		"Joystick a la izquierda: mover · habilidades a la derecha" if tactil
+		else "Ratón: clic para atacar-mover · Q W E R habilidades",
+		"Mercader, talentos y mochila: botones a la izquierda" if tactil
+		else "Móvil: joystick abajo a la izquierda y habilidades a la derecha",
+		"Tocá tus objetos en la mochila para usarlos" if tactil
+		else "F mercader · T talentos · Z X C V B N objetos",
 		"Sobrevive 20 oleadas y protegé el estandarte",
-	]:
+	]
+	for linea in lineas:
 		var item := ForjaTema.etiqueta(linea, 11, ForjaTema.TENUE)
 		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		contenido.add_child(item)
@@ -337,8 +346,11 @@ func _al_recibir_servidores(ok: bool, lista: Array) -> void:
 	if not ok:
 		var causa := ""
 		if _supabase != null and not _supabase.ultimo_error.is_empty():
-			causa = " (%s)" % _supabase.ultimo_error
-		_estado_servidores.text = "No se pudo consultar el lobby%s · reintentá" % causa
+			causa = _supabase.ultimo_error
+		_estado_servidores.text = _texto_error_lobby(causa)
+		if _boton_refrescar != null:
+			_boton_refrescar.text = "REINTENTAR"
+			_boton_refrescar.add_theme_color_override("font_color", Color(1.0, 0.62, 0.42))
 		_insignia_red.text = "LOBBY NO DISPONIBLE"
 		# Un reintento automático: el primer intento de la Web puede llegar antes
 		# de que el motor tenga listo el backend de red.
@@ -370,7 +382,20 @@ func _al_recibir_servidores(ok: bool, lista: Array) -> void:
 		_insignia_red.text = "LOBBY VACÍO"
 	else:
 		_estado_servidores.text = "%d sala(s) disponibles" % mostrados
+		if _boton_refrescar != null:
+			_boton_refrescar.text = "ACTUALIZAR"
+			_boton_refrescar.add_theme_color_override("font_color", ForjaTema.ORO_CLARO)
 		_insignia_red.text = "LOBBY ACTIVO · %d" % mostrados
+
+
+## Mensaje de error útil: dice qué falló y qué puede hacer el jugador, en vez
+## de un "HTTP 0" que no explica nada.
+func _texto_error_lobby(causa: String) -> String:
+	if causa.contains("401") or causa.to_lower().contains("api key"):
+		return "El lobby rechazó la clave pública del servidor. Avisá al anfitrión."
+	if causa.contains("0") or causa.to_lower().contains("red") or causa.is_empty():
+		return "Sin conexión con el lobby. Revisá los datos y tocá REINTENTAR."
+	return "No se pudo consultar el lobby (%s). Tocá REINTENTAR." % causa
 
 
 func _tarjeta_sala(fila: Dictionary, url: String) -> Control:

@@ -462,7 +462,7 @@ class Emblema:
 		draw_colored_polygon(puntos, relleno)
 		var borde := ForjaTema.ORO_CLARO if seleccionado else ForjaTema.ORO_OSCURO
 		if atenuado:
-			borde = Color(0.62, 0.50, 0.30, 0.85)
+			borde = Color(0.70, 0.58, 0.36, 0.95)
 		var trazo := 2.4 if seleccionado else 1.4
 		for i in 4:
 			draw_line(puntos[i], puntos[(i + 1) % 4], borde, trazo)

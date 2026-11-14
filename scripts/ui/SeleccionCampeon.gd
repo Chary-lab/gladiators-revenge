@@ -34,6 +34,7 @@ var _btn_elegir: Button
 var _piel: Label
 var _ranuras: Array = []
 var _xp_texto: Label
+var _volver: Button
 var _xp_barra: ProgressBar
 var _armado := false
 
@@ -137,7 +138,7 @@ func _crear_vitrina() -> Control:
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	caja.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_vitrina = VitrinaCampeon.new()
-	_vitrina.configurar(Vector2(430, 520))
+	_vitrina.configurar(Vector2(470, 566))
 	caja.add_child(_vitrina)
 	return caja
 
@@ -279,7 +280,7 @@ func _crear_ficha() -> Control:
 
 	_detalle_habilidad = ForjaTema.etiqueta("Elegí una habilidad para leer qué hace.", 10, ForjaTema.TENUE)
 	_detalle_habilidad.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detalle_habilidad.custom_minimum_size = Vector2(0, 26)
+	_detalle_habilidad.custom_minimum_size = Vector2(0, 36)
 	ficha.add_child(_detalle_habilidad)
 
 	# Equipo: el arma de la clase llega puesta; el resto se compra en la arena.
@@ -355,10 +356,10 @@ func _divisor() -> Control:
 func _crear_pie() -> Control:
 	var fila := HBoxContainer.new()
 	fila.add_theme_constant_override("separation", 12)
-	var volver := ForjaTema.boton("VOLVER", 13)
-	volver.custom_minimum_size = Vector2(120, 34)
-	volver.pressed.connect(_cerrar)
-	fila.add_child(volver)
+	_volver = ForjaTema.boton("VOLVER", 13)
+	_volver.custom_minimum_size = Vector2(120, 34)
+	_volver.pressed.connect(_cerrar)
+	fila.add_child(_volver)
 	var ayuda := ForjaTema.etiqueta("1 · 2 · 3 cambian de clase   ·   Enter confirma   ·   Esc cierra", 10, ForjaTema.TENUE)
 	ayuda.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	fila.add_child(ayuda)
@@ -494,6 +495,9 @@ func _actualizar() -> void:
 	else:
 		_btn_elegir.text = "ELEGIR CAMPEÓN"
 		_btn_elegir.disabled = false
+	# Sin campeón no se puede volver: la elección ya no se hace en el mapa.
+	if _volver != null:
+		_volver.visible = _actual != &"" and _actual != &"prisionero"
 
 
 func _elegir_habilidad(indice: int) -> void:
@@ -580,4 +584,5 @@ func _input(evento: InputEvent) -> void:
 		KEY_ENTER, KEY_KP_ENTER:
 			_confirmar()
 		KEY_ESCAPE:
-			_cerrar()
+			if _volver != null and _volver.visible:
+				_cerrar()

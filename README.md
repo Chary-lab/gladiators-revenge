@@ -4,7 +4,7 @@ Arena de supervivencia con perspectiva isométrica 2.5D en **Godot 4.7**, pensad
 para publicarse en **Web (HTML5 / WebAssembly)**. IP original: gladiadores orcos
 de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 
-## Estado (v1.8 jugable)
+## Estado (v1.8.1 jugable)
 
 Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
@@ -13,10 +13,12 @@ renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, é
 legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo**
 para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 
-- 129 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 132 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
+- **Apodo del gladiador**: la primera vez que entrás te pide un nombre (2–14
+  letras, se guarda) y encabeza tu ficha en la arena.
 - **Interfaz unificada (v1.8)**: tipografía **Cinzel** (SIL OFL), paleta de
   carbón/oro/ascua y colores de rareza (común, raro, épico, legendario) en un
   `Theme` compartido (`ForjaTema.tema_global()`); ninguna pantalla define su
@@ -27,12 +29,15 @@ para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 - **Forja de campeones**: el gladiador a tamaño héroe, riel de clases con
   rombos, ficha RPG (nivel, atributos, estadísticas con barras, habilidades
   con descripción al tocarlas, equipo) y selector de piel.
-- **HUD de combate**: una sola barra superior con oleada, estandarte y
-  economía; lengüeta de estadísticas y marcos de inventario por rareza.
+- **HUD de combate**: una sola barra superior con oleada, estandarte y la ficha
+  del jugador (apodo, nivel, enemigos abatidos y oro, con contadores animados);
+  marcos de inventario por rareza. La sala de espera es sólo texto, sin panel.
 - **Tienda**: filtros por categoría y rareza, placas de estado (xN, NUEVO,
   FORJABLE) y ficha lateral con comparación de datos.
-- **HUD táctil**: joystick con aro de runas, abanico de habilidades con
-  enfriamiento radial y segundos, pastilla de vida/maná con nivel y pausa.
+- **HUD táctil**: joystick con aro de runas y una rueda con INTERACTUAR en el
+  centro y Q/W/E/R alrededor (enfriamiento radial y segundos), pastilla de
+  vida/maná, mercader/talentos/mochila y pausa. En móvil la consola de
+  escritorio se apaga: la arena queda despejada.
 - **Controles táctiles** en móvil: joystick de movimiento a la izquierda y
   botones grandes de Q/W/E/R, INTERACTUAR y DETENER. Las habilidades apuntan al
   enemigo más cercano. El tamaño de los botones se ajusta desde Ajustes.

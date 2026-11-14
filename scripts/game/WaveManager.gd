@@ -15,6 +15,8 @@ signal entrada_iniciada(duracion: float)
 signal entrada_terminada
 signal victoria
 signal jefe_invocado(jefe: ArenaBossAI)
+## Total de enemigos abatidos en la partida (para la ficha del jugador).
+signal enemigo_abatido(total: int)
 
 enum Estado { ESPERA, ENTRADA, COMBATE, FIN }
 
@@ -28,6 +30,8 @@ var oleada_actual := 0
 
 var _estado: Estado = Estado.FIN
 var _pendientes := 0
+## Enemigos abatidos (jefes incluidos) desde el inicio de la partida.
+var bajas := 0
 var _temporizador := 0.0
 var _pool: ObjectPool
 var _jugador: GladiatorController
@@ -233,11 +237,15 @@ func _probabilidad_elite() -> float:
 
 
 func al_morir_enemigo(oro: int, xp: int = 0) -> void:
+	bajas += 1
+	enemigo_abatido.emit(bajas)
 	oro_ganado.emit(oro)
 	_otorgar_xp(xp)
 
 
 func _al_morir_jefe() -> void:
+	bajas += 1
+	enemigo_abatido.emit(bajas)
 	oro_ganado.emit(120 + oleada_actual * 20)
 	_otorgar_xp(_xp_jefe)
 	mensaje.emit("¡Campeón del Imperio derrotado!", 3.0)

@@ -45,7 +45,7 @@ func _construir() -> void:
 	_camara.fov = 32.0
 	_camara.near = 0.05
 	_viewport.add_child(_camara)
-	_camara.look_at_from_position(Vector3(-0.22, 1.00, 4.55), Vector3(-0.18, 0.86, 0), Vector3.UP)
+	_camara.look_at_from_position(Vector3(-0.16, 1.00, 5.65), Vector3(-0.12, 0.86, 0), Vector3.UP)
 
 	var gradiente := Sprite3D.new()
 	gradiente.texture = _degradado()

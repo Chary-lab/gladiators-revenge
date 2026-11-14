@@ -151,7 +151,7 @@ func _ready() -> void:
 		_iniciar_local()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-inicio" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-inicio" in args:
 		_capturar()
 
 	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
@@ -345,8 +345,14 @@ func _iniciar_local() -> void:
 	_crear_oleadas()
 	_crear_publico()
 	_crear_hud()
+	if _hud != null:
+		_hud.establecer_jugador(Perfil.apodo())
 	_crear_controles_tactiles()
 	_conectar()
+	# Apodo (primera vez) y forja de campeones: también cuando se entra desde el
+	# menú del lobby, no sólo en el arranque directo.
+	if not _en_captura():
+		call_deferred("_pedir_apodo_y_campeon")
 
 
 func _process(delta: float) -> void:
@@ -409,6 +415,8 @@ func _iniciar_cliente() -> void:
 	_publico.set_process(false)
 
 	_crear_hud()
+	if _hud != null:
+		_hud.establecer_jugador(Perfil.apodo())
 	if _hud != null:
 		_hud.mostrar_mensaje("Conectando al servidor cooperativo…", 6.0)
 	if url_servidor.is_empty():
@@ -727,6 +735,27 @@ func _ciclar_skin_desde_forja() -> void:
 		_seleccion.actualizar_piel(nombre_skin())
 
 
+## Primera pantalla: el apodo (sólo la primera vez) y luego la forja.
+func _pedir_apodo_y_campeon() -> void:
+	if not Perfil.tiene_apodo():
+		var modal := NombreJugador.new()
+		modal.name = "NombreJugador"
+		add_child(modal)
+		modal.confirmado.connect(_al_confirmar_apodo)
+		modal.configurar()
+		return
+	if _hud != null:
+		_hud.establecer_jugador(Perfil.apodo())
+	_mostrar_seleccion_campeon()
+
+
+func _al_confirmar_apodo(apodo: String) -> void:
+	Perfil.guardar(apodo)
+	if _hud != null:
+		_hud.establecer_jugador(Perfil.apodo())
+	call_deferred("_mostrar_seleccion_campeon")
+
+
 func _al_elegir_campeon(clase: StringName) -> void:
 	_seleccion = null
 	if es_cliente:
@@ -734,16 +763,18 @@ func _al_elegir_campeon(clase: StringName) -> void:
 			red.enviar_clase(clase)
 		_avisar("Solicitando clase %s…" % String(ForjaTema.NOMBRE_EMBLEMA.get(clase, clase)), 2.5)
 		return
+	# La clase es permanente: una segunda elección no cambia nada.
+	if _campeon_elegido:
+		return
+	var arma := _arma_por_clase(clase)
+	if arma == null or _jugador == null:
+		return
+	_jugador.equipar_arma(arma)
+	_campeon_elegido = true
 	for pedestal in _pedestales:
-		if pedestal.arma != null and pedestal.arma.id_clase() == clase:
-			if pedestal.comprar(_jugador):
-				_campeon_elegido = true
-				for otro in _pedestales:
-					if otro != pedestal:
-						otro.desactivar()
-				_avisar("Campeón: %s" % pedestal.arma.nombre, 2.8)
-				Sfx.reproducir("compra", -3.0)
-			return
+		pedestal.desactivar()
+	_avisar("Campeón: %s" % arma.nombre, 2.8)
+	Sfx.reproducir("compra", -3.0)
 
 
 func _arma_por_clase(clase: StringName) -> WeaponItem:
@@ -878,7 +909,7 @@ func _al_recibir_bienvenida(peer: int) -> void:
 	_jugador.es_local_red = true
 	print("[NET] jugador local listo: ", peer)
 	if _hud != null:
-		_hud.mostrar_mensaje("Conectado. Elige tu campeón en la armería.", 3.0)
+		_hud.mostrar_mensaje("Conectado. Elegí tu campeón en la forja.", 3.0)
 
 
 func _al_actualizar_lobby(ocupadas: Dictionary) -> void:
@@ -1431,7 +1462,6 @@ func _crear_zona_segura() -> void:
 	circulo.position = Vector3(18.0, 0.04, 0)
 	circulo.material_override = _material(Color(0.64, 0.48, 0.22))
 	add_child(circulo)
-	_etiqueta_mundo("CAMPEONES", Vector3(18.0, 2.6, 0), Color(1.0, 0.84, 0.45))
 
 
 func _etiqueta_mundo(texto: String, pos: Vector3, color: Color) -> void:
@@ -1480,15 +1510,10 @@ func _crear_camara() -> void:
 
 
 func _crear_armeria() -> void:
-	var armas := WeaponItem.crear_catalogo_base()
-	var posiciones := [Vector3(18.0, 0, 7.0), Vector3(18.0, 0, 0.0), Vector3(18.0, 0, -7.0)]
-	for i in armas.size():
-		var pedestal := ArmoryPedestal.new()
-		add_child(pedestal)
-		pedestal.global_position = posiciones[i]
-		pedestal.configurar(armas[i])
-		pedestal.es_campeon = true
-		_pedestales.append(pedestal)
+	# La elección de campeón vive en su propia pantalla (modal) desde el inicio
+	# de la partida. En el mapa no queda nada que tocar: ni pedestales, ni
+	# plataformas, ni etiquetas de "elegir".
+	pass
 
 
 func _crear_oleadas() -> void:
@@ -1515,8 +1540,6 @@ func _crear_controles_tactiles() -> void:
 	var pantalla_tactil := DisplayServer.is_touchscreen_available()
 	if not pantalla_tactil and not ("--tactil" in OS.get_cmdline_user_args()):
 		return
-	if not es_cliente and not es_servidor and not _en_captura():
-		call_deferred("_mostrar_seleccion_campeon")
 	_tactil = TouchControls.new()
 	_tactil.name = "Tactil"
 	add_child(_tactil)
@@ -1528,6 +1551,22 @@ func _crear_controles_tactiles() -> void:
 	_tactil.pausa.connect(_al_pausa_tactil)
 	_tactil.interactuar.connect(_interactuar_cercano)
 	_tactil.detener.connect(_al_detener_tactil)
+	_tactil.tienda.connect(_al_tienda_tactil)
+	_tactil.talentos.connect(_al_talentos_tactil)
+	# En móvil manda el HUD táctil: se apaga la consola de escritorio (comandos
+	# QWER, ficha y estadísticas) para dejar la arena despejada.
+	if _hud != null:
+		_hud.establecer_modo_tactil(true)
+
+
+func _al_tienda_tactil() -> void:
+	if _hud != null:
+		_hud.alternar_tienda()
+
+
+func _al_talentos_tactil() -> void:
+	if _hud != null:
+		_hud.alternar_talentos()
 
 
 ## Con el dedo no hay ratón para apuntar: la habilidad va al enemigo más cercano
@@ -1604,6 +1643,9 @@ func _crear_hud() -> void:
 	_hud.terminar_partida.connect(_al_pulsar_terminar)
 	_hud.reintentar.connect(_al_reintentar)
 	_hud.salir_lobby.connect(_al_salir_lobby)
+	# Ficha del jugador: las bajas las cuenta el gestor de oleadas.
+	if _oleadas != null and _hud.has_method("establecer_bajas"):
+		_oleadas.enemigo_abatido.connect(_hud.establecer_bajas)
 
 	# Barra de vida del jefe (oculta por defecto)
 	_jefe_barra_nodo = Control.new()
@@ -2345,7 +2387,8 @@ func _capturar() -> void:
 	var fin := "--captura-fin" in args
 	var campeon := "--captura-campeon" in args
 	var menu_red := "--captura-menu" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red
+	var capturar_apodo := "--captura-apodo" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo
 	if combate:
 		var sin_arma: bool = _jugador != null and _jugador.arma_actual != null and _jugador.arma_actual.clase == WeaponItem.Clase.PRISIONERO
 		if sin_arma:
@@ -2378,6 +2421,11 @@ func _capturar() -> void:
 			_hud.alternar_tienda()
 		elif cerca and _camara != null:
 			_camara.size = 7.0
+		if capturar_apodo:
+			var modal := NombreJugador.new()
+			add_child(modal)
+			modal.configurar()
+			await get_tree().create_timer(0.8).timeout
 		if campeon:
 			_mostrar_seleccion_campeon(true)
 			print("SELECCION: ", _seleccion != null, " perfiles=", _perfiles_campeon().size())
@@ -2385,7 +2433,7 @@ func _capturar() -> void:
 		if fin:
 			_finalizar("DERROTA", "Los gladiadores han caído en la arena.")
 			await get_tree().create_timer(1.2).timeout
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red) else 8.5).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -2408,6 +2456,8 @@ func _capturar() -> void:
 		ruta = "res://captura_campeon.png"
 	elif menu_red:
 		ruta = "res://captura_menu.png"
+	elif capturar_apodo:
+		ruta = "res://captura_apodo.png"
 	elif combate:
 		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))

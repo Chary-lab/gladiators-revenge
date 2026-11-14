@@ -55,24 +55,20 @@ func _ejecutar() -> void:
 		_comprobar(arma.es_valida(), "arma válida: %s" % arma.nombre)
 	_comprobar(WeaponItem.crear_prisionero().es_valida(), "kit de prisionero válido")
 
-	# --- Armería: comprar define la clase ---------------------------------
+	# --- Forja de campeones: la clase se elige en su pantalla --------------
 	var pedestales: Array = escena.get("_pedestales")
-	var pedestal: ArmoryPedestal = pedestales[0]
+	_comprobar(pedestales.is_empty(), "la armería no deja pedestales de campeón en el mapa")
 	var fuerza_antes := jugador.estadisticas.fuerza_total
 	var oro_antes: int = escena.oro
-	jugador.global_position = pedestal.global_position + Vector3(0.0, 0.0, 1.6)
-	escena._interactuar_cercano()
-	_comprobar(jugador.arma_actual != null and jugador.arma_actual.clase == WeaponItem.Clase.BASTION, "comprar en la armería equipa el Bastión")
+	escena._al_elegir_campeon(&"bastion")
+	_comprobar(
+		jugador.arma_actual != null and jugador.arma_actual.clase == WeaponItem.Clase.BASTION,
+		"elegir en la forja equipa el Bastión"
+	)
 	_comprobar(escena.oro == oro_antes, "elegir campeón no cuesta oro")
-	_comprobar(pedestal.vendida, "el pedestal queda marcado como elegido")
 	_comprobar(jugador.estadisticas.fuerza_total > fuerza_antes, "el arma aplica bonos de atributo")
 	var clase_fijada := jugador.arma_actual.clase
-	_comprobar(
-		pedestales[1].vendida and pedestales[2].vendida,
-		"las otras clases desaparecen de la selección al elegir campeón"
-	)
-	jugador.global_position = pedestales[1].global_position + Vector3(0.0, 0.0, 1.6)
-	escena._interactuar_cercano()
+	escena._al_elegir_campeon(&"filo")
 	_comprobar(
 		jugador.arma_actual.clase == clase_fijada,
 		"solo se puede escoger un tipo por partida"
@@ -327,10 +323,25 @@ func _ejecutar() -> void:
 	)
 	_comprobar(
 		(hud.get("_barra_superior") as Panel) != null
-		and hud.get("_overlay") != null
-		and hud.get("_overlay").get_parent() == hud.get("_barra_superior"),
-		"la barra superior es un solo panel con la lengüeta de estadísticas"
+		and hud.get("_ficha_jugador") != null
+		and hud.get("_ficha_jugador").get_parent() == hud.get("_barra_superior"),
+		"la barra superior incluye la ficha del jugador"
 	)
+
+	# --- Apodo y ficha del jugador ---------------------------------------
+	_comprobar(
+		Perfil.normalizar("  Orco  Épico  ") == "Orco Épico",
+		"el apodo se limpia y conserva acentos"
+	)
+	_comprobar(
+		Perfil.normalizar("a<b>c/d").find("<") == -1 and Perfil.normalizar("x").length() == 1,
+		"el apodo rechaza símbolos raros"
+	)
+	hud.establecer_bajas(3)
+	_comprobar((hud.get("_bajas_jugador") as Label).text == "3", "la ficha muestra los enemigos abatidos")
+	var bajas_antes: int = oleadas.bajas
+	oleadas.al_morir_enemigo(0)
+	_comprobar(oleadas.bajas == bajas_antes + 1, "cada muerte suma una baja")
 
 	# --- Tienda: pestañas y recetario ---
 	hud.alternar_tienda()
