@@ -579,6 +579,17 @@ func _ejecutar() -> void:
 		if not ArenaEnemy.ARQUETIPOS.has(tipo) or not ArenaEnemy.VISUALES.has(tipo):
 			arquetipos_ok = false
 	_comprobar(arquetipos_ok, "cada arquetipo tiene estadísticas y modelo visual")
+	# --- Lo que el snapshot debe llevar vivo ------------------------------
+	# El enfriamiento se leía del array del controlador, que nadie descuenta: el
+	# cliente recibía siempre el valor del lanzamiento y su CD quedaba congelado.
+	jugador.combat.set_cooldown(0, 5.0)
+	var fila_red: Dictionary = escena._datos_jugador(1, jugador)
+	_comprobar(
+		is_equal_approx(float(fila_red.get("cooldowns", [0])[0]), 5.0),
+		"el snapshot manda el enfriamiento que corre"
+	)
+	jugador.combat.set_cooldown(0, 0.0)
+
 	# --- Fin de partida ----------------------------------------------------
 	# En smoke no se abrió el panel de talentos (bloque de UI omitido): se abre
 	# para comprobar que el cierre de partida también apaga sus paneles.

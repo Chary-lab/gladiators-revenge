@@ -854,6 +854,7 @@ func _enviar_snapshot() -> void:
 			"max": _bandera.salud_maxima if _bandera != null else 0.0,
 		},
 		"oleada": _oleadas.oleada_actual if _oleadas != null else 0,
+		"bajas": _oleadas.bajas if _oleadas != null else 0,
 		"pendientes": _oleadas.get("_pendientes") if _oleadas != null else 0,
 		"estado_oleada": int(_oleadas.get("_estado")) if _oleadas != null else 0,
 		"tiempo_oleada": _oleadas.tiempo_restante() if _oleadas != null else 0.0,
@@ -919,9 +920,12 @@ func _datos_jugador(peer: int, cuerpo: GladiatorController) -> Dictionary:
 		"mana": cuerpo.mana_actual,
 		"escudo": cuerpo.escudo_actual,
 		"revive_en": cuerpo.revive_en,
+		# Se leen del componente de combate, que es quien los descuenta. El array
+		# `_cooldowns` del controlador solo se escribía al lanzar y quedaba fijo:
+		# el cliente recibía 14 s congelados y sobrescribía su cuenta local.
 		"cooldowns": [
-			cuerpo._cooldowns[0], cuerpo._cooldowns[1],
-			cuerpo._cooldowns[2], cuerpo._cooldowns[3],
+			cuerpo.cooldown_restante(0), cuerpo.cooldown_restante(1),
+			cuerpo.cooldown_restante(2), cuerpo.cooldown_restante(3),
 		],
 		"inv": inventario,
 		"xp": cuerpo.estadisticas.experiencia,
@@ -1024,6 +1028,8 @@ func _aplicar_snapshot(datos: Dictionary) -> void:
 			int(datos.get("estado_oleada", 0)),
 			float(datos.get("tiempo_oleada", 0.0))
 		)
+	if _hud != null and _hud.has_method("establecer_bajas"):
+		_hud.establecer_bajas(int(datos.get("bajas", 0)))
 	_lobby_red_activo = bool(datos.get("espera", _lobby_red_activo))
 	_lobby_red_restante = float(datos.get("prep", _lobby_red_restante))
 	_lobby_red_conectados = maxi(1, int(datos.get("conectados", _lobby_red_conectados)))
@@ -2310,9 +2316,12 @@ func _al_victoria() -> void:
 
 
 func _finalizar(titulo: String, detalle: String) -> void:
-	if game_state.esta_terminado():
-		return
-	game_state.finalizar(titulo, detalle)
+	# En cliente `game_state` es null (la bolsa y los puntos vienen del snapshot):
+	# no hay estado que marcar, pero los paneles y el cartel sí hay que ponerlos.
+	if game_state != null:
+		if game_state.esta_terminado():
+			return
+		game_state.finalizar(titulo, detalle)
 	for jugador in jugadores:
 		if jugador != null and is_instance_valid(jugador):
 			jugador.puede_moverse = false

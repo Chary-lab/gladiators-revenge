@@ -115,6 +115,13 @@ func _init() -> void:
 	var oleada: int = escena.get("_oleadas").oleada_actual
 	_comprobar(oleada >= 1, "la oleada avanza en red")
 
+	# El servidor es quien cuenta las bajas; el cliente debe pintarlas (antes se
+	# quedaba en 0 para siempre porque el snapshot no las incluía).
+	_comprobar(
+		await _esperar_hasta(func() -> bool: return int(escena.get("_hud").get("_bajas")) >= 1, 1500),
+		"las bajas del servidor llegan al HUD del cliente"
+	)
+
 	var espera := 0.0
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--esperar="):
