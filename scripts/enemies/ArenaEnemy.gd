@@ -288,6 +288,9 @@ func aplicar_remoto(posicion: Vector3, rotacion: float, vida: float, vida_max: f
 	salud_maxima = maxf(1.0, vida_max)
 	salud_actual = maxf(0.0, vida)
 	activo = salud_actual > 0.0
+	# Sin esto el espejo de red nunca pintaba la barra: el cliente veía enemigos
+	# sin vida y no podía leer la oleada.
+	_actualizar_barra_vida()
 
 
 ## Espejo de red: el servidor manda 15 posiciones por segundo; sin esto el
@@ -653,13 +656,19 @@ func _barra_color() -> Color:
 	return Color(0.92, 0.35, 0.32)
 
 
-func _material_barra(color: Color) -> StandardMaterial3D:
+func _material_barra(color: Color, prioridad := 0) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Con decenas de enemigos, fondo y relleno quedaban a la misma profundidad y
+	# el orden de dibujado era arbitrario: la placa negra tapaba el color y todas
+	# las barras se veían como rectángulos negros. Con prioridad fija y sin test
+	# de profundidad el relleno siempre va encima y se lee a cualquier distancia.
+	material.no_depth_test = true
+	material.render_priority = prioridad
 	return material
 
 
@@ -672,27 +681,24 @@ func _construir_barra() -> void:
 	add_child(raiz)
 	_barra_raiz = raiz
 
+	# Una sola barra, sin placa negra detrás: el fondo oscuro se comía el relleno
+	# en cuanto había enemigos (se veían rectángulos negros). La fracción se lee
+	# por el ancho y por el color (verdoso arriba, rojo al borde de la muerte).
 	var cuadro := QuadMesh.new()
-	cuadro.size = Vector2(1.15, 0.16)
-
-	var fondo := MeshInstance3D.new()
-	fondo.mesh = cuadro
-	fondo.scale = Vector3(1.08, 2.0, 1.0)
-	fondo.material_override = _material_barra(Color(0.02, 0.02, 0.02, 0.72))
-	raiz.add_child(fondo)
-	_barra_fondo = fondo
+	cuadro.size = Vector2(1.15, 0.18)
 
 	var relleno := MeshInstance3D.new()
 	relleno.mesh = cuadro
-	relleno.material_override = _material_barra(_barra_color())
+	relleno.material_override = _material_barra(_barra_color(), 1)
 	raiz.add_child(relleno)
 	_barra_relleno = relleno
+	_barra_fondo = null
 
 
-## La barra solo aparece cuando aporta información: enemigo herido o amenaza
-## (élite, bruto, tanque, nigromante). Así la arena no se llena de barras.
-func _barra_visible(frac: float) -> bool:
-	return frac < 0.999 or es_elite or es_bruto or es_tanque or es_nigromante
+## Siempre visible mientras el enemigo esté vivo: con la oleada llena, el
+## jugador necesita leer de un vistazo cuánta vida le queda a cada uno.
+func _barra_visible(_frac: float) -> bool:
+	return true
 
 
 func _actualizar_barra_vida() -> void:
@@ -700,11 +706,13 @@ func _actualizar_barra_vida() -> void:
 		_construir_barra()
 	var frac := clampf(salud_actual / maxf(1.0, salud_maxima), 0.0, 1.0)
 	if _barra_relleno != null:
-		_barra_relleno.scale.x = maxf(0.001, frac)
-		_barra_relleno.position.x = -(1.0 - frac) * 0.5
+		_barra_relleno.scale.x = maxf(0.02, frac)
+		_barra_relleno.position.x = -(1.0 - frac) * 0.575
 		var material := _barra_relleno.material_override as StandardMaterial3D
 		if material != null:
-			material.albedo_color = _barra_color()
+			# Color por arquetipo, pero virando a rojo cuando queda poca vida.
+			var base := _barra_color()
+			material.albedo_color = base.lerp(Color(1.0, 0.22, 0.18), clampf(1.0 - frac * 2.2, 0.0, 1.0))
 	_barra_raiz.visible = activo and _barra_visible(frac)
 
 

@@ -158,7 +158,7 @@ func _ready() -> void:
 		_iniciar_local()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-ficha" in args or "--captura-inicio" in args or "--captura-arquetipos" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-ficha" in args or "--captura-inicio" in args or "--captura-arquetipos" in args or "--captura-oleada" in args:
 		_capturar()
 
 	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
@@ -2502,7 +2502,8 @@ func _capturar() -> void:
 	var capturar_apodo := "--captura-apodo" in args
 	var capturar_ficha := "--captura-ficha" in args
 	var arquetipos := "--captura-arquetipos" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos
+	var oleada := "--captura-oleada" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos or oleada
 	# Permite fotografiar cualquier campeón: --captura-cerca --clase=saeta.
 	var clase_forzada := ""
 	for arg in args:
@@ -2566,6 +2567,25 @@ func _capturar() -> void:
 				indice += 1
 			if _camara != null:
 				_camara.size = 13.0
+		if oleada:
+			# Oleada de verdad (14 enemigos mezclados) para revisar las barras de
+			# vida en pantalla: varias a la vez, elite incluida y daño repartido.
+			_oleadas.aplicar_estado_red(9, 14, 2, 0.1)
+			for i in 14:
+				_oleadas.call("_invocar_enemigo")
+			await get_tree().create_timer(0.4).timeout
+			var angulo := 0.0
+			for nodo in get_tree().get_nodes_in_group("enemigos"):
+				var enemigo := nodo as ArenaEnemy
+				if enemigo == null:
+					continue
+				enemigo.salud_actual = enemigo.salud_maxima * randf_range(0.25, 0.95)
+				enemigo.global_position = _jugador.global_position + Vector3(cos(angulo), 0.0, sin(angulo)) * 5.4
+				enemigo.set_physics_process(false)
+				enemigo.call("_actualizar_barra_vida")
+				angulo += TAU / 18.0
+			if _camara != null:
+				_camara.size = 18.0
 		if capturar_ficha and _tactil != null:
 			_tactil.alternar_ficha()
 			await get_tree().create_timer(0.6).timeout
@@ -2581,7 +2601,7 @@ func _capturar() -> void:
 		if fin:
 			_finalizar("DERROTA", "Los gladiadores han caído en la arena.")
 			await get_tree().create_timer(1.2).timeout
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos) else 8.5).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos or oleada) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -2610,6 +2630,8 @@ func _capturar() -> void:
 		ruta = "res://captura_ficha.png"
 	elif arquetipos:
 		ruta = "res://captura_arquetipos.png"
+	elif oleada:
+		ruta = "res://captura_oleada.png"
 	elif combate:
 		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))

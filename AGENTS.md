@@ -35,6 +35,7 @@ godot -- --captura-campeon                 # forja de campeones con vitrina 3D
 godot -- --captura-apodo                   # modal de apodo
 godot -- --tactil --captura-ficha           # HUD táctil con la ficha del campeón abierta
 godot -- --captura-arquetipos              # sabueso + bruto + nigromante con su barra de vida
+godot -- --captura-oleada                  # oleada 9 con 14 enemigos en círculo (barras de vida)
 godot -- --captura-cerca --clase=lanza     # primer plano de cualquier clase (lanza, saeta…)
 ```
 
