@@ -28,6 +28,7 @@ godot -- --cliente=ws://127.0.0.1:9080
 godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9080 --esperar=40
 godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1:9080
 godot --headless --script res://tests/inspect_crear_sala.gd   # sonda del túnel (red real)
+godot --headless --script res://tests/sonda_red.gd -- --cliente=wss://… --segundos=30   # latencia de una sala
 godot -- --captura-combate                 # windowed screenshot to captura_combate.png
 godot -- --captura-menu                    # lobby (fuerza el menú de red)
 godot -- --captura-campeon                 # forja de campeones con vitrina 3D
@@ -96,6 +97,14 @@ godot -- --tactil --captura-ficha           # HUD táctil con la ficha del campe
 - En Web/APK `CREAR SALA` usa `SalaRemota` (POST /salas) porque el navegador no puede abrir puertos; en escritorio sigue el túnel de `CrearSala`. La API se resuelve por `--api=`, `SALA_API`, `?api=` o `red/api_url`.
 - `HTTPRequest` **no funciona en la build Web** (falla con código 0 sin llegar a la red): en `OS.has_feature("web")` hay que usar `JavaScriptBridge` + `fetch` (ver `Supabase._peticion_web` y `SalaRemota._crear_web`).
 - Supabase is optional infrastructure: client uses `anon` key + RLS to list `servidores`; only the headless server uses `SUPABASE_SERVICE_KEY` from env. Never put the service key or the Postgres connection string in the client, `project.godot` or git. Migration: `supabase/migrations/0001_coop.sql`.
+
+## Red: latencia y salas en Fly
+
+- El POP de Fly que atiende Venezuela es **gru** (verificable con `curl -sI …/salud | grep fly-region`). `mia` está deprecada en Fly y no acepta máquinas nuevas; mover la máquina a `iad`/`ewr`/`dfw` añade un salto POP→máquina, así que `gru` es la región correcta. Cambiar `primary_region` en `fly.toml` **no** mueve una máquina existente: hay que clonarla (`fly machine clone <id> --region …`) o recrearla.
+- Presupuesto medido (1 jugador, ven→gru): RTT ~95 ms (connect TCP), snapshots 14,5 Hz con p95 76 ms y ~1,8–3,3 KB cada uno (26–45 KB/s), `MaestroSalas` como relay no añade latencia (232 ms vs 229 ms en local). El retardo percibido para ver a otro jugador moverse ≈ RTT + tick + `lerp` del espejo (~60 ms). El propio avatar se predice en local, así que responde al instante.
+- `NetCoop.unirse()` reintenta con espera creciente (`INTENTOS_CONEXION`, estado `despertando`) porque la máquina puede estar dormida y la sala tarda en escuchar; `MaestroSalas` no entrega la URL hasta que la sala acepta TCP (`_sala_responde`). Sin eso el jugador veía "error de conexión" al crear la sala y tenía que volver a entrar.
+- `--maestro` en la nube: `auto_stop_machines = "stop"` hace que el primer `POST /salas` tarde ~6 s (despertar + arrancar la sala). Si molesta, `min_machines_running = 1`.
+- Sonda de latencia reutilizable: `godot --headless --script res://tests/sonda_red.gd -- --cliente=<url> --segundos=30` imprime cadencia, tamaño, handshake y retardo giro→snapshot. No forma parte de la suite.
 
 ## Balance y contenido
 

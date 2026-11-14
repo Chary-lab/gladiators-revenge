@@ -82,9 +82,9 @@ func _interpretar(codigo: int, texto: String) -> void:
 		_reintentos = 0
 		lista.emit(str(datos["url"]))
 		return
-	# Un fallo justo después de un despliegue (o al despertar la máquina) se
-	# arregla solo con un segundo intento.
-	if _reintentos < 1:
+	# Un fallo justo después de un despliegue (o al despertar la máquina, que tarda
+	# varios segundos) se arregla solo con más intentos.
+	if _reintentos < 3:
 		_reintentos += 1
 		await get_tree().create_timer(2.5).timeout
 		crear()

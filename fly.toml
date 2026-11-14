@@ -1,5 +1,7 @@
 app = "gladiators-revenge-server"
 primary_region = "gru"
+# Miami (mia) está deprecada en Fly: no acepta máquinas nuevas. Con el POP que
+# atiende Venezuela (gru), mover la máquina a EE. UU. añade un salto extra.
 
 [build]
   dockerfile = "Dockerfile"

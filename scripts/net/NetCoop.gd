@@ -17,6 +17,10 @@ enum Estado { DESCONECTADO, CONECTANDO, CONECTADO, SERVIDOR }
 const VERSION_RED := 1
 const PUERTO_POR_DEFECTO := 9080
 const TAM_BUFFER := 1 << 20
+## Reintentos al abrir la conexión: la máquina de Fly puede estar despertando y
+## el proceso de la sala tarda un par de segundos en escuchar. Antes se rendía al
+## primer intento y el jugador veía "error de conexión" y tenía que volver a entrar.
+const INTENTOS_CONEXION := 12
 
 var estado := Estado.DESCONECTADO
 var es_servidor := false
@@ -31,6 +35,9 @@ var _tcp: TCPServer
 var _clientes: Dictionary = {}      # id -> WebSocketPeer
 var _siguiente_id := 1
 var _ws: WebSocketPeer
+var _intentos := 0
+var _reintento_ms := 0
+var _alguna_vez_conectado := false
 
 
 func configurar(arena: Node) -> void:
@@ -57,6 +64,15 @@ func unirse(direccion: String) -> bool:
 	url = direccion.strip_edges()
 	if url.is_empty():
 		return false
+	_intentos = 0
+	_reintento_ms = 0
+	_alguna_vez_conectado = false
+	return _abrir_websocket()
+
+
+## Abre (o reabre) el WebSocket contra `url`. Reintentar es seguro: se crea un
+## peer nuevo y se descarta el anterior.
+func _abrir_websocket() -> bool:
 	_ws = WebSocketPeer.new()
 	_ws.inbound_buffer_size = TAM_BUFFER
 	_ws.outbound_buffer_size = TAM_BUFFER
@@ -69,6 +85,20 @@ func unirse(direccion: String) -> bool:
 	estado = Estado.CONECTANDO
 	conexion_cambiada.emit("conectando", "Conectando a %s" % url)
 	return true
+
+
+## El servidor aún no escucha (máquina despertando o sala reiniciándose): se
+## reintenta con espera creciente en vez de dar la partida por perdida.
+func _programar_reintento() -> void:
+	_intentos += 1
+	_ws = null
+	estado = Estado.CONECTANDO
+	var espera := minf(3.0, 0.6 + 0.35 * float(_intentos))
+	_reintento_ms = Time.get_ticks_msec() + int(espera * 1000.0)
+	conexion_cambiada.emit(
+		"despertando",
+		"Despertando la sala… (intento %d de %d)" % [_intentos + 1, INTENTOS_CONEXION]
+	)
 
 
 func cerrar() -> void:
@@ -86,6 +116,10 @@ func cerrar() -> void:
 		_tcp = null
 	estado = Estado.DESCONECTADO
 	es_servidor = false
+	# Cancela cualquier reintento pendiente: el jugador ya se fue.
+	_reintento_ms = 0
+	_intentos = INTENTOS_CONEXION
+	_alguna_vez_conectado = false
 
 
 func _process(_delta: float) -> void:
@@ -93,6 +127,9 @@ func _process(_delta: float) -> void:
 		_poll_servidor()
 	elif estado == Estado.CONECTANDO or estado == Estado.CONECTADO:
 		_poll_cliente()
+	if _reintento_ms > 0 and Time.get_ticks_msec() >= _reintento_ms:
+		_reintento_ms = 0
+		_abrir_websocket()
 
 
 # --- Servidor -------------------------------------------------------------
@@ -237,7 +274,11 @@ func _poll_cliente() -> void:
 					if datos is Dictionary:
 						snapshot_recibido.emit(datos)
 		WebSocketPeer.STATE_CLOSED:
-			if estado != Estado.DESCONECTADO:
+			# Si nunca llegó a entrar (máquina despertando o sala arrancando) se
+			# reintenta; si ya estaba jugando, la conexión se perdió de verdad.
+			if not _alguna_vez_conectado and _intentos < INTENTOS_CONEXION:
+				_programar_reintento()
+			elif estado != Estado.DESCONECTADO:
 				estado = Estado.DESCONECTADO
 				conexion_cambiada.emit("desconectado", "El servidor cerró la conexión")
 
@@ -253,6 +294,9 @@ func _procesar_mensaje_cliente(texto: String) -> void:
 				return
 			peer_local = int(mensaje.get("id", 1))
 			estado = Estado.CONECTADO
+			_alguna_vez_conectado = true
+			_intentos = 0
+			_reintento_ms = 0
 			print("[NET] bienvenida del servidor, peer=", peer_local)
 			bienvenida.emit(peer_local)
 			conexion_cambiada.emit("conectado", "Conectado como jugador %d" % peer_local)

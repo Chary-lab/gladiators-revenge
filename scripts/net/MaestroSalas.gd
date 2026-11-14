@@ -199,6 +199,12 @@ func _atender_peticion(peer: StreamPeerTCP, crudo: PackedByteArray, texto: Strin
 		if libre == 0:
 			_responder(peer, 503, {"error": "no hay salas libres, probá en un minuto"})
 			return
+		# Una sala recién arrancada (o la máquina despertando) no acepta conexiones
+		# todavía: si se entrega su URL ya, el jugador entra y recibe "error de
+		# conexión". Se espera a que escuche antes de contestar.
+		if not _sala_responde(libre):
+			_responder(peer, 503, {"error": "la sala está despertando; probá en unos segundos"})
+			return
 		# Reserva con caducidad: si el cliente nunca llega a conectar, la sala
 		# vuelve a quedar disponible.
 		_reservas[libre] = Time.get_ticks_msec()
@@ -227,6 +233,33 @@ func _sala_libre() -> int:
 		if not _ocupadas.has(n) and not _reservas.has(n):
 			return n
 	return 0
+
+
+## ¿El proceso de la sala ya acepta TCP? Sondea con un connect real y un presupuesto
+## acotado. Se llama sólo al crear sala (bloquea el bucle como máximo `limite_ms`);
+## con la sala libre no hay partidas a las que afectar.
+func _sala_responde(numero: int, limite_ms := 6000) -> bool:
+	var puerto := _puerto_sala(numero)
+	var limite := Time.get_ticks_msec() + limite_ms
+	while Time.get_ticks_msec() < limite:
+		var sonda := StreamPeerTCP.new()
+		if sonda.connect_to_host("127.0.0.1", puerto) == OK:
+			var fin := Time.get_ticks_msec() + 300
+			var listo := false
+			while Time.get_ticks_msec() < fin:
+				sonda.poll()
+				var e := sonda.get_status()
+				if e == StreamPeerTCP.STATUS_CONNECTED:
+					listo = true
+					break
+				if e == StreamPeerTCP.STATUS_ERROR:
+					break
+				OS.delay_msec(10)
+			sonda.disconnect_from_host()
+			if listo:
+				return true
+		OS.delay_msec(50)
+	return false
 
 
 func _responder(peer: StreamPeerTCP, codigo: int, cuerpo: Dictionary) -> void:
