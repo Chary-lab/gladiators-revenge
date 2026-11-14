@@ -292,8 +292,21 @@ func configurar(jugador: GladiatorController, arena: Node, hud: ArenaHUD = null)
 	_arena = arena
 	_hud = hud
 	if _jugador != null and _jugador.inventario != null:
-		if not _jugador.inventario.cambiado.is_connected(_reconstruir):
-			_jugador.inventario.cambiado.connect(_reconstruir)
+		if not _jugador.inventario.cambiado.is_connected(_al_cambiar_inventario):
+			_jugador.inventario.cambiado.connect(_al_cambiar_inventario)
+
+
+## Comprar cambia oro y cantidades, no la lista: refrescar en sitio cuesta
+## décimas de milisegundo y reconstruir las 26 tarjetas costaba 10 ms (medido),
+## que en móvil es más de medio fotograma por compra. Vender sí reescribe la
+## lista porque una ranura puede quedar vacía.
+func _al_cambiar_inventario() -> void:
+	if not visible:
+		return
+	if _vender:
+		_reconstruir()
+	else:
+		_refrescar()
 
 
 func alternar() -> void:
@@ -580,16 +593,21 @@ func _carta(item: ItemData, cuantos: int, precio: int, vender: bool, indice: int
 	placa.add_child(texto_precio)
 	boton.add_child(placa)
 
-	if cuantos > 1:
-		var marca := ForjaTema.rotulo("x%d" % cuantos, 9, ForjaTema.ORO)
-		marca.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		marca.offset_left = 4
-		marca.offset_top = 2
-		marca.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		boton.add_child(marca)
+	var marca := ForjaTema.rotulo("x%d" % cuantos, 9, ForjaTema.ORO)
+	marca.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	marca.offset_left = 4
+	marca.offset_top = 2
+	marca.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marca.visible = cuantos > 1
+	boton.add_child(marca)
 
 	boton.set_meta(&"item", item.id)
-	_botones[_clave(item.id, indice)] = boton
+	_botones[_clave(item.id, indice)] = {
+		"boton": boton,
+		"item": item,
+		"cuenta": marca,
+		"forjable": forjable,
+	}
 
 	if forjable:
 		boton.disabled = true
@@ -637,14 +655,39 @@ func _seleccionar_item(item: ItemData, indice: int, forjable: bool) -> void:
 	_seleccion_indice = indice
 	_seleccion_forjable = forjable
 	for clave in _botones:
-		var boton := _botones[clave] as Button
+		var datos: Dictionary = _botones[clave]
+		var boton := datos.get("boton") as Button
 		if boton == null or not is_instance_valid(boton):
 			continue
-		var otro := ItemCatalog.obtener(boton.get_meta(&"item", &""))
+		var del_boton := datos.get("item") as ItemData
 		var es_este := String(clave) == _clave(item.id, indice)
-		_pintar_carta(boton, _rareza_color(otro) if otro != null else ForjaTema.TEXTO, es_este)
+		_pintar_carta(boton, _rareza_color(del_boton) if del_boton != null else ForjaTema.TEXTO, es_este)
 	_actualizar_ficha()
 	Sfx.reproducir(&"click", -14.0)
+
+
+## Actualiza la tienda sin reconstuirla: oro, si alcanza el oro, cuántos llevás
+## y la ficha del objeto elegido. Es lo que corre al comprar.
+func _refrescar() -> void:
+	if _cuerpo == null:
+		return
+	_oro.text = str(_oro_actual())
+	for clave in _botones:
+		var datos: Dictionary = _botones[clave]
+		var boton := datos.get("boton") as Button
+		var item := datos.get("item") as ItemData
+		if boton == null or item == null or not is_instance_valid(boton):
+			continue
+		if datos.get("forjable", false):
+			continue
+		var alcanza := _puede_comprar(item)
+		boton.modulate = Color(1, 1, 1, 1) if alcanza else Color(0.62, 0.60, 0.56, 1)
+		var marca := datos.get("cuenta") as Label
+		if marca != null:
+			var cuantos := _en_mochila(item.id)
+			marca.text = "x%d" % cuantos
+			marca.visible = cuantos > 1
+	_actualizar_ficha()
 
 
 func _actualizar_ficha() -> void:
@@ -839,8 +882,9 @@ func _comprar(item: ItemData) -> void:
 	if _arena == null or not _arena.has_method("comprar_objeto"):
 		return
 	_arena.comprar_objeto(item)
-	_reconstruir()
-	_actualizar_ficha()
+	# Refresco en sitio: el inventario ya avisa por `cambiado`, pero comprar
+	# puede no mover la mochila (objetos que solo se forjan) y el oro sí cambia.
+	_refrescar()
 
 
 func _vender_ranura(indice: int) -> void:
