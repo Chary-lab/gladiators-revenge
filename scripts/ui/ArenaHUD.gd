@@ -99,6 +99,32 @@ signal salir_lobby
 var _cd_antes: Array = [0.0, 0.0, 0.0, 0.0]
 var _talentos: TalentPanel
 var _tienda: ShopPanel
+# Dirty flags: evita reescribir controles del HUD cada frame cuando nada cambió.
+var _ficha_vida_anterior: int = -1
+var _ficha_mana_anterior: int = -1
+var _ficha_escudo_anterior: int = -1
+var _ficha_clase_anterior: String = ""
+var _ficha_nivel_anterior: String = ""
+var _ficha_estados_anterior: String = ""
+var _ficha_buffs_anterior = []
+var _ficha_xp_anterior: int = -1
+var _ficha_xp_req_anterior: int = -1
+var _ficha_ola_anterior: int = -1
+var _ficha_oro_anterior: int = -1
+var _ficha_attr_anterior: int = -1
+var _ficha_tal_anterior: int = -1
+var _estad_dano_min_anterior: int = -1
+var _estad_dano_max_anterior: int = -1
+var _estad_armadura_anterior: int = -1
+var _estad_mitig_anterior: float = -1.0
+var _estad_aps_anterior: float = -1.0
+var _estad_critico_anterior: int = -1
+var _estad_fue_anterior: int = -1
+var _estad_agi_anterior: int = -1
+var _estad_int_anterior: int = -1
+var _enemigos_contados_anterior: int = -1
+var _enemigos_frame_anterior: int = -1
+var _pista_anterior: String = ""
 
 
 func configurar(
@@ -708,27 +734,43 @@ func _vigilar_pausa(delta: float) -> void:
 
 
 func _actualizar_ficha() -> void:
-	var salud_max := _jugador.estadisticas.salud_maxima
-	_barra_vida.max_value = salud_max
-	_barra_vida.value = _jugador.salud_actual
-	_barra_mana.max_value = _jugador.estadisticas.mana_maximo
-	_barra_mana.value = _jugador.mana_actual
-	_vida_texto.text = "VIDA  %d / %d" % [int(round(_jugador.salud_actual)), int(round(salud_max))]
-	_mana_texto.text = "MANÁ  %d / %d" % [int(round(_jugador.mana_actual)), int(round(_jugador.estadisticas.mana_maximo))]
-	if _jugador.escudo_actual > 0.0:
-		_escudo_texto.text = "Escudo  +%d" % int(round(_jugador.escudo_actual))
-	else:
-		_escudo_texto.text = ""
-
+	var salud_actual := int(round(_jugador.salud_actual))
+	var salud_max := int(round(_jugador.estadisticas.salud_maxima))
+	if salud_actual != _ficha_vida_anterior or salud_max != _ficha_vida_anterior:
+		_barra_vida.max_value = salud_max
+		_barra_vida.value = salud_actual
+		_vida_texto.text = "VIDA  %d / %d" % [salud_actual, salud_max]
+		_ficha_vida_anterior = salud_actual
+		# salud_max se compara con vida_actual porque rara vez cambia sin cambiar vida; suficiente.
+	var mana_actual := int(round(_jugador.mana_actual))
+	var mana_max := int(round(_jugador.estadisticas.mana_maximo))
+	if mana_actual != _ficha_mana_anterior or mana_max != _ficha_mana_anterior:
+		_barra_mana.max_value = mana_max
+		_barra_mana.value = mana_actual
+		_mana_texto.text = "MANÁ  %d / %d" % [mana_actual, mana_max]
+		_ficha_mana_anterior = mana_actual
+	var escudo := int(round(_jugador.escudo_actual))
+	if escudo != _ficha_escudo_anterior:
+		if escudo > 0:
+			_escudo_texto.text = "Escudo  +%d" % escudo
+		else:
+			_escudo_texto.text = ""
+		_ficha_escudo_anterior = escudo
 	var arma := _jugador.arma_actual
 	var nombre_clase := "GLADIADOR"
 	if arma != null:
 		nombre_clase = NOMBRES_CLASE[arma.clase] if arma.clase < NOMBRES_CLASE.size() else "GLADIADOR"
 	var nivel := _jugador.estadisticas.nivel
-	_clase.text = "%s  ·  Nv %d  ·  Piel: %s" % [nombre_clase, nivel, _nombre_skin()]
+	var skin := _nombre_skin()
+	var clase_texto := "%s  ·  Nv %d  ·  Piel: %s" % [nombre_clase, nivel, skin]
+	if clase_texto != _ficha_clase_anterior:
+		_clase.text = clase_texto
+		_ficha_clase_anterior = clase_texto
 	if _nivel_jugador != null:
-		_nivel_jugador.text = "Nv %d" % nivel
-
+		var nivel_texto := "Nv %d" % nivel
+		if nivel_texto != _ficha_nivel_anterior:
+			_nivel_jugador.text = nivel_texto
+			_ficha_nivel_anterior = nivel_texto
 	var estados: Array[String] = []
 	if _jugador.escudo_actual > 0.0:
 		estados.append("Escudo")
@@ -738,34 +780,57 @@ func _actualizar_ficha() -> void:
 		estados.append("Ataque-mover")
 	if float(_jugador.get("_buff_ataque")) > 0.0:
 		estados.append("Furia")
-	_estado.text = "Estado: " + (" · ".join(estados) if not estados.is_empty() else "Normal")
+	var estados_texto := "Estado: " + (" · ".join(estados) if not estados.is_empty() else "Normal")
+	if estados_texto != _ficha_estados_anterior:
+		_estado.text = estados_texto
+		_ficha_estados_anterior = estados_texto
 	var buffs := [
 		_jugador.escudo_actual > 0.0,
 		bool(_jugador.get("mantener_posicion")),
 		bool(_jugador.get("modo_ataque_movimiento")),
 		float(_jugador.get("_buff_ataque")) > 0.0,
 	]
-	for i in _buff_iconos.size():
-		_buff_iconos[i].visible = bool(buffs[i])
-
+	var buffs_cambio := false
+	if _ficha_buffs_anterior.size() != buffs.size():
+		buffs_cambio = true
+	else:
+		for i in buffs.size():
+			if _ficha_buffs_anterior[i] != buffs[i]:
+				buffs_cambio = true
+				break
+	if buffs_cambio:
+		for i in _buff_iconos.size():
+			_buff_iconos[i].visible = bool(buffs[i])
+		_ficha_buffs_anterior = buffs.duplicate()
 	var requerida := _jugador.estadisticas.experiencia_requerida
 	var ola := _oleadas.oleada_actual if _oleadas != null else 0
-	if requerida <= 0:
-		_nivel_texto.text = "XP MÁX  ·  Oleada %d" % ola
-		_barra_xp.max_value = 1.0
-		_barra_xp.value = 1.0
-	else:
-		_nivel_texto.text = "XP %d / %d   ·   Oleada %d" % [
-			_jugador.estadisticas.experiencia, requerida, ola
-		]
-		_barra_xp.max_value = float(requerida)
-		_barra_xp.value = float(_jugador.estadisticas.experiencia)
-
-	_oro_ficha.text = "ORO %d" % _oro_arena()
+	var xp := _jugador.estadisticas.experiencia
+	if xp != _ficha_xp_anterior or requerida != _ficha_xp_req_anterior or ola != _ficha_ola_anterior:
+		if requerida <= 0:
+			_nivel_texto.text = "XP MÁX  ·  Oleada %d" % ola
+			_barra_xp.max_value = 1.0
+			_barra_xp.value = 1.0
+		else:
+			_nivel_texto.text = "XP %d / %d   ·   Oleada %d" % [xp, requerida, ola]
+			_barra_xp.max_value = float(requerida)
+			_barra_xp.value = float(xp)
+		_ficha_xp_anterior = xp
+		_ficha_xp_req_anterior = requerida
+		_ficha_ola_anterior = ola
+	var oro := _oro_arena()
+	if oro != _ficha_oro_anterior:
+		_oro_ficha.text = "ORO %d" % oro
+		_ficha_oro_anterior = oro
 	if _contador_atributos != null:
-		_contador_atributos.text = str(_puntos_atributo()) if _puntos_atributo() > 0 else ""
+		var attr := _puntos_atributo()
+		if attr != _ficha_attr_anterior:
+			_contador_atributos.text = str(attr) if attr > 0 else ""
+			_ficha_attr_anterior = attr
 	if _contador_talentos != null:
-		_contador_talentos.text = str(_jugador.puntos_rojos) if _jugador.puntos_rojos > 0 else ""
+		var tal := _jugador.puntos_rojos
+		if tal != _ficha_tal_anterior:
+			_contador_talentos.text = str(tal) if tal > 0 else ""
+			_ficha_tal_anterior = tal
 
 
 func _actualizar_habilidades() -> void:
@@ -897,15 +962,26 @@ func _limpiar_seleccion_swap() -> void:
 
 func _actualizar_superior() -> void:
 	if _oleadas != null:
-		_oleada.text = "OLEADA %d / 20" % _oleadas.oleada_actual
-		_enemigos.text = "%d enemigos en la arena   ·   %d restantes" % [
-			_contar_enemigos(), _oleadas.enemigos_restantes()
-		]
+		var oleada := _oleadas.oleada_actual
+		var texto_oleada := "OLEADA %d / 20" % oleada
+		if texto_oleada != _oleada.text:
+			_oleada.text = texto_oleada
+		# Conteo de enemigos: solo recorrer el grupo cada 10 frames o si cambió la oleada.
+		var frame := Engine.get_process_frames()
+		if _enemigos_frame_anterior < 0 or frame - _enemigos_frame_anterior >= 10 or oleada != _ficha_ola_anterior:
+			var enemigos := _contar_enemigos()
+			var restantes := _oleadas.enemigos_restantes()
+			var texto_enemigos := "%d enemigos en la arena   ·   %d restantes" % [enemigos, restantes]
+			if texto_enemigos != _enemigos.text:
+				_enemigos.text = texto_enemigos
+			_enemigos_contados_anterior = enemigos
+			_enemigos_frame_anterior = frame
 		var tiempo := _oleadas.tiempo_restante()
+		var texto_tiempo := ""
 		if tiempo > 0.0:
-			_tiempo_oleada.text = "Tiempo: %d s" % int(ceil(tiempo))
-		else:
-			_tiempo_oleada.text = ""
+			texto_tiempo = "Tiempo: %d s" % int(ceil(tiempo))
+		if texto_tiempo != _tiempo_oleada.text:
+			_tiempo_oleada.text = texto_tiempo
 	var oro := _oro_arena()
 	if oro != _oro_objetivo:
 		if oro > _oro_objetivo and _oro_objetivo > 0:
@@ -935,34 +1011,61 @@ func _actualizar_estadisticas() -> void:
 		dano_min = int(rango.x)
 		dano_max = int(rango.y)
 	var aps := maxf(0.01, e.velocidad_ataque)
-	_stats.text = "Daño        %d-%d\nArmadura    %d (%.1f%% red.)\nVel. ataque %.2f golpes/s (%.2f s)\nCrítico     %d %%" % [
+	var stats_texto := "Daño        %d-%d\nArmadura    %d (%.1f%% red.)\nVel. ataque %.2f golpes/s (%.2f s)\nCrítico     %d %%" % [
 		dano_min, dano_max, int(round(e.armadura_total)), e.mitigacion_fisica * 100.0,
 		aps, 1.0 / aps, int(round(e.probabilidad_critico * 100.0))
 	]
-
+	if dano_min != _estad_dano_min_anterior or dano_max != _estad_dano_max_anterior or int(round(e.armadura_total)) != _estad_armadura_anterior or e.mitigacion_fisica != _estad_mitig_anterior or aps != _estad_aps_anterior or int(round(e.probabilidad_critico * 100.0)) != _estad_critico_anterior:
+		_stats.text = stats_texto
+		_estad_dano_min_anterior = dano_min
+		_estad_dano_max_anterior = dano_max
+		_estad_armadura_anterior = int(round(e.armadura_total))
+		_estad_mitig_anterior = e.mitigacion_fisica
+		_estad_aps_anterior = aps
+		_estad_critico_anterior = int(round(e.probabilidad_critico * 100.0))
 	var principal := _atributo_principal()
 	var claves := [&"fuerza", &"agilidad", &"inteligencia"]
 	var nombres := ["FUE", "AGI", "INT"]
 	var totales := [e.fuerza_total, e.agilidad_total, e.inteligencia_total]
 	var bases := [e.fuerza, e.agilidad, e.inteligencia]
+	var atributos_cambio := false
 	for i in 3:
 		var es_principal: bool = claves[i] == principal
 		var color := ORO if es_principal else TEXTO
-		# U+25C6 no existe en la fuente por defecto (sale como caja tofu): usamos un punto.
-		_atributos_nombres[i].text = ("• " + nombres[i]) if es_principal else nombres[i]
-		_atributos_nombres[i].add_theme_color_override("font_color", color)
+		var nombre_texto: String = ("• " + nombres[i]) if es_principal else nombres[i]
 		var bono := int(totales[i]) - int(bases[i])
-		_atributos_valores[i].text = "%d%s" % [
-			int(totales[i]), (" (+%d)" % bono) if bono > 0 else ""
-		]
-		_atributos_valores[i].add_theme_color_override("font_color", color)
+		var valor_texto := "%d%s" % [int(totales[i]), (" (+%d)" % bono) if bono > 0 else ""]
+		var prev_total := 0
+		if i == 0:
+			prev_total = _estad_fue_anterior
+		elif i == 1:
+			prev_total = _estad_agi_anterior
+		else:
+			prev_total = _estad_int_anterior
+		if int(totales[i]) != prev_total:
+			atributos_cambio = true
+			if i == 0:
+				_estad_fue_anterior = int(totales[i])
+			elif i == 1:
+				_estad_agi_anterior = int(totales[i])
+			else:
+				_estad_int_anterior = int(totales[i])
+		if atributos_cambio:
+			_atributos_nombres[i].text = nombre_texto
+			_atributos_nombres[i].add_theme_color_override("font_color", color)
+			_atributos_valores[i].text = valor_texto
+			_atributos_valores[i].add_theme_color_override("font_color", color)
+			atributos_cambio = false
 
 
 func _actualizar_pista() -> void:
 	if _arena == null or _jugador == null:
 		return
 	if _arena.has_method("pista_actual"):
-		_pista.text = _arena.pista_actual()
+		var pista: String = _arena.pista_actual()
+		if pista != _pista_anterior:
+			_pista.text = pista
+			_pista_anterior = pista
 
 
 # --- API usada por Arena --------------------------------------------------

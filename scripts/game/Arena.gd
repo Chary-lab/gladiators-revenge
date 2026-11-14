@@ -78,6 +78,7 @@ var _hud: ArenaHUD
 var _tienda: ShopPedestal
 var _puerta: PuertaArena
 var _texto_pista := ""
+var _pista_frame_anterior: int = -1
 var _pedestales: Array[ArmoryPedestal] = []
 var _puntos_spawn: Array[Vector3] = []
 var _en_combate := false
@@ -2162,23 +2163,27 @@ func _publico_bloquea_lobby() -> bool:
 func _actualizar_pista() -> void:
 	if _hud == null or _jugador == null or terminado:
 		return
-	var pedestal := _pedestal_cercano()
-	if pedestal != null:
-		if _campeon_elegido:
-			_texto_pista = "Campeón elegido  ·  la clase es permanente"
+	var frame := Engine.get_process_frames()
+	if _pista_frame_anterior < 0 or frame - _pista_frame_anterior >= 10:
+		var pedestal := _pedestal_cercano()
+		if pedestal != null:
+			if _campeon_elegido:
+				_texto_pista = "Campeón elegido  ·  la clase es permanente"
+			else:
+				_texto_pista = "F — Elegir campeón: %s (gratis)" % pedestal.arma.nombre
+			_hud.establecer_pista(_texto_pista)
+			_pista_frame_anterior = frame
+			return
+		if _tienda_cercana():
+			_texto_pista = "F — Mercader de la Rebelión: objetos y forja"
+		elif _jugador.global_position.distance_to(_obelisco) <= 4.5:
+			_texto_pista = "F — Obelisco de talentos (T)"
+		elif _jugador.global_position.distance_to(_fuente) <= 5.5:
+			_texto_pista = "Fuente: restaura vida y maná fuera de combate"
 		else:
-			_texto_pista = "F — Elegir campeón: %s (gratis)" % pedestal.arma.nombre
+			_texto_pista = ""
 		_hud.establecer_pista(_texto_pista)
-		return
-	if _tienda_cercana():
-		_texto_pista = "F — Mercader de la Rebelión: objetos y forja"
-	elif _jugador.global_position.distance_to(_obelisco) <= 4.5:
-		_texto_pista = "F — Obelisco de talentos (T)"
-	elif _jugador.global_position.distance_to(_fuente) <= 5.5:
-		_texto_pista = "Fuente: restaura vida y maná fuera de combate"
-	else:
-		_texto_pista = ""
-	_hud.establecer_pista(_texto_pista)
+		_pista_frame_anterior = frame
 
 
 func pista_actual() -> String:
