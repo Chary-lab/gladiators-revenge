@@ -64,6 +64,9 @@ var _escala_base := 1.0
 ## Altura local de la barra de vida: se calcula por arquetipo para que quede
 ## sobre la cabeza aunque el modelo sea 1.4× (bruto) o 0.8× (sabueso).
 var _alto_barra := 1.95
+## Último factor de escala aplicado a la barra: mientras el enemigo no cambie de
+## tamaño (el tween de aparición dura 0,18 s) no hay que reescribir nada.
+var _factor_barra := -1.0
 ## Barra de vida en el mundo: se construye la primera vez y solo se muestra
 ## cuando el enemigo está herido o es una amenaza (élite, bruto, tanque).
 var _barra_raiz: Node3D
@@ -214,6 +217,7 @@ func preparar(
 	_escala_base = float(VISUALES.get(arquetipo, VISUALES[&"esqueleto"]).get("escala", 1.0))
 	# +0,55 m por encima del modelo, en unidades locales (el nodo va escalado).
 	_alto_barra = 1.95 + 0.55 / maxf(_escala_base, 0.01)
+	_factor_barra = -1.0
 
 	var factor_elite := 2.4 if elite else 1.0
 	salud_maxima = (VIDA_BASE + ronda * VIDA_POR_RONDA) * factor_elite * vida_mult * float(mods["vida"])
@@ -724,6 +728,9 @@ func _sincronizar_barra() -> void:
 	if _barra_raiz == null:
 		return
 	var factor := maxf(scale.x, 0.01)
+	if is_equal_approx(factor, _factor_barra):
+		return
+	_factor_barra = factor
 	_barra_raiz.scale = Vector3.ONE / factor
 	_barra_raiz.position = Vector3(0, _alto_barra, 0)
 

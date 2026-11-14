@@ -5,6 +5,10 @@ extends SceneTree
 ##   godot --headless --script res://tests/microbench.gd
 
 func _initialize() -> void:
+	# El primer fotograma registra la raíz del árbol: sin esto las etiquetas de
+	# daño se crean fuera del árbol y cada `mostrar` imprime un error.
+	await process_frame
+
 	# Catálogo de armas: primera construcción vs. llamada cacheada.
 	var t0 := Time.get_ticks_usec()
 	WeaponItem.crear_catalogo_base()
@@ -37,4 +41,18 @@ func _initialize() -> void:
 	t0 = Time.get_ticks_usec()
 	ShopPanel._construir_padres()
 	print("padres_us=%.2f" % float(Time.get_ticks_usec() - t0))
+
+	# Números de daño: cada golpe crea sus tweens.
+	t0 = Time.get_ticks_usec()
+	for i in 2000:
+		NumerosDano.mostrar(Vector3.ZERO, 42.0, GladiatorStats.TIPO_FISICO, i % 3 == 0)
+	print("numeros_us=%.2f" % (float(Time.get_ticks_usec() - t0) / 2000.0))
+
+	# Coste de animar 40 etiquetas activas en un fotograma.
+	for i in 40:
+		NumerosDano.mostrar(Vector3.ZERO, 12.0)
+	t0 = Time.get_ticks_usec()
+	for i in 600:
+		NumerosDano._tick()
+	print("tick_us=%.3f" % (float(Time.get_ticks_usec() - t0) / 600.0))
 	quit(0)

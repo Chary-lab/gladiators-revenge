@@ -2610,7 +2610,24 @@ func _capturar() -> void:
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
-	await get_tree().process_frame
+	# Los números de daño duran 0,85 s: para que salgan en la foto de oleada se
+	# lanzan justo antes del disparo, sobre los primeros enemigos.
+	if oleada:
+		var muestra := 0
+		for nodo in get_tree().get_nodes_in_group("enemigos"):
+			if muestra >= 6:
+				break
+			var enemigo := nodo as Node3D
+			if enemigo == null:
+				continue
+			NumerosDano.mostrar(
+				enemigo.global_position + Vector3(0, 1.2, 0),
+				float(randi_range(18, 64)),
+				GladiatorStats.TIPO_FISICO,
+				muestra % 3 == 0
+			)
+			muestra += 1
+		await get_tree().process_frame
 	var imagen := get_viewport().get_texture().get_image()
 	var ruta := "res://captura.png"
 	if cerca:
