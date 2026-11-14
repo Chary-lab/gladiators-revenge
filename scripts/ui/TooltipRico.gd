@@ -23,19 +23,9 @@ func _ready() -> void:
 	z_index = 100
 	custom_minimum_size = Vector2(260, 0)
 
-	_estilo = StyleBoxFlat.new()
-	_estilo.bg_color = Color(0.055, 0.05, 0.045, 0.98)
-	_estilo.border_color = Color(0.86, 0.68, 0.32)
-	_estilo.set_border_width_all(2)
-	_estilo.set_corner_radius_all(8)
-	_estilo.content_margin_left = 12
-	_estilo.content_margin_right = 12
-	_estilo.content_margin_top = 10
-	_estilo.content_margin_bottom = 10
-	_estilo.shadow_color = Color(0, 0, 0, 0.6)
-	_estilo.shadow_size = 9
-	_estilo.shadow_offset = Vector2(0, 4)
+	_estilo = ForjaTema.estilo_ventana(ForjaTema.ORO, 0.99)
 	add_theme_stylebox_override("panel", _estilo)
+	theme = ForjaTema.tema_global()
 
 	var columna := VBoxContainer.new()
 	columna.add_theme_constant_override("separation", 6)
@@ -62,7 +52,8 @@ func _ready() -> void:
 	cabecera.add_child(textos)
 
 	_titulo = Label.new()
-	_titulo.add_theme_font_size_override("font_size", 16)
+	_titulo.add_theme_font_override("font", ForjaTema.fuente_titulo())
+	_titulo.add_theme_font_size_override("font_size", 17)
 	_titulo.add_theme_color_override("font_color", TITULO)
 	_titulo.add_theme_constant_override("outline_size", 3)
 	_titulo.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02, 0.8))

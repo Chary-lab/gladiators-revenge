@@ -4,7 +4,7 @@ extends PanelContainer
 ## La lógica de compra sigue viviendo en Arena/InventoryComponent.
 
 const ANCHO := 980.0
-const ALTO := 540.0
+const ALTO := 566.0
 
 var _jugador: GladiatorController
 var _arena: Node
@@ -28,6 +28,9 @@ var _modo_vender := false
 var _ranura_seleccionada: int = -1
 var _botones: Dictionary = {}
 var _detalle_tween: Tween
+## Filtro activo de la cuadrícula: todo, consumibles, equipo, épicos o legendarios.
+var _filtro: StringName = &"todo"
+var _chips: Array = []
 
 
 func _ready() -> void:
@@ -101,13 +104,30 @@ func _ready() -> void:
 	_tab_vender.pressed.connect(_cambiar_tab.bind(2))
 	tabs.add_child(_tab_vender)
 
+	# Filtros por categoría y rareza: la cuadrícula se reduce sin cambiar de pestaña.
+	var filtros := HBoxContainer.new()
+	filtros.add_theme_constant_override("separation", 6)
+	columna.add_child(filtros)
+	for datos in [
+		[&"todo", "TODO"],
+		[&"consumible", "CONSUMIBLES"],
+		[&"equipo", "EQUIPO"],
+		[&"epico", "ÉPICOS"],
+		[&"legendario", "LEGENDARIOS"],
+	]:
+		var chip := ForjaTema.boton(String(datos[1]), 10)
+		chip.custom_minimum_size = Vector2(104, 26)
+		chip.pressed.connect(_cambiar_filtro.bind(datos[0]))
+		filtros.add_child(chip)
+		_chips.append([datos[0], chip])
+
 	var cuerpo := HBoxContainer.new()
 	cuerpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	cuerpo.add_theme_constant_override("separation", 12)
 	columna.add_child(cuerpo)
 
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(590, 340)
+	scroll.custom_minimum_size = Vector2(590, 366)
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	cuerpo.add_child(scroll)
@@ -120,7 +140,7 @@ func _ready() -> void:
 	scroll.add_child(_lista)
 
 	_detalle_panel = PanelContainer.new()
-	_detalle_panel.custom_minimum_size = Vector2(330, 340)
+	_detalle_panel.custom_minimum_size = Vector2(330, 366)
 	_detalle_panel.add_theme_stylebox_override("panel", _estilo_detalle())
 	cuerpo.add_child(_detalle_panel)
 
@@ -298,6 +318,7 @@ func _reconstruir() -> void:
 		hijo.queue_free()
 	_botones.clear()
 	_oro.text = "ORO  %d" % _oro_actual()
+	_actualizar_chips()
 
 	var items: Array[ItemData] = []
 	if _modo_recetas:
@@ -306,6 +327,9 @@ func _reconstruir() -> void:
 		items = []  # modo vender: se construye desde las ranuras abajo
 	else:
 		items = ItemCatalog.vendibles()
+	# Modo vender lista ranuras, no catálogo: el filtro no aplica.
+	if not _modo_vender:
+		items = items.filter(_pasa_filtro)
 	for item in items:
 		_crear_carta(item)
 
@@ -347,18 +371,18 @@ func _crear_carta(item: ItemData) -> void:
 	boton.add_child(icono)
 
 	var nombre := Label.new()
-	nombre.position = Vector2(56, 5)
-	nombre.size = Vector2(124, 18)
+	nombre.position = Vector2(56, 4)
+	nombre.size = Vector2(126, 28)
 	nombre.text = item.nombre
 	nombre.add_theme_font_size_override("font_size", 11)
 	nombre.add_theme_color_override("font_color", _rareza_color(item))
-	nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nombre.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	nombre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	boton.add_child(nombre)
 
 	var precio := Label.new()
-	precio.position = Vector2(56, 24)
-	precio.size = Vector2(124, 15)
+	precio.position = Vector2(56, 32)
+	precio.size = Vector2(126, 15)
 	precio.text = ("Forja %d" % item.precio_forja) if _modo_recetas else ("%d oro" % item.precio)
 	precio.add_theme_font_size_override("font_size", 10)
 	precio.add_theme_color_override("font_color", Color(0.95, 0.78, 0.38))
@@ -375,6 +399,18 @@ func _crear_carta(item: ItemData) -> void:
 	resumen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	boton.add_child(resumen)
 
+	# Franja de rareza a la izquierda y placa de estado (x2, NUEVO, LISTA).
+	var franja := ColorRect.new()
+	franja.color = _rareza_color(item)
+	franja.position = Vector2.ZERO
+	franja.size = Vector2(3, 98)
+	franja.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boton.add_child(franja)
+	var estado := _estado_carta(item)
+	if not estado.is_empty():
+		_agregar_insignia(boton, estado, _rareza_color(item))
+
+	boton.tooltip_text = item.nombre
 	boton.mouse_entered.connect(_al_entrar_carta.bind(item, boton))
 	boton.mouse_exited.connect(_al_salir_carta.bind(boton))
 	boton.pressed.connect(_seleccionar.bind(item, boton))
@@ -403,12 +439,12 @@ func _crear_carta_venta(item: ItemData, indice: int) -> void:
 	boton.add_child(icono)
 
 	var nombre := Label.new()
-	nombre.position = Vector2(56, 5)
-	nombre.size = Vector2(124, 18)
+	nombre.position = Vector2(56, 4)
+	nombre.size = Vector2(126, 28)
 	nombre.text = item.nombre
 	nombre.add_theme_font_size_override("font_size", 11)
 	nombre.add_theme_color_override("font_color", _rareza_color(item))
-	nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nombre.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	nombre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	boton.add_child(nombre)
 
@@ -644,6 +680,45 @@ func _mejoras(id: StringName) -> Array[ItemData]:
 	return lista
 
 
+## Placa pequeña arriba a la derecha de la tarjeta (cantidad, nuevo, forjable).
+func _agregar_insignia(boton: Button, texto: String, color: Color) -> void:
+	var placa := Panel.new()
+	placa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ancho := 10.0 + float(texto.length()) * 6.4
+	placa.position = Vector2(188.0 - ancho - 5.0, 5.0)
+	placa.size = Vector2(ancho, 15)
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0.035, 0.030, 0.025, 0.95)
+	estilo.border_color = color
+	estilo.set_border_width_all(1)
+	estilo.set_corner_radius_all(2)
+	placa.add_theme_stylebox_override("panel", estilo)
+	boton.add_child(placa)
+	var etiqueta := ForjaTema.etiqueta(texto, 9, color, true)
+	etiqueta.size = placa.size
+	etiqueta.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	placa.add_child(etiqueta)
+
+
+## Estado de la tarjeta según el inventario y el modo de la tienda.
+func _estado_carta(item: ItemData) -> String:
+	var en_mochila := 0
+	if _jugador != null and _jugador.inventario != null:
+		en_mochila = _jugador.inventario.contar(item.id)
+	if en_mochila > 1:
+		return "x%d" % en_mochila
+	if _modo_recetas:
+		var receta: ItemData = null
+		if _jugador != null and _jugador.inventario != null:
+			receta = _jugador.inventario.receta_completada_por(item)
+		if receta != null and receta.id == item.id:
+			return "FORJABLE"
+		return ""
+	if en_mochila == 1:
+		return "EN MOCHILA"
+	return "NUEVO"
+
+
 func _tipo_item(item: ItemData) -> String:
 	# La rareza manda: un épico forjable no es "intermedio" para el jugador.
 	match item.rareza:
@@ -684,21 +759,53 @@ func _color_por_tipo(item: ItemData) -> Color:
 
 func _aplicar_estilo_carta(boton: Button, item: ItemData) -> void:
 	var seleccionada := _seleccionado != null and _seleccionado.id == item.id
-	var borde := Color(0.96, 0.78, 0.30) if seleccionada else _rareza_color(item)
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.19, 0.14, 0.07) if seleccionada else Color(0.10, 0.09, 0.08)
-	normal.border_color = borde
-	normal.set_border_width_all(2 if seleccionada else 1)
-	normal.set_corner_radius_all(6)
-	normal.shadow_color = Color(0, 0, 0, 0.4)
-	normal.shadow_size = 3
-	boton.add_theme_stylebox_override("normal", normal)
-	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = Color(0.24, 0.19, 0.10)
-	hover.border_color = borde
-	hover.shadow_size = 6
-	boton.add_theme_stylebox_override("hover", hover)
-	boton.add_theme_stylebox_override("pressed", hover)
+	var acento := _rareza_color(item)
+	boton.add_theme_stylebox_override("normal", ForjaTema.estilo_tarjeta(acento, seleccionada, false))
+	boton.add_theme_stylebox_override("hover", ForjaTema.estilo_tarjeta(acento, true, true))
+	boton.add_theme_stylebox_override("pressed", ForjaTema.estilo_tarjeta(acento, true, true))
+
+
+## Filtro activo de la cuadrícula.
+func _pasa_filtro(item: ItemData) -> bool:
+	match _filtro:
+		&"consumible":
+			return item.es_pocion() or item.tipo == ItemData.Tipo.PERGAMINO
+		&"equipo":
+			return item.es_equipo()
+		&"epico":
+			return item.rareza == ItemData.Rareza.EPICO
+		&"legendario":
+			return item.rareza == ItemData.Rareza.LEGENDARIO
+	return true
+
+
+func _cambiar_filtro(filtro: StringName) -> void:
+	if _filtro == filtro:
+		return
+	_filtro = filtro
+	_seleccionado = null
+	if _hud != null:
+		_hud.ocultar_tooltip()
+	_reconstruir()
+	Sfx.reproducir(&"click", -12.0)
+
+
+func _actualizar_chips() -> void:
+	for par in _chips:
+		var clave: StringName = par[0]
+		var chip: Button = par[1]
+		if chip == null:
+			continue
+		var activo := clave == _filtro
+		var estilo := StyleBoxFlat.new()
+		estilo.bg_color = ForjaTema.ORO if activo else Color(0.11, 0.10, 0.088, 0.9)
+		estilo.border_color = ForjaTema.ORO_CLARO if activo else Color(0.34, 0.28, 0.19)
+		estilo.set_border_width_all(1)
+		estilo.set_corner_radius_all(3)
+		chip.add_theme_stylebox_override("normal", estilo)
+		chip.add_theme_stylebox_override("hover", estilo)
+		chip.add_theme_stylebox_override("pressed", estilo)
+		chip.add_theme_color_override("font_color", ForjaTema.TINTA if activo else ForjaTema.TENUE)
 
 
 func _estilo_compra(activo: bool) -> StyleBoxFlat:

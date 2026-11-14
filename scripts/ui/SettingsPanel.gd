@@ -24,16 +24,9 @@ func configurar() -> void:
 	add_child(centro)
 
 	var panel := PanelContainer.new()
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.09, 0.08, 0.07, 0.98)
-	estilo.border_color = Color(0.62, 0.45, 0.22)
-	estilo.set_border_width_all(3)
-	estilo.set_corner_radius_all(8)
-	estilo.content_margin_left = 28
-	estilo.content_margin_right = 28
-	estilo.content_margin_top = 20
-	estilo.content_margin_bottom = 20
-	panel.add_theme_stylebox_override("panel", estilo)
+	panel.theme = ForjaTema.tema_global()
+	panel.add_theme_stylebox_override("panel", ForjaTema.estilo_ventana())
+	ForjaTema.ornar(panel)
 	centro.add_child(panel)
 
 	var columna := VBoxContainer.new()
@@ -41,11 +34,8 @@ func configurar() -> void:
 	columna.custom_minimum_size = Vector2(420, 0)
 	panel.add_child(columna)
 
-	var titulo := Label.new()
-	titulo.text = "AJUSTES"
+	var titulo := ForjaTema.titulo("AJUSTES", 26, ForjaTema.ORO_CLARO)
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	titulo.add_theme_font_size_override("font_size", 24)
-	titulo.add_theme_color_override("font_color", Color(0.92, 0.72, 0.35))
 	columna.add_child(titulo)
 
 	columna.add_child(_etiqueta("Volumen general"))
@@ -68,20 +58,14 @@ func configurar() -> void:
 	_escala.value_changed.connect(_al_cambiar_escala)
 	columna.add_child(_escala)
 
-	var cerrar := Button.new()
-	cerrar.text = "CERRAR"
+	var cerrar := ForjaTema.boton("CERRAR", 17, true)
 	cerrar.custom_minimum_size = Vector2(0, 46)
-	cerrar.add_theme_font_size_override("font_size", 18)
 	cerrar.pressed.connect(_al_cerrar)
 	columna.add_child(cerrar)
 
 
 func _etiqueta(texto: String) -> Label:
-	var l := Label.new()
-	l.text = texto
-	l.add_theme_font_size_override("font_size", 15)
-	l.add_theme_color_override("font_color", Color(0.82, 0.76, 0.64))
-	return l
+	return ForjaTema.rotulo(texto, 12, ForjaTema.TENUE)
 
 
 func _al_cambiar_volumen(valor: float) -> void:

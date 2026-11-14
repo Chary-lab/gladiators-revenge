@@ -122,6 +122,9 @@ var _hora_inicio_partida := 0.0
 
 func _ready() -> void:
 	get_tree().paused = false
+	# Sistema de diseño compartido: todo Control del árbol hereda la paleta, la
+	# tipografía y los estilos de ForjaTema.
+	get_tree().root.theme = ForjaTema.tema_global()
 	_ajustes = Ajustes.cargar()
 	_ajustes.aplicar()
 	if "--maestro" in OS.get_cmdline_user_args():
@@ -148,7 +151,7 @@ func _ready() -> void:
 		_iniciar_local()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-inicio" in args:
 		_capturar()
 
 	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
@@ -229,6 +232,8 @@ func _necesita_menu() -> bool:
 	if DisplayServer.get_name() == "headless":
 		return false
 	if "--menu-red" in OS.get_cmdline_user_args():
+		return true
+	if "--captura-menu" in OS.get_cmdline_user_args():
 		return true
 	return OS.has_feature("web") or OS.has_feature("mobile")
 
@@ -654,18 +659,43 @@ func _perfiles_campeon() -> Array:
 		stats.configurar_clase(clase)
 		var rango := stats.rango_dano_ataque(arma.dano_ataque_base, arma.atributo_principal)
 		var habilidades: Array = []
-		for hab in arma.habilidades:
+		for indice in arma.habilidades.size():
+			var hab = arma.habilidades[indice]
 			if hab != null:
-				habilidades.append({"nombre": hab.nombre})
+				habilidades.append({
+					"id": hab.id,
+					"nombre": hab.nombre,
+					"descripcion": hab.descripcion,
+					"tecla": ["Q", "W", "E", "R"][indice] if indice < 4 else "",
+					"coste_mana": hab.coste_mana,
+				})
 		salida.append({
 			"clase": clase,
 			"nombre": String(ForjaTema.NOMBRE_EMBLEMA.get(clase, clase)).to_upper(),
 			"lema": String(ForjaTema.LEMA_CLASE.get(clase, "")),
+			"rol": String(ForjaTema.ROL_CLASE.get(clase, "")),
+			"descripcion": String(ForjaTema.DESCRIPCION_CLASE.get(clase, "")),
 			"vida": stats.salud_maxima,
 			"mana": stats.mana_maximo,
 			"dano_min": rango.x,
 			"dano_max": rango.y,
 			"defensa": stats.mitigacion_fisica,
+			"armadura": stats.armadura_total,
+			"vel_ataque": stats.velocidad_ataque,
+			"critico": stats.probabilidad_critico,
+			"atributos": {
+				&"fuerza": stats.fuerza_total,
+				&"agilidad": stats.agilidad_total,
+				&"inteligencia": stats.inteligencia_total,
+			},
+			"arma": {"nombre": arma.nombre, "base": arma.dano_ataque_base},
+			"vis_arma": arma.escena_visual,
+			"rot_arma": arma.rotacion_visual,
+			"esc_arma": arma.escala_visual,
+			"pesada": arma.clase == WeaponItem.Clase.BASTION,
+			"xp_requerida": CurvaNivel.xp_requerida(1),
+			"piel": nombre_skin(),
+			"tinte": SKINS[_skin_actual]["tinte"] if _skin_actual >= 0 and _skin_actual < SKINS.size() else SKIN_TIERRA_BALDIA,
 			"habilidades": habilidades,
 		})
 	return salida
@@ -685,7 +715,16 @@ func _mostrar_seleccion_campeon(forzar := false) -> void:
 	add_child(_seleccion)
 	_seleccion.elegido.connect(_al_elegir_campeon)
 	_seleccion.cerrado.connect(func() -> void: _seleccion = null)
+	_seleccion.piel_siguiente.connect(_ciclar_skin_desde_forja)
 	_seleccion.configurar(perfiles, _jugador.arma_actual.id_clase() if _jugador.arma_actual != null else &"")
+
+
+## Cambiar el aspecto desde la forja de campeones: cicla la piel y refresca la
+## etiqueta del modal para que el jugador vea el nombre nuevo.
+func _ciclar_skin_desde_forja() -> void:
+	_ciclar_skin()
+	if _seleccion != null and is_instance_valid(_seleccion):
+		_seleccion.actualizar_piel(nombre_skin())
 
 
 func _al_elegir_campeon(clase: StringName) -> void:
@@ -2305,7 +2344,8 @@ func _capturar() -> void:
 	var tienda := "--captura-tienda" in args
 	var fin := "--captura-fin" in args
 	var campeon := "--captura-campeon" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon
+	var menu_red := "--captura-menu" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red
 	if combate:
 		var sin_arma: bool = _jugador != null and _jugador.arma_actual != null and _jugador.arma_actual.clase == WeaponItem.Clase.PRISIONERO
 		if sin_arma:
@@ -2345,7 +2385,7 @@ func _capturar() -> void:
 		if fin:
 			_finalizar("DERROTA", "Los gladiadores han caído en la arena.")
 			await get_tree().create_timer(1.2).timeout
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon) else 8.5).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -2362,10 +2402,12 @@ func _capturar() -> void:
 		ruta = "res://captura_jefe.png"
 	elif tienda:
 		ruta = "res://captura_tienda.png"
-	if fin:
+	elif fin:
 		ruta = "res://captura_fin.png"
-	if campeon:
+	elif campeon:
 		ruta = "res://captura_campeon.png"
+	elif menu_red:
+		ruta = "res://captura_menu.png"
 	elif combate:
 		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))

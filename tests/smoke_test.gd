@@ -311,6 +311,27 @@ func _ejecutar() -> void:
 				glifos_ok = false
 	_comprobar(glifos_ok, "la UI no usa glifos que la fuente no dibuja")
 
+	# --- Sistema de diseño (ForjaTema) ------------------------------------
+	var tema := ForjaTema.tema_global()
+	_comprobar(
+		tema.has_stylebox("normal", "Button") and tema.has_icon("grabber", "HSlider"),
+		"el tema global estiliza botones y deslizadores"
+	)
+	var fuente_titulo := ForjaTema.fuente_titulo()
+	_comprobar(
+		fuente_titulo != null
+		and fuente_titulo.has_char("Á".unicode_at(0))
+		and fuente_titulo.has_char("ñ".unicode_at(0))
+		and fuente_titulo.has_char("·".unicode_at(0)),
+		"la tipografía de títulos cubre acentos, eñe y el punto medio"
+	)
+	_comprobar(
+		(hud.get("_barra_superior") as Panel) != null
+		and hud.get("_overlay") != null
+		and hud.get("_overlay").get_parent() == hud.get("_barra_superior"),
+		"la barra superior es un solo panel con la lengüeta de estadísticas"
+	)
+
 	# --- Tienda: pestañas y recetario ---
 	hud.alternar_tienda()
 	await process_frame
@@ -493,6 +514,10 @@ func _ejecutar() -> void:
 		(tactil.get("_aro") as ForjaTema.AroRunas) != null,
 		"el joystick dibuja el aro de runas"
 	)
+	_comprobar(
+		(tactil.get("_velos") as Array).size() == 4 and (tactil.get("_cd_textos") as Array).size() == 4,
+		"las habilidades táctiles muestran enfriamiento radial y segundos"
+	)
 	_comprobar(tactil.has_signal("pausa"), "el HUD táctil tiene botón de pausa")
 	var perfiles: Array = escena._perfiles_campeon()
 	_comprobar(perfiles.size() == 3, "la forja de campeones ofrece las tres clases")
@@ -507,6 +532,10 @@ func _ejecutar() -> void:
 	_comprobar(
 		(seleccion.get("_emblemas") as Array).size() == 3 and seleccion.get("_marca") != null,
 		"la pantalla de campeón monta emblemas y ficha"
+	)
+	_comprobar(
+		seleccion.get("_vitrina") != null and seleccion.get("_btn_elegir") != null,
+		"la pantalla de campeón tiene vitrina 3D y botón de elegir"
 	)
 	seleccion.free()
 	tactil.free()

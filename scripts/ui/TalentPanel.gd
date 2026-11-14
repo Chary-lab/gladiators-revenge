@@ -15,6 +15,7 @@ func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	theme = ForjaTema.tema_global()
 	custom_minimum_size = Vector2(ANCHO, ALTO)
 	size = Vector2(ANCHO, ALTO)
 	anchor_left = 0.5
@@ -41,10 +42,7 @@ func _ready() -> void:
 	var cabecera := HBoxContainer.new()
 	columna.add_child(cabecera)
 
-	var titulo := Label.new()
-	titulo.text = "TALENTOS DE COMBATE"
-	titulo.add_theme_font_size_override("font_size", 22)
-	titulo.add_theme_color_override("font_color", Color(0.96, 0.82, 0.45))
+	var titulo := ForjaTema.titulo("TALENTOS DE COMBATE", 22, ForjaTema.ORO_CLARO)
 	cabecera.add_child(titulo)
 
 	var relleno := Control.new()
@@ -247,11 +245,4 @@ func _texto(contenido: String, tamano: int) -> Label:
 
 
 func _estilo() -> StyleBoxFlat:
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.07, 0.06, 0.08, 1.0)
-	estilo.border_color = Color(0.55, 0.40, 0.20)
-	estilo.set_border_width_all(2)
-	estilo.set_corner_radius_all(8)
-	estilo.content_margin_left = 0
-	estilo.content_margin_right = 0
-	return estilo
+	return ForjaTema.estilo_ventana()

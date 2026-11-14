@@ -22,6 +22,7 @@ var _bandera: RebellionBanner
 var _arena: Node
 var _raiz: Control
 var _hud_arriba: Control
+var _barra_superior: Panel
 var _consola: Panel
 var _mensaje: Label
 var _pista: Label
@@ -165,7 +166,6 @@ func construir() -> void:
 	_crear_habilidades()
 	_crear_minimapa()
 	_crear_barra_superior()
-	_crear_overlay()
 	_crear_mensajes()
 	_crear_revive()
 	_crear_lobby()
@@ -207,6 +207,7 @@ func _crear_ficha() -> void:
 	_raiz.add_child(fondo)
 
 	_clase = _texto(fondo, "GLADIADOR ORCO", Vector2(10, 4), Vector2(525, 20), 16, ORO)
+	_clase.add_theme_font_override("font", ForjaTema.fuente_titulo())
 	_clase.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_barra_xp = _barra(fondo, Vector2(10, 24), Vector2(525, 6), Color(0.62, 0.35, 0.92))
 	_nivel_texto = _texto(fondo, "", Vector2(10, 33), Vector2(525, 14), 10, Color(0.82, 0.70, 1.0))
@@ -261,6 +262,7 @@ func _crear_ficha() -> void:
 
 func _crear_inventario() -> void:
 	var titulo := _texto(_raiz, "INVENTARIO", Vector2(900, 537), Vector2(114, 14), 11, ORO)
+	titulo.add_theme_font_override("font", ForjaTema.fuente_etiqueta())
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for i in InventoryComponent.RANURAS:
 		var columna := i % 2
@@ -283,6 +285,7 @@ func _crear_inventario() -> void:
 
 func _crear_habilidades() -> void:
 	var titulo := _texto(_raiz, "COMANDOS", Vector2(1024, 537), Vector2(240, 14), 11, ORO)
+	titulo.add_theme_font_override("font", ForjaTema.fuente_etiqueta())
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var comandos := [
 		["atacar", "A", "Atacar-mover: clic izquierdo sobre el suelo.", _comando_atacar],
@@ -361,51 +364,75 @@ func _crear_pips(boton: Button) -> Array:
 
 
 func _crear_barra_superior() -> void:
-	# --- Panel decorativo izquierdo: oleada y tiempo ---
-	var panel_oleada := _panel(Vector2(12, 10), Vector2(420, 74), Color(0.06, 0.04, 0.03, 0.95), Color(0.86, 0.68, 0.32))
-	_hud_arriba.add_child(panel_oleada)
+	# Una sola barra de mando: oleada y amenaza a la izquierda, objetivo en el
+	# centro, economía a la derecha y el panel de estadísticas como lengüeta.
+	_barra_superior = _panel(
+		Vector2(12, 10), Vector2(1256, 78), Color(0.055, 0.047, 0.040, 0.96), ForjaTema.ORO_OSCURO
+	)
+	_barra_superior.add_theme_stylebox_override(
+		"panel", ForjaTema.estilo_ventana(ForjaTema.ORO_OSCURO, 0.96)
+	)
+	_hud_arriba.add_child(_barra_superior)
+	ForjaTema.ornar(_barra_superior, ForjaTema.ORO_OSCURO)
 
-	_oleada = _texto(panel_oleada, "", Vector2(10, 6), Vector2(400, 24), 20, Color(0.96, 0.82, 0.48))
-	_oleada.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# --- Zona izquierda: oleada, cuenta atrás y enemigos ---
+	_oleada = _texto(_barra_superior, "OLEADA 1 / 20", Vector2(20, 6), Vector2(400, 26), 19, ForjaTema.ORO_CLARO)
+	_oleada.add_theme_font_override("font", ForjaTema.fuente_titulo())
+	_tiempo_oleada = _texto(_barra_superior, "", Vector2(20, 32), Vector2(300, 16), 12, ORO)
+	_enemigos = _texto(_barra_superior, "", Vector2(20, 50), Vector2(400, 18), 11, ForjaTema.TENUE)
 
-	_tiempo_oleada = _texto(panel_oleada, "", Vector2(10, 32), Vector2(400, 18), 14, Color(0.9, 0.7, 0.4))
-	_tiempo_oleada.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# --- Separadores verticales ---
+	var div_izq := ColorRect.new()
+	div_izq.color = Color(ForjaTema.ORO_OSCURO.r, ForjaTema.ORO_OSCURO.g, ForjaTema.ORO_OSCURO.b, 0.5)
+	div_izq.position = Vector2(432, 12)
+	div_izq.size = Vector2(1, 54)
+	div_izq.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_barra_superior.add_child(div_izq)
 
-	_enemigos = _texto(panel_oleada, "", Vector2(10, 52), Vector2(400, 16), 12, Color(0.82, 0.78, 0.7))
-	_enemigos.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	# --- Panel decorativo derecho: oro y puntos ---
-	var panel_economia := _panel(Vector2(440, 10), Vector2(260, 74), Color(0.06, 0.04, 0.03, 0.95), Color(0.86, 0.68, 0.32))
-	_hud_arriba.add_child(panel_economia)
-
-	_oro = _texto(panel_economia, "", Vector2(10, 10), Vector2(240, 22), 16, ORO)
-	_oro.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-
-	var texto_puntos := _texto(panel_economia, "", Vector2(10, 34), Vector2(240, 20), 13, Color(0.82, 0.78, 0.7))
-	_texto_puntos = texto_puntos
-	_texto_puntos.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-
-	# --- Barra de vida del estandarte (centro-abajo, independiente) ---
-	var marco_estandarte := _panel(Vector2(460, 94), Vector2(360, 26), Color(0.08, 0.07, 0.06, 0.9), Color(0.45, 0.32, 0.2))
-	_hud_arriba.add_child(marco_estandarte)
-	_barra_bandera = _barra(marco_estandarte, Vector2(2, 2), Vector2(356, 18), Color(0.72, 0.18, 0.14))
+	# --- Zona central: el estandarte, que es el objetivo de la partida ---
+	var rotulo_estandarte := ForjaTema.rotulo("ESTANDARTE DE LA REBELIÓN", 10, ForjaTema.TENUE)
+	rotulo_estandarte.position = Vector2(456, 10)
+	_barra_superior.add_child(rotulo_estandarte)
+	_barra_bandera = _barra(_barra_superior, Vector2(456, 30), Vector2(536, 18), ForjaTema.SANGRE)
 	_barra_bandera.show_percentage = false
-	var etiqueta := _texto(marco_estandarte, "ESTANDARTE DE LA REBELIÓN", Vector2(0, 2), Vector2(360, 16), 10, TEXTO)
+	var etiqueta := _texto(_barra_superior, "", Vector2(456, 50), Vector2(536, 16), 10, ForjaTema.TENUE)
 	etiqueta.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	_aviso = _texto(_hud_arriba, "", Vector2(12, 130), Vector2(688, 24), 18, Color(1.0, 0.45, 0.25))
+	var div_der := ColorRect.new()
+	div_der.color = Color(ForjaTema.ORO_OSCURO.r, ForjaTema.ORO_OSCURO.g, ForjaTema.ORO_OSCURO.b, 0.5)
+	div_der.position = Vector2(1006, 12)
+	div_der.size = Vector2(1, 54)
+	div_der.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_barra_superior.add_child(div_der)
+
+	# --- Zona derecha: oro y puntos ---
+	_oro = _texto(_barra_superior, "", Vector2(1014, 6), Vector2(232, 24), 16, ORO)
+	_oro.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_oro.add_theme_font_override("font", ForjaTema.fuente_titulo())
+	_texto_puntos = _texto(_barra_superior, "", Vector2(1014, 32), Vector2(232, 18), 12, ForjaTema.TEXTO)
+	_texto_puntos.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+	# Aviso de furia del público: bajo la barra, centrado y en ascua.
+	_aviso = _texto(_hud_arriba, "", Vector2(330, 96), Vector2(620, 26), 18, Color(1.0, 0.45, 0.25))
 	_aviso.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	# La lengüeta de estadísticas cuelga de la barra (abajo a la izquierda, para
+	# no tapar la economía ni el estandarte).
+	_crear_overlay()
 
 
 func _crear_overlay() -> void:
-	_overlay = _panel(Vector2(1032, 10), Vector2(238, 148), Color(0.07, 0.06, 0.06, 0.92), Color(0.4, 0.32, 0.22))
-	_hud_arriba.add_child(_overlay)
+	var barra := _barra_superior if _barra_superior != null else _hud_arriba
+	_overlay = _panel(Vector2(12, 86), Vector2(240, 140), Color(0.07, 0.06, 0.055, 0.97), ForjaTema.ORO_OSCURO)
+	_overlay.add_theme_stylebox_override("panel", ForjaTema.estilo_ventana(ForjaTema.ORO_OSCURO, 0.97))
+	barra.add_child(_overlay)
 	_overlay_titulo = Button.new()
 	_overlay_titulo.text = "ESTADÍSTICAS  -"
 	_overlay_titulo.position = Vector2(4, 3)
-	_overlay_titulo.size = Vector2(230, 24)
+	_overlay_titulo.size = Vector2(232, 24)
 	_overlay_titulo.flat = true
 	_overlay_titulo.add_theme_font_size_override("font_size", 12)
+	_overlay_titulo.add_theme_font_override("font", ForjaTema.fuente_etiqueta())
 	_overlay_titulo.add_theme_color_override("font_color", ORO)
 	_overlay_titulo.focus_mode = Control.FOCUS_NONE
 	_overlay_titulo.pressed.connect(_alternar_overlay)
@@ -413,13 +440,13 @@ func _crear_overlay() -> void:
 
 	_overlay_detalle = VBoxContainer.new()
 	_overlay_detalle.position = Vector2(12, 28)
-	_overlay_detalle.size = Vector2(218, 100)
+	_overlay_detalle.size = Vector2(216, 100)
 	_overlay_detalle.add_theme_constant_override("separation", 1)
 	_overlay.add_child(_overlay_detalle)
-	_overlay_vida = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(214, 18), 12, TEXTO)
-	_overlay_mana = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(214, 18), 12, TEXTO)
-	_overlay_dano = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(214, 18), 12, TEXTO)
-	_overlay_recibido = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(214, 18), 12, TEXTO)
+	_overlay_vida = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(212, 18), 12, ForjaTema.TEXTO)
+	_overlay_mana = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(212, 18), 12, ForjaTema.TEXTO)
+	_overlay_dano = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(212, 18), 12, ForjaTema.TEXTO)
+	_overlay_recibido = _texto(_overlay_detalle, "", Vector2.ZERO, Vector2(212, 18), 12, ForjaTema.TEXTO)
 
 
 func _crear_mensajes() -> void:
@@ -477,8 +504,9 @@ func _crear_lobby() -> void:
 	columna.add_child(_lobby_detalle)
 
 	# Franja centrada bajo la barra superior (el HUD trabaja en 1280x720).
-	_lobby.custom_minimum_size = Vector2(800, 118)
-	_lobby.position = Vector2(240, 92)
+	# Deja libre la lengüeta de estadísticas de la izquierda.
+	_lobby.custom_minimum_size = Vector2(740, 118)
+	_lobby.position = Vector2(268, 92)
 
 
 func establecer_lobby(visible: bool, segundos: float, jugadores: int, maximo: int, es_local: bool) -> void:
@@ -686,6 +714,13 @@ func _actualizar_inventario() -> void:
 			_actualizar_velo(_inventario_velos[i], 0.0)
 			continue
 		_boton_icono(boton, item.id, IconStudio.CATEGORIA_OBJETO)
+		# El marco toma el color de la rareza: se ve de un vistazo qué llevás.
+		boton.add_theme_stylebox_override(
+			"normal", ForjaTema.estilo_tarjeta(_rareza_item(item), false, false)
+		)
+		boton.add_theme_stylebox_override(
+			"hover", ForjaTema.estilo_tarjeta(_rareza_item(item), true, true)
+		)
 		var restante := inventario.energia_restante(i)
 		var cantidad := int(ranura["cantidad"])
 		var cd_max := 8.0
@@ -930,7 +965,7 @@ func _lanzar_habilidad(slot: int) -> void:
 func _alternar_overlay() -> void:
 	_overlay_expandido = not _overlay_expandido
 	_overlay_detalle.visible = _overlay_expandido
-	_overlay.size = Vector2(238, 148 if _overlay_expandido else 30)
+	_overlay.size = Vector2(232, 140 if _overlay_expandido else 30)
 	_overlay_titulo.text = "ESTADÍSTICAS  %s" % ("-" if _overlay_expandido else "+")
 
 
@@ -1011,7 +1046,7 @@ func _cd(segundos: float) -> String:
 ## Velo de enfriamiento: rectángulo semitransparente que baja con el tiempo.
 func _velo(boton: Button, tam: Vector2) -> ColorRect:
 	var velo := ColorRect.new()
-	velo.color = Color(0.0, 0.0, 0.0, 0.55)
+	velo.color = Color(0.10, 0.03, 0.02, 0.72)
 	velo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	velo.position = Vector2.ZERO
 	velo.size = tam
@@ -1509,6 +1544,18 @@ func _tipo_item(item: ItemData) -> String:
 		ItemData.Tipo.INTERMEDIO: return "Intermedio"
 		ItemData.Tipo.LEGENDARIO: return "Legendario"
 	return "Objeto"
+
+
+## Color de la rareza del objeto, con el sistema compartido de ForjaTema.
+func _rareza_item(item: ItemData) -> Color:
+	if item == null:
+		return ForjaTema.COLOR_RAREZA[&"comun"]
+	match item.rareza:
+		ItemData.Rareza.EPICO:
+			return ForjaTema.COLOR_RAREZA[&"epico"]
+		ItemData.Rareza.LEGENDARIO:
+			return ForjaTema.COLOR_RAREZA[&"legendario"]
+	return ForjaTema.COLOR_RAREZA[&"comun"]
 
 
 func _rareza_color(item: ItemData) -> Color:

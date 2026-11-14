@@ -4,7 +4,7 @@ Arena de supervivencia con perspectiva isométrica 2.5D en **Godot 4.7**, pensad
 para publicarse en **Web (HTML5 / WebAssembly)**. IP original: gladiadores orcos
 de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 
-## Estado (v1.7 jugable)
+## Estado (v1.8 jugable)
 
 Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
@@ -13,14 +13,26 @@ renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, é
 legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo**
 para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 
-- 124 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 129 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
-- **Forja de campeones**: pantalla de selección con rombos de clase, ficha del
-  campeón, estadísticas reales del sistema y habilidades; se abre al empezar.
-- **HUD táctil nuevo**: joystick con aro de runas, abanico de habilidades,
-  vida/maná compactos y pausa que abre Ajustes.
+- **Interfaz unificada (v1.8)**: tipografía **Cinzel** (SIL OFL), paleta de
+  carbón/oro/ascua y colores de rareza (común, raro, épico, legendario) en un
+  `Theme` compartido (`ForjaTema.tema_global()`); ninguna pantalla define su
+  propia paleta.
+- **Lobby atmosférico**: el campeón se exhibe en una vitrina 3D sobre brasas y
+  aros de arena, con las salas públicas como tarjetas y el estado del lobby
+  arriba.
+- **Forja de campeones**: el gladiador a tamaño héroe, riel de clases con
+  rombos, ficha RPG (nivel, atributos, estadísticas con barras, habilidades
+  con descripción al tocarlas, equipo) y selector de piel.
+- **HUD de combate**: una sola barra superior con oleada, estandarte y
+  economía; lengüeta de estadísticas y marcos de inventario por rareza.
+- **Tienda**: filtros por categoría y rareza, placas de estado (xN, NUEVO,
+  FORJABLE) y ficha lateral con comparación de datos.
+- **HUD táctil**: joystick con aro de runas, abanico de habilidades con
+  enfriamiento radial y segundos, pastilla de vida/maná con nivel y pausa.
 - **Controles táctiles** en móvil: joystick de movimiento a la izquierda y
   botones grandes de Q/W/E/R, INTERACTUAR y DETENER. Las habilidades apuntan al
   enemigo más cercano. El tamaño de los botones se ajusta desde Ajustes.
@@ -28,7 +40,8 @@ para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
   comprueba el release de GitHub y abre la descarga con un toque.
 - **Fin de partida** con "Volver a jugar" y "Salir al lobby" (los invitados de
   una sala solo ven Salir al lobby).
-- Todo el arte es **CC0** (KayKit, Kenney); el código es **MIT**.
+- Todo el arte es **CC0** (KayKit, Kenney) y la tipografía **SIL OFL**
+  (Cinzel); el código es **MIT**.
 
 ## Ejecutar
 
@@ -105,12 +118,33 @@ Pasos completos y seguridad en [`supabase/README.md`](supabase/README.md).
 
 Las teclas usan `physical_keycode`: funcionan igual en teclados no QWERTY.
 
+## Interfaz y dirección de arte
+
+La interfaz entera sale de un único sistema: `scripts/ui/ForjaTema.gd` define la
+paleta (carbón cálido, oro viejo, ascua), los colores de rareza, la tipografía y
+`tema_global()`, que `Arena._ready` aplica a la raíz del árbol para que todo
+`Control` la herede. Los títulos usan **Cinzel** (`assets/ui/Cinzel-variable.ttf`,
+SIL OFL) y el cuerpo, la sans del motor.
+
+Los rótulos de sección (`rotulo()`), los paneles (`estilo_panel`, `estilo_ventana`,
+`estilo_tarjeta`), las barras segmentadas, los iconos de estadística y las esquinas
+grabadas viven ahí; una pantalla nueva solo compone piezas. El fondo de las
+pantallas de menú es `FondoForja` (degradado, resplandor de ascua, aros de arena y
+brasas dibujadas, sin shaders) y el campeón se muestra en `VitrinaCampeon`, un
+`SubViewport` con tres luces y giro de presentación que no se construye en
+headless.
+
 ## Consola inferior
+
+La barra superior es un solo panel continuo: oleada, cuenta atrás y enemigos a
+la izquierda; el estandarte (objetivo de la partida) en el centro; oro y puntos a
+la derecha; y la lengüeta de estadísticas colgando abajo a la izquierda.
 
 La consola de 185 px se divide en cuatro bloques: minimapa cuadrado, retrato 3D
 en vivo con barras de vida/maná, ficha del gladiador con nivel, XP, oleada,
 atributo principal y estado, inventario 2x3 y parrilla de comandos/habilidades
-4x3. Los botones son **solo iconos**; el nombre y el escalado real viven en el
+4x3. Las ranuras del inventario llevan el marco del color de la rareza del
+objeto. Los botones son **solo iconos**; el nombre y el escalado real viven en el
 tooltip. La tecla de cada botón va en la esquina superior izquierda y las
 habilidades muestran puntos dorados con su rango actual. `IconStudio.gd`
 renderiza miniaturas 3D de 64x64 con luz cálida, rim light y fondo degradado

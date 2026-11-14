@@ -1,7 +1,7 @@
 class_name TouchControls
 extends CanvasLayer
 ## HUD táctil: joystick con anillo de runas a la izquierda, abanico de
-## habilidades a la derecha, vida/maná arriba y botón de pausa.
+## habilidades a la derecha con enfriamiento radial, vida/maná arriba y pausa.
 ##
 ## Coordenadas de diseño 1280x720. El joystick emite una dirección normalizada
 ## que el gladiador usa para moverse de verdad, sin depender de la emulación de
@@ -14,23 +14,27 @@ signal detener
 signal pausa
 
 const CLAVES := ["Q", "W", "E", "R"]
-const CENTRO_JOY := Vector2(186, 470)
-const RADIO_JOY := 104.0
-const CENTRO_ABANICO := Vector2(1128, 600)
-const RADIO_ABANICO := 190.0
+const CENTRO_JOY := Vector2(172, 438)
+const RADIO_JOY := 98.0
+const CENTRO_ABANICO := Vector2(1102, 424)
+const RADIO_ABANICO := 158.0
+const LADO_BOTON := 96.0
 ## Ángulos del abanico de habilidades (grados: 180 = izquierda, 270 = arriba).
-const ANGULOS := [190.0, 220.0, 250.0, 280.0]
+const ANGULOS := [186.0, 218.0, 250.0, 282.0]
 
 var _raiz: Control
 var _base: Panel
 var _aro: ForjaTema.AroRunas
 var _perilla: Panel
 var _botones: Array = []
+var _velos: Array = []
+var _cd_textos: Array = []
 var _panel_vital: PanelContainer
 var _barra_vida: ForjaTema.BarraSegmentada
 var _barra_mana: ForjaTema.BarraSegmentada
 var _texto_vida: Label
 var _texto_mana: Label
+var _nivel: Label
 var _boton_pausa: Button
 var _jugador: GladiatorController
 ## Multiplicador de tamaño configurable desde Ajustes.
@@ -46,26 +50,38 @@ func configurar(jugador: GladiatorController) -> void:
 	_raiz = Control.new()
 	_raiz.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_raiz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_raiz.theme = ForjaTema.tema_global()
 	add_child(_raiz)
 
 	_crear_vitales()
 	_crear_joystick()
 
 	for i in CLAVES.size():
-		var boton := _crear_boton(CLAVES[i], _posicion_abanico(i), 104, 30, true)
+		var boton := _crear_boton(CLAVES[i], _posicion_abanico(i), LADO_BOTON, 26, true)
 		boton.pressed.connect(func() -> void: habilidad.emit(i))
+		var velo := ForjaTema.VeloRadial.new()
+		velo.visible = false
+		boton.add_child(velo)
+		_velos.append(velo)
+		var cd := ForjaTema.etiqueta("", 20, Color(1.0, 0.88, 0.60), true)
+		cd.set_anchors_preset(Control.PRESET_FULL_RECT)
+		cd.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		cd.add_theme_constant_override("outline_size", 6)
+		cd.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02, 0.9))
+		boton.add_child(cd)
+		_cd_textos.append(cd)
 		_botones.append(boton)
 
-	var interactuar_btn := _crear_boton("INTERACTUAR", Vector2(1152, 302), 116, 14, false)
+	var interactuar_btn := _crear_boton("INTERACTUAR", Vector2(1150, 622), 128, 13, false)
 	interactuar_btn.pressed.connect(func() -> void: interactuar.emit())
 
-	var detener_btn := _crear_boton("DETENER", Vector2(958, 330), 92, 13, false)
+	var detener_btn := _crear_boton("DETENER", Vector2(998, 632), 104, 13, false)
 	detener_btn.pressed.connect(func() -> void: detener.emit())
 
 	_boton_pausa = ForjaTema.boton("II", 18)
-	_boton_pausa.position = Vector2(1198, 148)
-	_boton_pausa.custom_minimum_size = Vector2(56, 44)
-	_boton_pausa.size = Vector2(56, 44)
+	_boton_pausa.position = Vector2(1216, 96)
+	_boton_pausa.custom_minimum_size = Vector2(52, 40)
+	_boton_pausa.size = Vector2(52, 40)
 	_boton_pausa.pressed.connect(func() -> void: pausa.emit())
 	_raiz.add_child(_boton_pausa)
 
@@ -75,40 +91,52 @@ func configurar(jugador: GladiatorController) -> void:
 func _posicion_abanico(indice: int) -> Vector2:
 	var grados: float = ANGULOS[clampi(indice, 0, ANGULOS.size() - 1)]
 	var rad := deg_to_rad(grados)
-	return CENTRO_ABANICO + Vector2(cos(rad), sin(rad)) * RADIO_ABANICO - Vector2(52, 52)
+	return CENTRO_ABANICO + Vector2(cos(rad), sin(rad)) * RADIO_ABANICO - Vector2(LADO_BOTON, LADO_BOTON) * 0.5
 
 
+## Vida, maná y nivel en una pastilla compacta arriba a la izquierda: en el
+## teléfono la consola del HUD queda lejos del pulgar, así que el estado vital
+## vive junto al pulgar que mira la esquina superior.
 func _crear_vitales() -> void:
 	_panel_vital = PanelContainer.new()
-	var estilo := ForjaTema.estilo_panel(0.92)
-	estilo.content_margin_left = 10
-	estilo.content_margin_right = 12
-	estilo.content_margin_top = 8
+	var estilo := ForjaTema.estilo_panel(0.9)
+	estilo.content_margin_left = 12
+	estilo.content_margin_right = 14
+	estilo.content_margin_top = 7
 	estilo.content_margin_bottom = 8
 	_panel_vital.add_theme_stylebox_override("panel", estilo)
-	_panel_vital.position = Vector2(20, 86)
-	_panel_vital.custom_minimum_size = Vector2(268, 0)
+	_panel_vital.position = Vector2(16, 96)
+	_panel_vital.custom_minimum_size = Vector2(272, 0)
 	_raiz.add_child(_panel_vital)
 
 	var columna := VBoxContainer.new()
-	columna.add_theme_constant_override("separation", 5)
+	columna.add_theme_constant_override("separation", 4)
 	_panel_vital.add_child(columna)
 
-	for dato in [["VIDA", ForjaTema.VIDA], ["MANÁ", ForjaTema.MANA]]:
+	var cabecera := HBoxContainer.new()
+	columna.add_child(cabecera)
+	_nivel = ForjaTema.rotulo("NIVEL 1", 10, ForjaTema.TEXTO_FUERTE)
+	_nivel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cabecera.add_child(_nivel)
+	var clase := ForjaTema.rotulo("GLADIADOR", 10, ForjaTema.TENUE)
+	cabecera.add_child(clase)
+
+	for dato in [["vida", ForjaTema.VIDA], ["mana", ForjaTema.MANA]]:
 		var fila := HBoxContainer.new()
-		fila.add_theme_constant_override("separation", 8)
-		var nombre := ForjaTema.etiqueta(String(dato[0]), 10, ForjaTema.TENUE)
-		nombre.custom_minimum_size = Vector2(40, 0)
-		fila.add_child(nombre)
+		fila.add_theme_constant_override("separation", 6)
+		var icono := ForjaTema.IconoStat.new(StringName(dato[0]), 13.0, dato[1])
+		icono.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		fila.add_child(icono)
 		var barra := ForjaTema.BarraSegmentada.new(1.0, dato[1])
-		barra.custom_minimum_size = Vector2(150, 12)
+		barra.custom_minimum_size = Vector2(166, 12)
+		barra.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		fila.add_child(barra)
 		var valor := ForjaTema.etiqueta("", 10, ForjaTema.ORO_CLARO)
-		valor.custom_minimum_size = Vector2(58, 0)
+		valor.custom_minimum_size = Vector2(64, 0)
 		valor.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		fila.add_child(valor)
 		columna.add_child(fila)
-		if String(dato[0]) == "VIDA":
+		if String(dato[0]) == "vida":
 			_barra_vida = barra
 			_texto_vida = valor
 		else:
@@ -159,10 +187,12 @@ func _crear_boton(texto: String, posicion: Vector2, tamano: float, letra: int, c
 	boton.add_theme_color_override("font_disabled_color", Color(0.45, 0.40, 0.33))
 
 	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.07, 0.06, 0.05, 0.82)
+	estilo.bg_color = Color(0.07, 0.06, 0.05, 0.86)
 	estilo.border_color = ForjaTema.ORO_OSCURO
 	estilo.set_border_width_all(2)
 	estilo.set_corner_radius_all(int(tamano * 0.5) if circular else 4)
+	estilo.shadow_color = Color(0, 0, 0, 0.45)
+	estilo.shadow_size = 4
 	boton.add_theme_stylebox_override("normal", estilo)
 
 	var pulsado := estilo.duplicate() as StyleBoxFlat
@@ -171,6 +201,7 @@ func _crear_boton(texto: String, posicion: Vector2, tamano: float, letra: int, c
 	boton.add_theme_stylebox_override("pressed", pulsado)
 	boton.add_theme_stylebox_override("hover", estilo)
 	boton.add_theme_stylebox_override("disabled", estilo)
+	boton.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	_raiz.add_child(boton)
 	return boton
 
@@ -190,8 +221,8 @@ func aplicar_escala(nueva: float) -> void:
 		_perilla.position = CENTRO_JOY - _perilla.size * 0.5
 	for i in _botones.size():
 		var boton: Button = _botones[i]
-		var centro := _posicion_abanico(i) + Vector2(52, 52)
-		boton.size = Vector2(104, 104) * escala
+		var centro := _posicion_abanico(i) + Vector2(LADO_BOTON, LADO_BOTON) * 0.5
+		boton.size = Vector2(LADO_BOTON, LADO_BOTON) * escala
 		boton.custom_minimum_size = boton.size
 		boton.position = centro - boton.size * 0.5
 
@@ -268,17 +299,32 @@ func _process(_delta: float) -> void:
 	var vida_max := maxf(1.0, _jugador.estadisticas.salud_maxima)
 	_barra_vida.valor = clampf(_jugador.salud_actual / vida_max, 0.0, 1.0)
 	_barra_vida.queue_redraw()
-	_texto_vida.text = "%d" % int(ceil(_jugador.salud_actual))
+	_texto_vida.text = "%d/%d" % [int(ceil(_jugador.salud_actual)), int(vida_max)]
 	var mana_max := maxf(1.0, _jugador.estadisticas.mana_maximo)
 	_barra_mana.valor = clampf(_jugador.mana_actual / mana_max, 0.0, 1.0)
 	_barra_mana.queue_redraw()
-	_texto_mana.text = "%d" % int(ceil(_jugador.mana_actual))
+	_texto_mana.text = "%d/%d" % [int(ceil(_jugador.mana_actual)), int(mana_max)]
+	if _nivel != null:
+		_nivel.text = "NIVEL %d" % _jugador.estadisticas.nivel
 
 	for i in mini(_botones.size(), CLAVES.size()):
 		var boton: Button = _botones[i]
 		if boton == null:
 			continue
-		boton.modulate = Color(1, 1, 1, 1) if _disponible(i) else Color(0.55, 0.52, 0.46, 0.75)
+		var restante := _jugador.cooldown_restante(i) if not _jugador.esta_muerto else 0.0
+		var total := 1.0
+		if _jugador.arma_actual != null and i < _jugador.arma_actual.habilidades.size():
+			var habilidad = _jugador.arma_actual.habilidades[i]
+			if habilidad != null:
+				total = maxf(0.01, _jugador.cooldown_habilidad(habilidad))
+		var fraccion := clampf(restante / total, 0.0, 1.0)
+		var velo: ForjaTema.VeloRadial = _velos[i]
+		if velo != null:
+			velo.fijar(fraccion)
+		var cd: Label = _cd_textos[i]
+		if cd != null:
+			cd.text = ("%d" % int(ceil(restante))) if restante > 0.5 else ""
+		boton.modulate = Color(1, 1, 1, 1) if _disponible(i) else Color(0.55, 0.52, 0.46, 0.8)
 
 
 func _disponible(slot: int) -> bool:

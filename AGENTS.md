@@ -26,9 +26,11 @@ godot --headless --script res://tests/net_smoke.gd -- --cliente=ws://127.0.0.1:9
 godot --headless --script res://tests/net_smoke_b.gd -- --cliente=ws://127.0.0.1:9080
 godot --headless --script res://tests/inspect_crear_sala.gd   # sonda del túnel (red real)
 godot -- --captura-combate                 # windowed screenshot to captura_combate.png
+godot -- --captura-menu                    # lobby (fuerza el menú de red)
+godot -- --captura-campeon                 # forja de campeones con vitrina 3D
 ```
 
-- Expected baseline: smoke **124/124**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **129/129**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
 - En `--headless` los fotogramas corren a miles por segundo: `await process_frame` no espera nada. Los tests esperan con `create_timer(0.01)` (`_esperar_hasta`) o `create_timer(segundos)`.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
@@ -54,7 +56,13 @@ godot -- --captura-combate                 # windowed screenshot to captura_comb
 - Revive: a dead player with a living teammate counts down 10 s (2.5× faster within 4 m) and revives next to the nearest ally at 60 % HP, keeping inventory/talents/level. All players dead still ends the run. Server action `debug_morir`/`debug_curar` only works with `--red-rapida` for tests.
 - Sala de espera: `WaveManager.en_espera()` y `asegurar_preparacion(segundos)` mantienen la cuenta atrás de 30 s antes de la primera oleada; si alguien entra con menos de 8 s, `agregar_jugador_red` la alarga. `ArenaHUD.establecer_lobby(visible, segundos, jugadores, maximo, es_local)` dibuja el panel central (título, cuenta atrás grande y "N/3 gladiadores").
 - El menú de red ya no pide URL a mano: lista de salas + JUGAR SOLO + CREAR SALA. Para entrar a una sala se pulsa su botón en la lista.
-- Tema: `scripts/ui/ForjaTema.gd` centraliza la paleta (carbón, oro, ascua), paneles, botones, barras segmentadas, emblemas de clase (`ForjaTema.Emblema`, las clases internas se usan calificadas) y el aro de runas del joystick (`ForjaTema.AroRunas`). Cualquier pantalla nueva toma los colores de aquí.
+- Interfaz: `scripts/ui/ForjaTema.gd` es el sistema de diseño completo. Define la paleta (carbón, oro, ascua), `COLOR_RAREZA`/`NOMBRE_RAREZA` (común, raro, épico, legendario), la tipografía **Cinzel** (`assets/ui/Cinzel-variable.ttf`, SIL OFL; `fuente_titulo()`, `fuente_etiqueta()`) y `tema_global()`, que `Arena._ready` asigna a `get_tree().root.theme` para que todo `Control` lo herede. Piezas: `estilo_panel`, `estilo_ventana`, `estilo_tarjeta`, `BarraSegmentada`, `Emblema`, `AroRunas`, `VeloRadial`, `IconoStat`, `EsquinasOrnadas` (`ornar()`). Una pantalla nueva compone estas piezas; no define su propia paleta ni su propia fuente.
+- Fondos: `scripts/ui/FondoForja.gd` dibuja degradado, resplandor de ascua, aros de arena y brasas (sin shaders, redibujo a 30 fps). Un `Control` hijo de un `CanvasLayer` **no** hereda el tamaño del viewport: `FondoForja` sincroniza su `size` en `_process` desde el padre; sin eso queda en 0x0 y la pantalla se ve transparente.
+- Vitrina 3D: `scripts/ui/VitrinaCampeon.gd` (SubViewport propio, tres luces, giro de presentación) muestra al gladiador de cuerpo entero en el lobby y en la forja de campeones. No se construye en headless (`DisplayServer.get_name() == "headless"`), así que las pruebas no pagan el coste de instanciar GLB. La cámara se orienta con `look_at_from_position()`: `look_at()` antes de entrar al árbol falla con "Node not inside tree".
+- Lobby/forja: `MenuRed` monta el lobby atmosférico (campeón en vitrina, salas como tarjetas, estado de red arriba) y `SeleccionCampeon` la ficha RPG de tres zonas (riel de clases, vitrina, ficha con nivel/atributos/estadísticas/habilidades/equipo). Los perfiles de clase salen de `Arena._perfiles_campeon()`: cualquier campo nuevo (tinte, arma visual, xp_requerida, habilidades con `id`) se agrega ahí y la pantalla lo consume.
+- HUD de combate: la barra superior es un solo `Panel` (`_barra_superior`) con oleada/cuenta atrás/enemigos, estandarte, oro/puntos y la lengüeta `_overlay` colgando abajo a la izquierda (deja libre la sala de espera, que arranca en x=268). Las ranuras del inventario usan el marco del color de rareza del objeto.
+- Tienda: `ShopPanel` tiene filtros por categoría/rareza (`_filtro`, `_chips`, `_pasa_filtro`), tarjetas con franja de rareza y placa de estado (`_estado_carta`: xN, NUEVO, EN MOCHILA, FORJABLE). El filtro por defecto es `&"todo"`, así la cuadrícula muestra el catálogo completo y las pruebas que cuentan tarjetas siguen valiendo.
+- HUD táctil: `TouchControls` dibuja enfriamiento radial con `ForjaTema.VeloRadial` (`_velos`) y los segundos restantes (`_cd_textos`), más una pastilla de vida/maná con nivel. Joystick y abanico viven por encima de la consola del HUD.
 - Selección de campeón: `scripts/ui/SeleccionCampeon.gd` (CanvasLayer 55) se abre al empezar la partida local si no hay clase (`Arena._mostrar_seleccion_campeon`), recibe `_perfiles_campeon()` con vida/maná/daño/defensa calculados desde `GladiatorStats` y el arma de la clase, y al confirmar equipa por la misma vía que el pedestal (`pedestal.comprar`) o pide clase al servidor. `--captura-campeon` la fotografía.
 - Táctil: `scripts/ui/TouchControls.gd` tiene joystick (base + perilla, emite `mover(direccion)`), Q/W/E/R y DETENER/INTERACTUAR. El gladiador usa `mover_tactil(direccion)` (movimiento directo, sin navegación) y en red el cliente manda la acción `mover` a ~8 Hz mientras se mantiene la dirección.
 - Ajustes: `scripts/core/Ajustes.gd` (user://ajustes.cfg) guarda `volumen` y `escala_tactil`; `SettingsPanel` los edita desde el menú. `Arena._ready` los carga y aplica (bus Master y escala del joystick/botones).
@@ -83,7 +91,7 @@ godot -- --captura-combate                 # windowed screenshot to captura_comb
 
 ## Assets / content rules
 
-- Only CC0 assets: KayKit 3D under `assets/kaykit/`, Kenney audio under `assets/audio/`. Keep license files with the assets and update `CREDITS.md` when adding any.
+- Only CC0 art/audio: KayKit 3D under `assets/kaykit/`, Kenney audio under `assets/audio/`. The only exception is the interface font: Cinzel under `assets/ui/` (SIL OFL, license file alongside). Keep license files with the assets and update `CREDITS.md` when adding any.
 - Do not use Warcraft/Blizzard/Valve names or art. Keep Spanish original names, lore and icons.
 - Web budget is roughly 47 MB / 9 files today; keep the build comfortably below ~60 MB.
 
@@ -104,7 +112,7 @@ playwright-cli.cmd open http://127.0.0.1:8137/ --browser msedge
 ## Verification gate
 
 1. `godot --headless --editor --quit`
-2. `godot --headless --script res://tests/smoke_test.gd` → 100/100
+2. `godot --headless --script res://tests/smoke_test.gd` → 129/129
 3. `godot --headless --script res://tests/wave_sim.gd` → 3/3
 4. `godot --headless --quit-after 600` → no script/parse errors
 5. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`

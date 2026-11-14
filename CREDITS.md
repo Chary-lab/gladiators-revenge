@@ -14,6 +14,16 @@
   no usan arte de terceros.
 - No contiene samples de terceros fuera de los packs CC0 acreditados abajo.
 
+## Tipografía
+
+| Fuente | Uso | Licencia |
+| --- | --- | --- |
+| [Cinzel](https://github.com/NDISCOVER/Cinzel) | Títulos, versalitas y rótulos de toda la interfaz | SIL Open Font License 1.1 (`assets/ui/Cinzel-OFL.txt`) |
+
+El cuerpo de texto usa la sans que incluye Godot (Open Sans), sin archivos
+externos. La fuente se carga como `FontFile` variable y se espacia con
+`FontVariation` para los rótulos (`ForjaTema.fuente_etiqueta()`).
+
 ## Arte 3D
 
 Los modelos, texturas y props son de **KayKit** y se distribuyen como **CC0**
