@@ -61,6 +61,9 @@ var es_nigromante := false
 var _reduccion_fisica := 0.0
 var _ritual_restante := 0.0
 var _escala_base := 1.0
+## Altura local de la barra de vida: se calcula por arquetipo para que quede
+## sobre la cabeza aunque el modelo sea 1.4× (bruto) o 0.8× (sabueso).
+var _alto_barra := 1.95
 ## Barra de vida en el mundo: se construye la primera vez y solo se muestra
 ## cuando el enemigo está herido o es una amenaza (élite, bruto, tanque).
 var _barra_raiz: Node3D
@@ -209,6 +212,8 @@ func preparar(
 	_reduccion_fisica = float(mods.get("armadura", 0.0))
 	_ritual_restante = 3.0 if es_nigromante else 0.0
 	_escala_base = float(VISUALES.get(arquetipo, VISUALES[&"esqueleto"]).get("escala", 1.0))
+	# +0,55 m por encima del modelo, en unidades locales (el nodo va escalado).
+	_alto_barra = 1.95 + 0.55 / maxf(_escala_base, 0.01)
 
 	var factor_elite := 2.4 if elite else 1.0
 	salud_maxima = (VIDA_BASE + ronda * VIDA_POR_RONDA) * factor_elite * vida_mult * float(mods["vida"])
@@ -606,8 +611,6 @@ func _morir() -> void:
 
 # --- Visibilidad: barra de vida, telegráficos y reacciones -----------------
 
-const BARRA_ALTO := 1.95
-
 
 ## Aparición con rebote al salir del pool: sin esto los enemigos brotaban de
 ## golpe y en oleadas densas era imposible leer de dónde venía la presión.
@@ -665,12 +668,12 @@ func _construir_barra() -> void:
 		return
 	var raiz := Node3D.new()
 	raiz.name = "BarraVida"
-	raiz.position = Vector3(0, BARRA_ALTO, 0)
+	raiz.position = Vector3(0, _alto_barra, 0)
 	add_child(raiz)
 	_barra_raiz = raiz
 
 	var cuadro := QuadMesh.new()
-	cuadro.size = Vector2(1.0, 0.11)
+	cuadro.size = Vector2(1.15, 0.16)
 
 	var fondo := MeshInstance3D.new()
 	fondo.mesh = cuadro
@@ -705,15 +708,16 @@ func _actualizar_barra_vida() -> void:
 	_barra_raiz.visible = activo and _barra_visible(frac)
 
 
-## El enemigo se escala por arquetipo (bruto 1.42, sabueso 0.82): la barra se
-## contrarresta para que todas midan lo mismo en pantalla y queden a la altura
-## de la cabeza.
+## El enemigo se escala por arquetipo (bruto 1.42, sabueso 0.82): el cuadro se
+## contrarresta para que todos midan lo mismo en pantalla, pero la altura NO se
+## divide: `_alto_barra` ya está en unidades locales, y dividirla dejaba la barra
+## del bruto dentro de la cabeza (era el único que no la mostraba).
 func _sincronizar_barra() -> void:
 	if _barra_raiz == null:
 		return
 	var factor := maxf(scale.x, 0.01)
 	_barra_raiz.scale = Vector3.ONE / factor
-	_barra_raiz.position = Vector3(0, BARRA_ALTO / factor, 0)
+	_barra_raiz.position = Vector3(0, _alto_barra, 0)
 
 
 ## Nigromante: cura un 12 % de la vida máxima a los enemigos en 6 m.

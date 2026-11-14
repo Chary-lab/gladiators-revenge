@@ -2552,14 +2552,14 @@ func _capturar() -> void:
 			for tipo in tipos:
 				var enemigo := ArenaEnemy.crear()
 				add_child(enemigo)
-				enemigo.global_position = _jugador.global_position + Vector3(-2.6 + indice * 2.6, 0.0, -2.8)
+				enemigo.global_position = _jugador.global_position + Vector3(-2.6 + indice * 2.6, 0.0, 2.6)
 				enemigo.preparar(12, false, _jugador, _bandera, _oleadas, pool, 0, tipo, 1.0, 1.0)
 				enemigo.set_physics_process(false)
 				enemigo.salud_actual = enemigo.salud_maxima * 0.55
 				enemigo.call("_actualizar_barra_vida")
 				indice += 1
 			if _camara != null:
-				_camara.size = 11.0
+				_camara.size = 13.0
 		if capturar_ficha and _tactil != null:
 			_tactil.alternar_ficha()
 			await get_tree().create_timer(0.6).timeout

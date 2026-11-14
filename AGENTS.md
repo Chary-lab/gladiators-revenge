@@ -38,7 +38,7 @@ godot -- --captura-arquetipos              # sabueso + bruto + nigromante con su
 godot -- --captura-cerca --clase=lanza     # primer plano de cualquier clase (lanza, saeta…)
 ```
 
-- Expected baseline: smoke **15/15**, regression **147/147**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **15/15**, regression **147/147**, wave sim **3/3**, net smoke A **12/12**, net smoke B **12/12**, clean 600-frame run.
 - `tests/smoke_test.gd` corre en modo smoke (solo las comprobaciones críticas: arranque, identidad, Supabase/salas, tienda/forja, progresión, combate, cierre). `tests/regression_test.gd` hereda de ese script y fuerza el modo completo; no dupliques cuerpo de pruebas, añade el check con `_comprobar(..., true)` si es crítico o sin el tercer argumento si es regresión.
 - Los bloques caros de regresión (anti-camping, tema, UI de tienda/pausa/iconos, auras, táctil, ajustes) están dentro de `if _completo():`. Un check crítico no debe depender de estado que solo crea un bloque de regresión.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).

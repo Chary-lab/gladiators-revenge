@@ -276,8 +276,10 @@ static func _crear_saetera() -> WeaponItem:
 	arma.atributo_principal = &"agilidad"
 	arma.bonificaciones_atributos = {"fuerza": 0, "agilidad": 8, "inteligencia": 0}
 	arma.escena_visual = _escena_arco()
-	arma.rotacion_visual = Vector3(-96.0, 0.0, 0.0)
-	arma.escala_visual = 0.95
+	# El plano del arco es XY; girarlo 30° en Y lo saca de canto respecto a la
+	# cámara isométrica para que la curva se lea en partida.
+	arma.rotacion_visual = Vector3(0.0, 30.0, 0.0)
+	arma.escala_visual = 1.15
 	arma.habilidades = _kit_saetera()
 	return arma
 
@@ -349,30 +351,47 @@ static func _escena_arco() -> PackedScene:
 	var raiz := Node3D.new()
 	raiz.name = "ArcoVisual"
 	var madera := _material_arma(Color(0.34, 0.21, 0.12), 0.0, 0.8)
-	var tendón := _material_arma(Color(0.86, 0.82, 0.68), 0.0, 0.9)
+	var tendón := _material_arma(Color(0.88, 0.84, 0.70), 0.0, 0.9)
+
+	# Arco de verdad: arco de circunferencia con la empuñadura en el origen y las
+	# puntas volviendo hacia -X, donde se tensa la cuerda. Con dos palos rectos a
+	# tamaño de juego se leía como una vara, no como un arco.
+	var radio := 0.90
+	var apertura := deg_to_rad(72.0)
+	var puntos: Array[Vector3] = []
+	for i in 7:
+		var angulo := -apertura + (2.0 * apertura) * float(i) / 6.0
+		puntos.append(Vector3(radio * cos(angulo) - radio, radio * sin(angulo), 0.0))
+
+	for i in puntos.size() - 1:
+		var a := puntos[i]
+		var b := puntos[i + 1]
+		var medio := (a + b) * 0.5
+		var largo := a.distance_to(b)
+		var brazo := CylinderMesh.new()
+		brazo.top_radius = 0.024
+		brazo.bottom_radius = 0.030
+		brazo.height = largo * 1.08
+		brazo.radial_segments = 6
+		var giro := atan2(b.y - a.y, b.x - a.x) - PI * 0.5
+		_pieza(raiz, brazo, madera, medio, Vector3(0.0, 0.0, rad_to_deg(giro)))
 
 	var empunadura := BoxMesh.new()
-	empunadura.size = Vector3(0.05, 0.28, 0.05)
+	empunadura.size = Vector3(0.06, 0.26, 0.06)
 	_pieza(raiz, empunadura, madera, Vector3.ZERO)
 
-	for lado in [1.0, -1.0]:
-		var brazo := CylinderMesh.new()
-		brazo.top_radius = 0.022
-		brazo.bottom_radius = 0.030
-		brazo.height = 0.62
-		brazo.radial_segments = 6
-		_pieza(raiz, brazo, madera, Vector3(0.08 * lado, 0.46 * lado, 0), Vector3(0, 0, -26.0 * lado))
-
+	var punta_a := puntos[0]
+	var punta_b := puntos[puntos.size() - 1]
 	var cuerda := BoxMesh.new()
-	cuerda.size = Vector3(0.008, 1.10, 0.008)
-	_pieza(raiz, cuerda, tendón, Vector3(-0.20, 0, 0))
+	cuerda.size = Vector3(0.010, punta_a.distance_to(punta_b), 0.010)
+	_pieza(raiz, cuerda, tendón, (punta_a + punta_b) * 0.5)
 
 	var flecha := CylinderMesh.new()
 	flecha.top_radius = 0.0
-	flecha.bottom_radius = 0.012
-	flecha.height = 0.18
+	flecha.bottom_radius = 0.014
+	flecha.height = 0.20
 	flecha.radial_segments = 5
-	_pieza(raiz, flecha, tendón, Vector3(0.10, 0.0, 0), Vector3(0, 0, -90.0))
+	_pieza(raiz, flecha, tendón, Vector3(0.03, 0.0, 0), Vector3(0, 0, -90.0))
 
 	return _empaquetar(raiz)
 
