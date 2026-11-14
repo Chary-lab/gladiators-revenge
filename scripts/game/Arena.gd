@@ -116,6 +116,11 @@ var _tactil_moviendo := false
 var _tactil_ultimo_envio := 0
 var _remota: SalaRemota
 var _api_salas := ""
+## Sala de espera tal como la manda el servidor: en cliente el WaveManager no
+## corre, así que sin esto la cuenta atrás se quedaba clavada en 11 s.
+var _lobby_red_activo := false
+var _lobby_red_restante := 0.0
+var _lobby_red_conectados := 1
 var _servidor_publico_url := ""
 var _hora_inicio_partida := 0.0
 
@@ -238,6 +243,13 @@ func _necesita_menu() -> bool:
 	return OS.has_feature("web") or OS.has_feature("mobile")
 
 
+## Quita el lobby de encima de la arena (sólo si existe).
+func _cerrar_menu() -> void:
+	if _menu != null and is_instance_valid(_menu):
+		_menu.queue_free()
+		_menu = null
+
+
 func _mostrar_menu() -> void:
 	_menu = MenuRed.new()
 	add_child(_menu)
@@ -309,6 +321,7 @@ func _al_fallo_creacion(motivo: String) -> void:
 func _iniciar_cliente_con_url(direccion: String) -> void:
 	es_cliente = true
 	url_servidor = direccion
+	_cerrar_menu()
 	_iniciar_cliente()
 
 
@@ -326,6 +339,10 @@ func _crear_estado_partida() -> void:
 
 
 func _iniciar_local() -> void:
+	# El menú es un CanvasLayer a pantalla completa: si sobrevive al arranque de
+	# la partida tapa el HUD (se veía "no aparece el HUD móvil" hasta que se
+	# volvía al menú y desde allí se entraba de nuevo).
+	_cerrar_menu()
 	_crear_estado_partida()
 
 	enemy_tracker = EnemyTracker.new()
@@ -417,6 +434,9 @@ func _iniciar_cliente() -> void:
 	_crear_hud()
 	if _hud != null:
 		_hud.establecer_jugador(Perfil.apodo())
+	# En una sala también hay capa táctil: sin esto el móvil entraba al combate
+	# con el HUD de escritorio (minimapa y QWER) y sin joystick.
+	_crear_controles_tactiles()
 	if _hud != null:
 		_hud.mostrar_mensaje("Conectando al servidor cooperativo…", 6.0)
 	if url_servidor.is_empty():
@@ -497,7 +517,7 @@ func agregar_jugador_red(peer: int) -> void:
 	if _oleadas != null:
 		_oleadas.agregar_jugador(cuerpo)
 		# Si alguien entra con la cuenta atrás casi terminada, se le dan unos
-		# segundos para elegir campeón en la armería.
+		# segundos para elegir campeón en la forja.
 		_oleadas.asegurar_preparacion(8.0)
 	if _supabase != null:
 		_supabase.actualizar_jugadores(jugadores_red.size())
@@ -545,8 +565,18 @@ func equipar_clase_red(peer: int, clase: StringName) -> void:
 	if cuerpo == null:
 		return
 	var arma := _arma_por_clase(clase)
-	if arma != null:
-		cuerpo.equipar_arma(arma)
+	if arma == null:
+		return
+	cuerpo.equipar_arma(arma)
+	# Si todos los conectados ya tienen clase, la primera oleada empieza ya.
+	if _oleadas != null and _oleadas.en_espera():
+		var todos_listos := true
+		for otro in jugadores_red.values():
+			if otro.arma_actual == null:
+				todos_listos = false
+				break
+		if todos_listos:
+			_oleadas.acortar_preparacion(2.0)
 
 
 func aplicar_accion_red(peer: int, accion: StringName, datos: Dictionary) -> void:
@@ -771,6 +801,9 @@ func _al_elegir_campeon(clase: StringName) -> void:
 		return
 	_jugador.equipar_arma(arma)
 	_campeon_elegido = true
+	# Ya hay campeón: no tiene sentido esperar los 30 s de la sala de espera.
+	if _oleadas != null:
+		_oleadas.acortar_preparacion(2.0)
 	for pedestal in _pedestales:
 		pedestal.desactivar()
 	_avisar("Campeón: %s" % arma.nombre, 2.8)
@@ -811,6 +844,9 @@ func _enviar_snapshot() -> void:
 		"pendientes": _oleadas.get("_pendientes") if _oleadas != null else 0,
 		"estado_oleada": int(_oleadas.get("_estado")) if _oleadas != null else 0,
 		"tiempo_oleada": _oleadas.tiempo_restante() if _oleadas != null else 0.0,
+		"espera": _oleadas.en_espera() if _oleadas != null else false,
+		"prep": _oleadas.tiempo_preparacion() if _oleadas != null else 0.0,
+		"conectados": maxi(1, jugadores_red.size()),
 		"oro": oro,
 		"puntos": puntos_atributo,
 		"congelando": _publico != null and _publico.congelando,
@@ -910,6 +946,8 @@ func _al_recibir_bienvenida(peer: int) -> void:
 	print("[NET] jugador local listo: ", peer)
 	if _hud != null:
 		_hud.mostrar_mensaje("Conectado. Elegí tu campeón en la forja.", 3.0)
+	if not _en_captura() and not _campeon_elegido:
+		call_deferred("_pedir_apodo_y_campeon")
 
 
 func _al_actualizar_lobby(ocupadas: Dictionary) -> void:
@@ -964,6 +1002,9 @@ func _aplicar_snapshot(datos: Dictionary) -> void:
 			int(datos.get("estado_oleada", 0)),
 			float(datos.get("tiempo_oleada", 0.0))
 		)
+	_lobby_red_activo = bool(datos.get("espera", _lobby_red_activo))
+	_lobby_red_restante = float(datos.get("prep", _lobby_red_restante))
+	_lobby_red_conectados = maxi(1, int(datos.get("conectados", _lobby_red_conectados)))
 	if _bandera != null and datos.has("bandera"):
 		var banda: Dictionary = datos["bandera"]
 		_bandera.salud_actual = float(banda.get("hp", _bandera.salud_actual))
@@ -1537,7 +1578,10 @@ func _crear_publico() -> void:
 func _crear_controles_tactiles() -> void:
 	if _jugador == null:
 		return
-	var pantalla_tactil := DisplayServer.is_touchscreen_available()
+	# `is_touchscreen_available()` miente en varios Android (devuelve false y la
+	# partida arrancaba con la consola de escritorio, sin joystick). En móvil
+	# siempre hay capa táctil.
+	var pantalla_tactil := OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 	if not pantalla_tactil and not ("--tactil" in OS.get_cmdline_user_args()):
 		return
 	_tactil = TouchControls.new()
@@ -1902,6 +1946,8 @@ func puede_comprar_objeto(item: ItemData) -> bool:
 
 
 func puede_comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
+	# En el cliente no existe GameState: la bolsa es el oro del snapshot. Sin esto,
+	# aplicar un snapshot con la tienda abierta reventaba en `game_state.oro`.
 	if item == null or terminado or jugador == null or jugador.inventario == null:
 		return false
 	if jugador.global_position.x <= BORDE_ARENA + 1.0:
@@ -1909,7 +1955,8 @@ func puede_comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 	var inventario := jugador.inventario
 	var receta := inventario.receta_completada_por(item)
 	var coste := item.precio + (receta.precio_forja if receta != null else 0)
-	if game_state.oro < coste:
+	var bolsa: int = game_state.oro if game_state != null else oro
+	if bolsa < coste:
 		return false
 	if receta != null:
 		return true
@@ -1930,7 +1977,7 @@ func comprar_objeto(item: ItemData) -> bool:
 
 func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 	if not puede_comprar_para(jugador, item):
-		if jugador != null and game_state.oro < item.precio:
+		if jugador != null and game_state != null and game_state.oro < item.precio:
 			_avisar("Necesitas %d de oro" % item.precio, 2.0)
 		else:
 			_avisar("La mochila está llena y no completa ninguna receta", 2.5)
@@ -2026,9 +2073,20 @@ func revisar_forjas_automaticas() -> void:
 ## Sala de espera con cuenta atrás: se muestra mientras la partida prepara la
 ## primera oleada y desaparece al empezar el combate.
 func _actualizar_lobby() -> void:
-	if _hud == null or _oleadas == null or not is_instance_valid(_hud):
+	if _hud == null or not is_instance_valid(_hud):
 		return
 	var terminado_ya: bool = game_state != null and game_state.esta_terminado()
+	# En cliente el WaveManager está apagado a propósito: la espera viene en el
+	# snapshot. Antes se leía `_oleadas.tiempo_preparacion()` sin arrancar y la
+	# cuenta atrás se quedaba en 11 s para siempre (la partida parecía trabada).
+	if es_cliente:
+		if _lobby_red_activo and not terminado_ya:
+			_hud.establecer_lobby(true, _lobby_red_restante, _lobby_red_conectados, 3, false)
+		else:
+			_hud.establecer_lobby(false, 0.0, 0, 0, false)
+		return
+	if _oleadas == null:
+		return
 	var visible := _oleadas.en_espera() and not terminado_ya and not _publico_bloquea_lobby()
 	if not visible:
 		_hud.establecer_lobby(false, 0.0, 0, 0, false)
@@ -2036,8 +2094,6 @@ func _actualizar_lobby() -> void:
 	var conectados := 1
 	if es_servidor:
 		conectados = maxi(1, jugadores_red.size())
-	elif es_cliente:
-		conectados = maxi(1, _jugadores_remotos.size())
 	_hud.establecer_lobby(true, _oleadas.tiempo_preparacion(), conectados, 3, not (es_servidor or es_cliente))
 
 

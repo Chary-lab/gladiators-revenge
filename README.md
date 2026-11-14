@@ -4,7 +4,7 @@ Arena de supervivencia con perspectiva isométrica 2.5D en **Godot 4.7**, pensad
 para publicarse en **Web (HTML5 / WebAssembly)**. IP original: gladiadores orcos
 de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 
-## Estado (v1.8.1 jugable)
+## Estado (v1.8.3 jugable)
 
 Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
@@ -13,7 +13,7 @@ renderizadas, inventario de 6 ranuras con forja automática, objetos comunes, é
 legendarios con auras, arte 3D animado y audio CC0. **Cooperativo online autoritativo**
 para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 
-- 132 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
+- 133 comprobaciones de humo + 23 comprobaciones de red + simulación de 20 oleadas.
 - Export web sin threads, servible desde cualquier hosting estático.
 - Export Android (APK), servidor Docker y despliegue Web automático con Actions.
 - Revivir cooperativo, snapshots binarios a 15 Hz y tooltips/tienda rediseñados.
@@ -34,6 +34,9 @@ para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
   marcos de inventario por rareza. La sala de espera es sólo texto, sin panel.
 - **Tienda**: filtros por categoría y rareza, placas de estado (xN, NUEVO,
   FORJABLE) y ficha lateral con comparación de datos.
+- **Coop**: la sala de espera del cliente la manda el servidor (cuenta atrás
+  real), la capa táctil existe también dentro de una sala y elegir campeón
+  acorta la espera. El maestro pre-arranca una sola sala.
 - **HUD táctil**: joystick con aro de runas y una rueda con INTERACTUAR en el
   centro y Q/W/E/R alrededor (enfriamiento radial y segundos), pastilla de
   vida/maná, mercader/talentos/mochila y pausa. En móvil la consola de

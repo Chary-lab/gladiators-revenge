@@ -360,7 +360,9 @@ func _crear_pie() -> Control:
 	_volver.custom_minimum_size = Vector2(120, 34)
 	_volver.pressed.connect(_cerrar)
 	fila.add_child(_volver)
-	var ayuda := ForjaTema.etiqueta("1 · 2 · 3 cambian de clase   ·   Enter confirma   ·   Esc cierra", 10, ForjaTema.TENUE)
+	var tactil := OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	var texto_ayuda := "Tocá una clase y confirmá" if tactil else "1 · 2 · 3 cambian de clase   ·   Enter confirma   ·   Esc cierra"
+	var ayuda := ForjaTema.etiqueta(texto_ayuda, 10, ForjaTema.TENUE)
 	ayuda.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	fila.add_child(ayuda)
 	return fila

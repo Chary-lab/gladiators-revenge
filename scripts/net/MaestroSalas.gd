@@ -15,7 +15,7 @@ extends Node
 ## Uso: godot --headless -- --maestro [--salas=2] [--puerto=8080] [--puerto-base=9101]
 ## En la nube basta con PORT/SALAS/SERVER_PUBLIC_URL en el entorno.
 
-const SALAS_POR_DEFECTO := 2
+const SALAS_POR_DEFECTO := 1
 const PUERTO_POR_DEFECTO := 8080
 const PUERTO_BASE_POR_DEFECTO := 9101
 const MAX_CABECERA := 8192

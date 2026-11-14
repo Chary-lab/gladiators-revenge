@@ -146,7 +146,7 @@ func _crear_navegacion() -> Control:
 	_boton_solo.pressed.connect(_al_pulsar_solo)
 	columna.add_child(_boton_solo)
 
-	var pista := ForjaTema.etiqueta("Juego en solitario · 20 oleadas · elegís campeón en la armería", 11, ForjaTema.TENUE)
+	var pista := ForjaTema.etiqueta("Juego en solitario · 20 oleadas · elegís campeón en la forja", 11, ForjaTema.TENUE)
 	pista.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	columna.add_child(pista)
 
@@ -208,7 +208,7 @@ func _crear_navegacion() -> Control:
 	columna.add_child(_aviso_version)
 
 	var ayuda := ForjaTema.etiqueta(
-		"La clase se elige una sola vez por partida, en la armería del centro.", 10, ForjaTema.TENUE
+		"La clase se elige una sola vez por partida, en la forja de campeones.", 10, ForjaTema.TENUE
 	)
 	ayuda.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	columna.add_child(ayuda)

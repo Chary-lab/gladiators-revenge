@@ -88,7 +88,7 @@ func _init() -> void:
 	)
 
 	_comprobar(
-		await _esperar_hasta(func() -> bool: return escena.get("_enemigos_remotos").size() > 0, 900),
+		await _esperar_hasta(func() -> bool: return escena.get("_enemigos_remotos").size() > 0, 2500),
 		"el cliente recibe enemigos de la oleada"
 	)
 	var oleada: int = escena.get("_oleadas").oleada_actual

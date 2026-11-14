@@ -31,7 +31,7 @@ godot -- --captura-campeon                 # forja de campeones con vitrina 3D
 godot -- --captura-apodo                   # modal de apodo
 ```
 
-- Expected baseline: smoke **132/132**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **133/133**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
 - En `--headless` los fotogramas corren a miles por segundo: `await process_frame` no espera nada. Los tests esperan con `create_timer(0.01)` (`_esperar_hasta`) o `create_timer(segundos)`.
 - Exit warnings about 2–4 resources still in use come from audio/SceneTree teardown and are known. Fail on `SCRIPT ERROR`, parse/compile errors or failed checks.
@@ -62,6 +62,9 @@ godot -- --captura-apodo                   # modal de apodo
 - Vitrina 3D: `scripts/ui/VitrinaCampeon.gd` (SubViewport propio, tres luces, giro de presentación) muestra al gladiador de cuerpo entero en el lobby y en la forja de campeones. No se construye en headless (`DisplayServer.get_name() == "headless"`), así que las pruebas no pagan el coste de instanciar GLB. La cámara se orienta con `look_at_from_position()`: `look_at()` antes de entrar al árbol falla con "Node not inside tree".
 - Arranque local: `Arena._iniciar_local()` llama a `_pedir_apodo_y_campeon()` (no lo hace `_ready`, porque en Web/APK se entra por el lobby). Si `Perfil.apodo()` está vacío abre `NombreJugador` (CanvasLayer 62, campo `LineEdit`, 2–14 caracteres) y después la forja; el apodo se guarda en `user://perfil.cfg` y encabeza la ficha del HUD. `Perfil.normalizar()` filtra símbolos y conserva acentos.
 - La elección de campeón **no existe en el mapa**: `_crear_armeria()` no crea pedestales ni etiquetas (sólo es un no-op) y `_al_elegir_campeon()` equipa el arma del catálogo directamente (`equipar_arma`), sin coste y sin segunda elección. Si se cierra la forja sin clase, no hay `VOLVER` ni Esc: la elección es obligatoria.
+- Coop: el cliente no corre `WaveManager` (`set_process(false)` en `_iniciar_cliente()`), así que **nunca** leas `_oleadas.tiempo_preparacion()` en cliente: el snapshot trae `espera`, `prep` y `conectados`, y `_actualizar_lobby()` pinta la sala de espera con esos valores. Sin eso la cuenta atrás se quedaba clavada en 11 s y la partida parecía trabada. La capa táctil se crea también en `_iniciar_cliente()` (`_crear_controles_tactiles()`) y la forja se abre en `_al_recibir_bienvenida()`: en una sala el móvil entró con HUD de escritorio y sin joystick.
+- La espera inicial son 30 s; `WaveManager.acortar_preparacion(segundos)` la recorta cuando ya hay campeón (local en `_al_elegir_campeon()`, en red cuando todos los conectados tienen clase, `equipar_clase_red()`). `asegurar_preparacion()` sólo alarga.
+- En cliente `game_state` es `null`: la bolsa es `oro` (snapshot). `puede_comprar_para()` usa `game_state.oro` si existe y si no `oro`; sin ese corte, abrir la tienda mientras llega un snapshot lanzaba `Invalid access to property 'oro' on Nil`.
 - HUD de combate: la barra superior es un solo `Panel` (`_barra_superior`) con oleada/cuenta atrás/enemigos, estandarte y la **ficha del jugador** (`_ficha_jugador`: apodo, `Nv`, `ABATIDOS`, oro). El oro cuenta hacia arriba con un `lerp` en `_process` y la ficha da un pulso al cambiar; las bajas dan un pulso en `_bajas_jugador`. `WaveManager` lleva `bajas` y emite `enemigo_abatido(total)`; `Arena._crear_hud()` lo conecta a `ArenaHUD.establecer_bajas()`. No hay panel de estadísticas ni "PUNTOS": el octavo comando abre la forja.
 - Sala de espera: `ArenaHUD.establecer_lobby()` dibuja **sólo texto sin fondo** ("PREPÁRATE PARA LA SIGUIENTE OLEADA", cuenta atrás y "La oleada empieza en unos segundos"): nada de panel central tapando la arena.
 - Lobby/forja: `MenuRed` monta el lobby atmosférico (campeón en vitrina, salas como tarjetas, estado de red arriba) y `SeleccionCampeon` la ficha RPG de tres zonas (riel de clases, vitrina, ficha con nivel/atributos/estadísticas/habilidades/equipo). Los perfiles de clase salen de `Arena._perfiles_campeon()`: cualquier campo nuevo (tinte, arma visual, xp_requerida, habilidades con `id`) se agrega ahí y la pantalla lo consume.
@@ -117,7 +120,7 @@ playwright-cli.cmd open http://127.0.0.1:8137/ --browser msedge
 ## Verification gate
 
 1. `godot --headless --editor --quit`
-2. `godot --headless --script res://tests/smoke_test.gd` → 132/132
+2. `godot --headless --script res://tests/smoke_test.gd` → 133/133
 3. `godot --headless --script res://tests/wave_sim.gd` → 3/3
 4. `godot --headless --quit-after 600` → no script/parse errors
 5. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`

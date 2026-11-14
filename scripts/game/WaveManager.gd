@@ -288,6 +288,14 @@ func asegurar_preparacion(segundos: float) -> void:
 	_temporizador = maxf(_temporizador, segundos)
 
 
+## Recorta la espera (cuando todos ya eligieron campeón o el jugador confirmó):
+## la partida arranca enseguida en vez de dejar 30 s de reloj muerto.
+func acortar_preparacion(segundos: float) -> void:
+	if _estado != Estado.ESPERA:
+		return
+	_temporizador = minf(_temporizador, maxf(0.5, segundos))
+
+
 func tiempo_preparacion() -> float:
 	if _estado != Estado.ESPERA:
 		return 0.0

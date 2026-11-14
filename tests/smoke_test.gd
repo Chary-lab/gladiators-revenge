@@ -328,6 +328,18 @@ func _ejecutar() -> void:
 		"la barra superior incluye la ficha del jugador"
 	)
 
+	# --- Sala de espera: elegir campeón acorta la cuenta atrás ------------
+	var olas := WaveManager.new()
+	olas.iniciar([jugador], null, [], null)
+	escena.add_child(olas)
+	var antes_prep := olas.tiempo_preparacion()
+	olas.acortar_preparacion(2.0)
+	_comprobar(
+		antes_prep > 2.0 and olas.tiempo_preparacion() <= 2.0 and olas.en_espera(),
+		"acortar_preparacion recorta la espera sin salir de la sala"
+	)
+	olas.queue_free()
+
 	# --- Apodo y ficha del jugador ---------------------------------------
 	_comprobar(
 		Perfil.normalizar("  Orco  Épico  ") == "Orco Épico",

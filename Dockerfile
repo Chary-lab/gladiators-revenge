@@ -29,7 +29,7 @@ RUN godot --headless --path /app --import     && test -f /app/.godot/global_scri
 # El maestro escucha en PORT y levanta una sala (proceso Godot) por cada SALAS.
 # Necesita SUPABASE_SERVICE_KEY para que las salas se anuncien en el lobby.
 ENV PORT=9080
-ENV SALAS=2
+ENV SALAS=1
 EXPOSE 9080
 
-CMD ["sh", "-c", "exec godot --headless --path /app -- --maestro --puerto=${PORT:-9080} --salas=${SALAS:-2}"]
+CMD ["sh", "-c", "exec godot --headless --path /app -- --maestro --puerto=${PORT:-9080} --salas=${SALAS:-1}"]

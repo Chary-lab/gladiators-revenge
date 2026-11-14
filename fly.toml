@@ -6,7 +6,7 @@ primary_region = "gru"
 
 [env]
   PORT = "9080"
-  SALAS = "2"
+  SALAS = "1"
   # SUPABASE_SERVICE_KEY y SERVER_PUBLIC_URL se cargan como secretos:
   #   .\desplegar.ps1  (o: fly secrets set SUPABASE_SERVICE_KEY=... SERVER_PUBLIC_URL=https://<app>.fly.dev)
   # El maestro reparte la URL como wss://<app>.fly.dev/sala/<n>.
@@ -19,7 +19,8 @@ primary_region = "gru"
   min_machines_running = 0
 
 [[vm]]
-  # Cada sala es un proceso Godot (~180 MB) más el maestro: 2 salas piden 1 GB.
+  # Cada sala es un proceso Godot (~180 MB) más el maestro: una sola sala
+  # pre-arrancada llega de sobra para 3 jugadores y no duplica el lobby.
   memory = "1024mb"
   cpu_kind = "shared"
   cpus = 1
