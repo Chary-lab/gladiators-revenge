@@ -410,7 +410,15 @@ func _ejecutar() -> void:
 		var panel_tienda = hud.get("_tienda")
 		var grid: GridContainer = panel_tienda.get("_grid")
 		var cartas_mercado := grid.get_child_count()
-		_comprobar(cartas_mercado == ItemCatalog.vendibles().size(), "la tienda lista lo vendible en una sola cuadrícula")
+		var forjables := 0
+		for carta in grid.get_children():
+			if carta is Button and carta.has_meta(&"forjable"):
+				forjables += 1
+		_comprobar(
+			cartas_mercado == ItemCatalog.vendibles().size() + ItemCatalog.recetas().size()
+			and forjables == ItemCatalog.recetas().size(),
+			"la tienda lista lo vendible y los forjables con su receta en una sola cuadrícula"
+		)
 		_comprobar(panel_tienda.get("_chip_vender") != null, "la tienda tiene el modo VENDER")
 		panel_tienda._cambiar_modo(true)
 		await process_frame

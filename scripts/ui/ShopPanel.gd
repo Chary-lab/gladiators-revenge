@@ -211,9 +211,30 @@ func _reconstruir() -> void:
 	for item in ItemCatalog.vendibles():
 		_grid.add_child(_carta(item, _en_mochila(item.id), item.precio, false, -1))
 
+	# Los que no se venden se muestran igual, en gris: así el jugador ve qué puede
+	# forjar y qué ingrediente le falta, en vez de comprar a ciegas. Ordenados por
+	# coste de forja, que es como se desbloquean.
+	var forjables := ItemCatalog.recetas()
+	forjables.sort_custom(func(a: ItemData, b: ItemData) -> bool: return a.precio_forja < b.precio_forja)
+	for item in forjables:
+		_grid.add_child(_carta(item, 0, item.precio_forja, false, -1, true))
 
-## Tarjeta: icono, nombre y precio. Un toque compra o vende.
-func _carta(item: ItemData, cuantos: int, precio: int, vender: bool, indice: int) -> Button:
+
+## Texto de estado de una tarjeta forjable: qué falta o si la receta ya está.
+func _detalle_forjable(item: ItemData) -> String:
+	var faltan: Array[String] = []
+	for id in item.receta:
+		if _en_mochila(id) <= 0:
+			var ingrediente := ItemCatalog.obtener(id)
+			faltan.append(ingrediente.nombre if ingrediente != null else String(id))
+	if faltan.is_empty():
+		return "receta lista · se forja al comprar"
+	return "falta: " + ", ".join(faltan)
+
+
+## Tarjeta: icono, nombre y precio. Un toque compra o vende. `forjable` la deja
+## informativa: gris, sin acción, con el coste de forja y lo que falta.
+func _carta(item: ItemData, cuantos: int, precio: int, vender: bool, indice: int, forjable := false) -> Button:
 	var boton := Button.new()
 	boton.custom_minimum_size = Vector2(226, 74)
 	boton.focus_mode = Control.FOCUS_NONE
@@ -260,16 +281,29 @@ func _carta(item: ItemData, cuantos: int, precio: int, vender: bool, indice: int
 	precio_fila.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	textos.add_child(precio_fila)
 
-	var moneda := ForjaTema.IconoStat.new(&"oro", 12.0, acento)
-	moneda.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	precio_fila.add_child(moneda)
-	precio_fila.add_child(ForjaTema.rotulo("%d" % precio, 11, acento))
-	if cuantos > 1:
-		precio_fila.add_child(ForjaTema.rotulo("x%d" % cuantos, 10, ForjaTema.TENUE))
-	if vender:
-		precio_fila.add_child(ForjaTema.rotulo("VENTA", 9, ForjaTema.TENUE))
+	if forjable:
+		precio_fila.add_child(ForjaTema.rotulo("FORJA %d" % precio, 11, acento))
+		var detalle := ForjaTema.etiqueta(_detalle_forjable(item), 9, ForjaTema.TENUE)
+		detalle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		detalle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		textos.add_child(detalle)
+	else:
+		var moneda := ForjaTema.IconoStat.new(&"oro", 12.0, acento)
+		moneda.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		precio_fila.add_child(moneda)
+		precio_fila.add_child(ForjaTema.rotulo("%d" % precio, 11, acento))
+		if cuantos > 1:
+			precio_fila.add_child(ForjaTema.rotulo("x%d" % cuantos, 10, ForjaTema.TENUE))
+		if vender:
+			precio_fila.add_child(ForjaTema.rotulo("VENTA", 9, ForjaTema.TENUE))
 
-	if not vender:
+	if forjable:
+		# Informativa: no se compra, se forja sola al reunir los ingredientes.
+		boton.disabled = true
+		boton.mouse_default_cursor_shape = Control.CURSOR_ARROW
+		boton.modulate = Color(0.62, 0.60, 0.56, 1)
+		boton.set_meta(&"forjable", true)
+	elif not vender:
 		var alcanza: bool = _puede_comprar(item)
 		boton.disabled = not alcanza
 		boton.modulate = Color(1, 1, 1, 1) if alcanza else Color(0.62, 0.60, 0.56, 1)

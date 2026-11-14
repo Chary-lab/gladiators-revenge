@@ -32,8 +32,8 @@ para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 - **HUD de combate**: una sola barra superior con oleada, estandarte y la ficha
   del jugador (apodo, nivel, enemigos abatidos y oro, con contadores animados);
   marcos de inventario por rareza. La sala de espera es sólo texto, sin panel.
-- **Tienda**: filtros por categoría y rareza, placas de estado (xN, NUEVO,
-  FORJABLE) y ficha lateral con comparación de datos.
+- **Tienda**: una sola cuadrícula con lo que se vende y, en gris, lo que solo
+  se forja (con su coste y el ingrediente que falta), más el modo VENDER.
 - **Coop**: la sala de espera del cliente la manda el servidor (cuenta atrás
   real), la capa táctil existe también dentro de una sala y elegir campeón
   acorta la espera. El maestro pre-arranca una sola sala.
@@ -253,6 +253,9 @@ pergaminos, componentes y recetas. La mochila tiene 6 ranuras activas.
   rebotes), Cuerno de la Rebelión (cura el estandarte y da gritos de guerra),
   Capa del Comandante y Guadaña del Verdugo Ancestral (auras de mando).
 
+La tienda muestra también, al final de la cuadrícula y en gris, los objetos que
+solo se forjan: su coste de forja y qué ingrediente falta. No se compran.
+
 La forja es automática: al comprar el ingrediente que completa una receta, se
 consumen los materiales, se cobra la forja y, si el resultado completa otra
 receta, la cadena sigue hasta el legendario. Los objetos equipados aplican sus
@@ -336,7 +339,7 @@ scripts/
     MenuRed.gd              menú Jugar solo / Crear sala / Unirse a partida
     DamageNumbers.gd        números de daño/curación con pool
     TalentPanel.gd          panel de talentos con rangos y requisitos
-    ShopPanel.gd            tienda, recetario, forja y tooltips
+    ShopPanel.gd            tienda, forjables y tooltips
     IconStudio.gd           miniaturas 3D 64x64 con SubViewport y caché
     ItemModelFactory.gd     modelos de objetos y comandos con primitivas
     GladiatorPortrait.gd    busto 3D animado para la consola
