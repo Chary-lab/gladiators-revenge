@@ -62,6 +62,20 @@ func listar_servidores(callback: Callable) -> void:
 	_peticion(HTTPClient.METHOD_GET, ruta, "", false, _parse_servidores.bind(callback))
 
 
+## Borra anuncios huérfanos: si un proceso de sala murió sin despedirse, su fila
+## queda `activo=true` para siempre y el lobby la sigue listando (la lista ya
+## ignora lo viejo, pero la tabla crecía sin control). Sólo servidor.
+func limpiar_viejos(minutos := 10.0) -> void:
+	if not configurado_servidor():
+		return
+	var limite := int(Time.get_unix_time_from_system() - minutos * 60.0)
+	var iso := Time.get_datetime_string_from_unix_time(limite, true) + "Z"
+	var ruta := "/rest/v1/%s?actualizado_en=lt.%s" % [TABLA_SERVIDORES, iso]
+	_peticion(HTTPClient.METHOD_DELETE, ruta, "", true, func(_ok, _datos) -> void:
+		print("[SUPABASE] limpieza de salas anteriores a ", iso)
+	)
+
+
 func iniciar_latido(nombre: String, url_publica: String, max_jugadores := 3) -> void:
 	if not configurado_servidor():
 		print("[SUPABASE] sin SUPABASE_SERVICE_KEY; no se registra el servidor")

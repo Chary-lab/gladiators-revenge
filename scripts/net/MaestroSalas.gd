@@ -42,9 +42,18 @@ func iniciar() -> bool:
 		push_error("MaestroSalas: no se pudo abrir el puerto %d (%s)" % [_puerto, error_string(error)])
 		return false
 	print("[MAESTRO] escuchando en el puerto %d · %d salas desde %d" % [_puerto, _total, _puerto_base])
+	_limpiar_anuncios_viejos()
 	for n in range(1, _total + 1):
 		_arrancar_sala(n)
 	return true
+
+
+## Al arrancar, borra de Supabase los anuncios huérfanos (procesos muertos).
+func _limpiar_anuncios_viejos() -> void:
+	var supabase := Supabase.new()
+	supabase.name = "SupabaseLimpieza"
+	add_child(supabase)
+	supabase.limpiar_viejos(10.0)
 
 
 func _leer_opciones() -> void:
