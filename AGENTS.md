@@ -29,6 +29,7 @@ godot -- --captura-combate                 # windowed screenshot to captura_comb
 godot -- --captura-menu                    # lobby (fuerza el menú de red)
 godot -- --captura-campeon                 # forja de campeones con vitrina 3D
 godot -- --captura-apodo                   # modal de apodo
+godot -- --tactil --captura-ficha           # HUD táctil con la ficha del campeón abierta
 ```
 
 - Expected baseline: smoke **133/133**, wave sim **3/3**, net smoke A **11/11**, net smoke B **12/12**, clean 600-frame run.
@@ -70,7 +71,8 @@ godot -- --captura-apodo                   # modal de apodo
 - Lobby/forja: `MenuRed` monta el lobby atmosférico (campeón en vitrina, salas como tarjetas, estado de red arriba) y `SeleccionCampeon` la ficha RPG de tres zonas (riel de clases, vitrina, ficha con nivel/atributos/estadísticas/habilidades/equipo). Los perfiles de clase salen de `Arena._perfiles_campeon()`: cualquier campo nuevo (tinte, arma visual, xp_requerida, habilidades con `id`) se agrega ahí y la pantalla lo consume.
 - HUD de combate: la barra superior es un solo `Panel` (`_barra_superior`) con oleada/cuenta atrás/enemigos, estandarte, oro/puntos y la lengüeta `_overlay` colgando abajo a la izquierda (deja libre la sala de espera, que arranca en x=268). Las ranuras del inventario usan el marco del color de rareza del objeto.
 - Tienda: `ShopPanel` tiene filtros por categoría/rareza (`_filtro`, `_chips`, `_pasa_filtro`), tarjetas con franja de rareza y placa de estado (`_estado_carta`: xN, NUEVO, EN MOCHILA, FORJABLE). El filtro por defecto es `&"todo"`, así la cuadrícula muestra el catálogo completo y las pruebas que cuentan tarjetas siguen valiendo.
-- HUD táctil: `TouchControls` dibuja una rueda con **INTERACTUAR en el centro** y Q/W/E/R alrededor (`CENTRO_RUEDA`, `RADIO_RUEDA`, `ANGULOS`), enfriamiento radial (`_velos`) y segundos (`_cd_textos`), pastilla de vida/maná con nivel, accesos MERCADER/TALENTOS/MOCHILA y mochila propia. `Arena._crear_controles_tactiles()` llama a `ArenaHUD.establecer_modo_tactil(true)`: en móvil se apaga la consola de escritorio (minimapa, retrato, ficha, inventario y parrilla QWER) y la pantalla queda despejada. El modo táctil sólo se activa con pantalla táctil o `--tactil`; el resto (menús, forja, tienda, HUD superior) es idéntico en Web y APK.
+- Tienda simple (`ShopPanel`): una sola cuadrícula con todos los vendibles y dos chips, `COMPRAR` y `VENDER`; un toque compra o vende, sin seleccionar y confirmar. El recetario y la ficha lateral desaparecieron: la forja se encadena sola al comprar el último ingrediente. El smoke comprueba `_grid` y `_chip_vender`, no `_lista`/`_tabs`.
+- HUD táctil: `TouchControls` dibuja una rueda con **INTERACTUAR en el centro** y Q/W/E/R alrededor (`CENTRO_RUEDA`, `RADIO_RUEDA`, `ANGULOS`), enfriamiento radial (`_velos`) y segundos (`_cd_textos`), pastilla de vida/maná con nivel, accesos MERCADER/TALENTOS/MOCHILA y mochila propia. `Arena._crear_controles_tactiles()` llama a `ArenaHUD.establecer_modo_tactil(true)`: en móvil se apaga la consola de escritorio (minimapa, retrato, ficha, inventario y parrilla QWER) y la pantalla queda despejada. Cada botón de habilidad lleva su nivel (`Nv 3`, o el nivel de desbloqueo si está bloqueada) en un rótulo anclado abajo, y el botón `FICHA` abre una tarjeta semitransparente (`_panel_ficha`, `RichTextLabel`) con clase, XP, vida/maná, daño, armadura, crítico, atributos y las cuatro habilidades con nivel, coste, recarga y descripción. El modo táctil se activa con `OS.has_feature("mobile")`, pantalla táctil, `--tactil` o `?tactil=1` en la web; el resto (menús, forja, tienda, HUD superior) es idéntico en Web y APK.
 - Selección de campeón: `scripts/ui/SeleccionCampeon.gd` (CanvasLayer 55) se abre al empezar la partida local si no hay clase (`Arena._mostrar_seleccion_campeon`), recibe `_perfiles_campeon()` con vida/maná/daño/defensa calculados desde `GladiatorStats` y el arma de la clase, y al confirmar equipa por la misma vía que el pedestal (`pedestal.comprar`) o pide clase al servidor. `--captura-campeon` la fotografía.
 - Táctil: `scripts/ui/TouchControls.gd` tiene joystick (base + perilla, emite `mover(direccion)`), Q/W/E/R y DETENER/INTERACTUAR. El gladiador usa `mover_tactil(direccion)` (movimiento directo, sin navegación) y en red el cliente manda la acción `mover` a ~8 Hz mientras se mantiene la dirección.
 - Ajustes: `scripts/core/Ajustes.gd` (user://ajustes.cfg) guarda `volumen` y `escala_tactil`; `SettingsPanel` los edita desde el menú. `Arena._ready` los carga y aplica (bus Master y escala del joystick/botones).
@@ -128,3 +130,15 @@ playwright-cli.cmd open http://127.0.0.1:8137/ --browser msedge
 7. Online change → run server + `net_smoke` + `net_smoke_b`; expect 11/11 and 12/12.
 
 Commits use conventional Spanish messages (`feat(v2): …`, `feat(combate): …`) with no signatures. Do not commit generated builds, captures or `.godot/`.
+
+## Skills externas
+
+Antes de improvisar una capacidad que no tenemos (una API desconocida, un dominio sin
+cobertura, un bug que huele a patrón conocido), buscar en el registro de skills y
+evaluar antes de escribir código propio:
+
+1. `hermes skills search "<tema>" --limit 10 --json`
+2. Revisar la candidata: si duplica `godot-gdscript` o aporta poco, se descarta.
+3. Instalar y avisar en el reporte qué se instaló y de dónde (`skills-sh/...`).
+4. Si el install nativo falla por rate limit de GitHub, el camino alterno es
+   `bash ~/AppData/Local/hermes/skills/instalar-skills-externas/scripts/instalar.sh`.

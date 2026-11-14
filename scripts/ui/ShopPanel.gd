@@ -1,36 +1,23 @@
 class_name ShopPanel
 extends PanelContainer
-## Mercader de la Rebelión con tarjetas visuales, rareza, detalle rico y forja.
+## Mercader de la Rebelión, versión simple: una sola lista de tarjetas y un
+## toque para comprar. Sin pestañas de rarezas, sin ficha lateral y sin dos
+## pasos (seleccionar y después confirmar): nombre, precio y listo.
 ## La lógica de compra sigue viviendo en Arena/InventoryComponent.
 
-const ANCHO := 980.0
-const ALTO := 566.0
+const ANCHO := 760.0
+const ALTO := 470.0
+const COLUMNAS := 3
 
 var _jugador: GladiatorController
 var _arena: Node
 var _hud: ArenaHUD
-var _lista: GridContainer
-var _detalle_panel: PanelContainer
-var _detalle_icono: TextureRect
-var _detalle_titulo: Label
-var _detalle_tipo: Label
-var _detalle_desc: Label
-var _detalle_stats: RichTextLabel
-var _detalle_receta: RichTextLabel
+var _grid: GridContainer
 var _oro: Label
-var _comprar: Button
-var _tab_mercado: Button
-var _tab_recetas: Button
-var _tab_vender: Button
-var _seleccionado: ItemData
-var _modo_recetas := false
-var _modo_vender := false
-var _ranura_seleccionada: int = -1
-var _botones: Dictionary = {}
-var _detalle_tween: Tween
-## Filtro activo de la cuadrícula: todo, consumibles, equipo, épicos o legendarios.
-var _filtro: StringName = &"todo"
-var _chips: Array = []
+var _aviso: Label
+var _chip_comprar: Button
+var _chip_vender: Button
+var _vender := false
 
 
 func _ready() -> void:
@@ -40,19 +27,17 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(ANCHO, ALTO)
 	size = Vector2(ANCHO, ALTO)
 	anchor_left = 0.5
-	anchor_top = 0.0
 	anchor_right = 0.5
-	anchor_bottom = 0.0
 	offset_left = -ANCHO * 0.5
-	offset_top = 80.0
 	offset_right = ANCHO * 0.5
-	offset_bottom = 80.0 + ALTO
-	add_theme_stylebox_override("panel", _estilo_panel())
+	offset_top = 96.0
+	offset_bottom = 96.0 + ALTO
+	add_theme_stylebox_override("panel", ForjaTema.estilo_ventana())
 
 	var margen := MarginContainer.new()
 	margen.add_theme_constant_override("margin_left", 18)
 	margen.add_theme_constant_override("margin_right", 18)
-	margen.add_theme_constant_override("margin_top", 14)
+	margen.add_theme_constant_override("margin_top", 12)
 	margen.add_theme_constant_override("margin_bottom", 12)
 	add_child(margen)
 
@@ -60,173 +45,67 @@ func _ready() -> void:
 	columna.add_theme_constant_override("separation", 8)
 	margen.add_child(columna)
 
+	# --- Cabecera: título, oro y cerrar ---
 	var cabecera := HBoxContainer.new()
+	cabecera.add_theme_constant_override("separation", 10)
 	columna.add_child(cabecera)
 
-	var titulo := Label.new()
-	titulo.text = "MERCADER DE LA REBELIÓN"
-	titulo.add_theme_font_size_override("font_size", 24)
-	titulo.add_theme_color_override("font_color", Color(0.94, 0.76, 0.38))
-	titulo.add_theme_constant_override("outline_size", 4)
-	titulo.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02))
-	titulo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var titulo := ForjaTema.titulo("MERCADER", 24, ForjaTema.ORO_CLARO)
+	titulo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cabecera.add_child(titulo)
 
-	_oro = Label.new()
-	_oro.add_theme_font_size_override("font_size", 17)
-	_oro.add_theme_color_override("font_color", Color(0.98, 0.84, 0.45))
+	var relleno := Control.new()
+	relleno.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cabecera.add_child(relleno)
+
+	var icono_oro := ForjaTema.IconoStat.new(&"oro", 16.0, ForjaTema.ORO)
+	icono_oro.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cabecera.add_child(icono_oro)
+	_oro = ForjaTema.titulo("0", 20, ForjaTema.ORO)
+	_oro.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cabecera.add_child(_oro)
 
-	var cerrar := Button.new()
-	cerrar.text = "F / ESC"
-	cerrar.flat = true
-	cerrar.focus_mode = Control.FOCUS_NONE
-	cerrar.add_theme_font_size_override("font_size", 13)
+	var cerrar := ForjaTema.boton("CERRAR", 12)
+	cerrar.custom_minimum_size = Vector2(104, 34)
 	cerrar.pressed.connect(cerrar_panel)
 	cabecera.add_child(cerrar)
 
-	var subtitulo := Label.new()
-	subtitulo.text = "Equipa, forja y convierte el oro en poder"
-	subtitulo.add_theme_font_size_override("font_size", 11)
-	subtitulo.add_theme_color_override("font_color", Color(0.68, 0.63, 0.54))
-	columna.add_child(subtitulo)
+	# --- Dos modos nada más ---
+	var chips := HBoxContainer.new()
+	chips.add_theme_constant_override("separation", 8)
+	columna.add_child(chips)
 
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 8)
-	columna.add_child(tabs)
-	_tab_mercado = _boton_tab("MERCADO")
-	_tab_mercado.pressed.connect(_cambiar_tab.bind(0))
-	tabs.add_child(_tab_mercado)
-	_tab_recetas = _boton_tab("RECETARIO")
-	_tab_recetas.pressed.connect(_cambiar_tab.bind(1))
-	tabs.add_child(_tab_recetas)
-	_tab_vender = _boton_tab("VENDER")
-	_tab_vender.pressed.connect(_cambiar_tab.bind(2))
-	tabs.add_child(_tab_vender)
+	_chip_comprar = ForjaTema.boton("COMPRAR", 13)
+	_chip_comprar.custom_minimum_size = Vector2(140, 34)
+	_chip_comprar.pressed.connect(_cambiar_modo.bind(false))
+	chips.add_child(_chip_comprar)
 
-	# Filtros por categoría y rareza: la cuadrícula se reduce sin cambiar de pestaña.
-	var filtros := HBoxContainer.new()
-	filtros.add_theme_constant_override("separation", 6)
-	columna.add_child(filtros)
-	for datos in [
-		[&"todo", "TODO"],
-		[&"consumible", "CONSUMIBLES"],
-		[&"equipo", "EQUIPO"],
-		[&"epico", "ÉPICOS"],
-		[&"legendario", "LEGENDARIOS"],
-	]:
-		var chip := ForjaTema.boton(String(datos[1]), 10)
-		chip.custom_minimum_size = Vector2(104, 26)
-		chip.pressed.connect(_cambiar_filtro.bind(datos[0]))
-		filtros.add_child(chip)
-		_chips.append([datos[0], chip])
+	_chip_vender = ForjaTema.boton("VENDER", 13)
+	_chip_vender.custom_minimum_size = Vector2(140, 34)
+	_chip_vender.pressed.connect(_cambiar_modo.bind(true))
+	chips.add_child(_chip_vender)
 
-	var cuerpo := HBoxContainer.new()
-	cuerpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	cuerpo.add_theme_constant_override("separation", 12)
-	columna.add_child(cuerpo)
+	_aviso = ForjaTema.etiqueta("Tocá un objeto para comprarlo.", 11, ForjaTema.TENUE)
+	_aviso.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_aviso.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chips.add_child(_aviso)
 
+	columna.add_child(ForjaTema.regla(ANCHO - 36.0))
+
+	# --- Una sola lista con scroll ---
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(590, 366)
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	cuerpo.add_child(scroll)
+	columna.add_child(scroll)
 
-	_lista = GridContainer.new()
-	_lista.columns = 3
-	_lista.add_theme_constant_override("h_separation", 8)
-	_lista.add_theme_constant_override("v_separation", 8)
-	_lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_lista)
+	_grid = GridContainer.new()
+	_grid.columns = COLUMNAS
+	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_grid.add_theme_constant_override("h_separation", 10)
+	_grid.add_theme_constant_override("v_separation", 10)
+	scroll.add_child(_grid)
 
-	_detalle_panel = PanelContainer.new()
-	_detalle_panel.custom_minimum_size = Vector2(330, 366)
-	_detalle_panel.add_theme_stylebox_override("panel", _estilo_detalle())
-	cuerpo.add_child(_detalle_panel)
-
-	var detalle_margen := MarginContainer.new()
-	detalle_margen.add_theme_constant_override("margin_left", 12)
-	detalle_margen.add_theme_constant_override("margin_right", 12)
-	detalle_margen.add_theme_constant_override("margin_top", 12)
-	detalle_margen.add_theme_constant_override("margin_bottom", 12)
-	_detalle_panel.add_child(detalle_margen)
-
-	var detalle := VBoxContainer.new()
-	detalle.add_theme_constant_override("separation", 7)
-	detalle_margen.add_child(detalle)
-
-	var cab_detalle := HBoxContainer.new()
-	cab_detalle.add_theme_constant_override("separation", 10)
-	detalle.add_child(cab_detalle)
-
-	_detalle_icono = TextureRect.new()
-	_detalle_icono.custom_minimum_size = Vector2(70, 70)
-	_detalle_icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_detalle_icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_detalle_icono.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	cab_detalle.add_child(_detalle_icono)
-
-	var detalle_textos := VBoxContainer.new()
-	detalle_textos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detalle_textos.add_theme_constant_override("separation", 2)
-	cab_detalle.add_child(detalle_textos)
-	_detalle_titulo = Label.new()
-	_detalle_titulo.add_theme_font_size_override("font_size", 18)
-	_detalle_titulo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detalle_textos.add_child(_detalle_titulo)
-	_detalle_tipo = Label.new()
-	_detalle_tipo.add_theme_font_size_override("font_size", 11)
-	detalle_textos.add_child(_detalle_tipo)
-	_detalle_desc = Label.new()
-	_detalle_desc.add_theme_font_size_override("font_size", 11)
-	_detalle_desc.add_theme_color_override("font_color", Color(0.76, 0.72, 0.64))
-	_detalle_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detalle_textos.add_child(_detalle_desc)
-
-	detalle.add_child(HSeparator.new())
-
-	var scroll_detalle := ScrollContainer.new()
-	scroll_detalle.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll_detalle.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	detalle.add_child(scroll_detalle)
-	var contenido := VBoxContainer.new()
-	contenido.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	contenido.add_theme_constant_override("separation", 8)
-	scroll_detalle.add_child(contenido)
-
-	_detalle_stats = RichTextLabel.new()
-	_detalle_stats.bbcode_enabled = true
-	_detalle_stats.fit_content = true
-	_detalle_stats.scroll_active = false
-	_detalle_stats.custom_minimum_size = Vector2(296, 0)
-	_detalle_stats.add_theme_font_size_override("normal_font_size", 11)
-	_detalle_stats.add_theme_color_override("default_color", Color(0.9, 0.86, 0.78))
-	contenido.add_child(_detalle_stats)
-
-	_detalle_receta = RichTextLabel.new()
-	_detalle_receta.bbcode_enabled = true
-	_detalle_receta.fit_content = true
-	_detalle_receta.scroll_active = false
-	_detalle_receta.custom_minimum_size = Vector2(296, 0)
-	_detalle_receta.add_theme_font_size_override("normal_font_size", 10)
-	_detalle_receta.add_theme_color_override("default_color", Color(0.82, 0.78, 0.7))
-	contenido.add_child(_detalle_receta)
-
-	_comprar = Button.new()
-	_comprar.text = "COMPRAR"
-	_comprar.custom_minimum_size = Vector2(0, 42)
-	_comprar.focus_mode = Control.FOCUS_NONE
-	_comprar.add_theme_font_size_override("font_size", 15)
-	_comprar.pressed.connect(_comprar_seleccionado)
-	detalle.add_child(_comprar)
-
-	var pie := Label.new()
-	pie.text = "Compra el ingrediente que falta y la forja se encadena automáticamente."
-	pie.add_theme_font_size_override("font_size", 11)
-	pie.add_theme_color_override("font_color", Color(0.62, 0.58, 0.5))
-	columna.add_child(pie)
-
-	_actualizar_tabs()
+	_actualizar_chips()
 
 
 func configurar(jugador: GladiatorController, arena: Node, hud: ArenaHUD = null) -> void:
@@ -260,14 +139,10 @@ func cerrar_panel() -> void:
 
 
 func modo_abierto() -> void:
-	_seleccionado = null
-	_modo_recetas = false
-	_modo_vender = false
-	_ranura_seleccionada = -1
+	_vender = false
 	if _arena != null and _arena.has_method("revisar_forjas_automaticas"):
 		_arena.revisar_forjas_automaticas()
-	if _tab_mercado != null:
-		_actualizar_tabs()
+	_actualizar_chips()
 
 
 func _unhandled_input(evento: InputEvent) -> void:
@@ -281,310 +156,135 @@ func _unhandled_input(evento: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func _cambiar_tab(modo: int) -> void:
-	var era_recetas := _modo_recetas
-	var era_vender := _modo_vender
-	_modo_recetas = modo == 1
-	_modo_vender = modo == 2
-	if _modo_recetas == era_recetas and _modo_vender == era_vender:
+func _cambiar_modo(vender: bool) -> void:
+	if vender == _vender:
 		return
-	_seleccionado = null
-	_ranura_seleccionada = -1
-	if _hud != null:
-		_hud.ocultar_tooltip()
-	_actualizar_tabs()
+	_vender = vender
+	_actualizar_chips()
 	_reconstruir()
+	Sfx.reproducir(&"click", -12.0)
 
 
-func _actualizar_tabs() -> void:
-	if _tab_mercado == null or _tab_recetas == null or _tab_vender == null:
+func _actualizar_chips() -> void:
+	if _chip_comprar == null:
 		return
-	var activo_mercado := not _modo_recetas and not _modo_vender
-	_tab_mercado.add_theme_stylebox_override("normal", _estilo_tab(activo_mercado))
-	_tab_recetas.add_theme_stylebox_override("normal", _estilo_tab(_modo_recetas))
-	_tab_vender.add_theme_stylebox_override("normal", _estilo_tab(_modo_vender))
-	_tab_mercado.add_theme_stylebox_override("hover", _estilo_tab(activo_mercado))
-	_tab_recetas.add_theme_stylebox_override("hover", _estilo_tab(_modo_recetas))
-	_tab_vender.add_theme_stylebox_override("hover", _estilo_tab(_modo_vender))
-	_tab_mercado.add_theme_color_override("font_color", Color(0.08, 0.07, 0.06) if activo_mercado else Color(0.75, 0.70, 0.62))
-	_tab_recetas.add_theme_color_override("font_color", Color(0.08, 0.07, 0.06) if _modo_recetas else Color(0.75, 0.70, 0.62))
-	_tab_vender.add_theme_color_override("font_color", Color(0.08, 0.07, 0.06) if _modo_vender else Color(0.75, 0.70, 0.62))
+	_pintar_chip(_chip_comprar, not _vender)
+	_pintar_chip(_chip_vender, _vender)
+	_aviso.text = "Tocá un objeto para venderlo por la mitad." if _vender else "Tocá un objeto para comprarlo."
+
+
+func _pintar_chip(chip: Button, activo: bool) -> void:
+	var estilo := ForjaTema.estilo_tarjeta(ForjaTema.ORO if activo else ForjaTema.ORO_OSCURO, activo, true)
+	chip.add_theme_stylebox_override("normal", estilo)
+	chip.add_theme_stylebox_override("hover", estilo)
+	chip.add_theme_stylebox_override("pressed", estilo)
+	chip.add_theme_color_override("font_color", Color(0.07, 0.06, 0.05) if activo else ForjaTema.TEXTO)
 
 
 func _reconstruir() -> void:
-	if _lista == null:
+	if _grid == null:
 		return
-	for hijo in _lista.get_children():
+	for hijo in _grid.get_children():
 		hijo.queue_free()
-	_botones.clear()
-	_oro.text = "ORO  %d" % _oro_actual()
-	_actualizar_chips()
+	_oro.text = str(_oro_actual())
 
-	var items: Array[ItemData] = []
-	if _modo_recetas:
-		items = ItemCatalog.recetas()
-	elif _modo_vender:
-		items = []  # modo vender: se construye desde las ranuras abajo
-	else:
-		items = ItemCatalog.vendibles()
-	# Modo vender lista ranuras, no catálogo: el filtro no aplica.
-	if not _modo_vender:
-		items = items.filter(_pasa_filtro)
-	for item in items:
-		_crear_carta(item)
-
-	# Modo vender: mostrar ranuras del inventario del jugador
-	if _modo_vender and _jugador != null and _jugador.inventario != null:
+	if _vender:
+		if _jugador == null or _jugador.inventario == null:
+			return
+		var algo := false
 		for i in _jugador.inventario.ranuras.size():
-			var ranura := _jugador.inventario.ranuras[i]
+			var ranura: Dictionary = _jugador.inventario.ranuras[i]
 			var item: ItemData = ranura.get("item")
 			if item == null:
 				continue
-			_crear_carta_venta(item, i)
-
-	if not _modo_vender and (_seleccionado == null or not items.has(_seleccionado)):
-		_seleccionado = items[0] if not items.is_empty() else null
-	for item in items:
-		if _botones.has(item.id):
-			_aplicar_estilo_carta(_botones[item.id], item)
-	_actualizar_detalle()
-
-
-func _crear_carta(item: ItemData) -> void:
-	var boton := Button.new()
-	boton.custom_minimum_size = Vector2(188, 98)
-	boton.size = Vector2(188, 98)
-	boton.focus_mode = Control.FOCUS_NONE
-	boton.text = ""
-	boton.clip_contents = true
-	_aplicar_estilo_carta(boton, item)
-
-	var icono := TextureRect.new()
-	icono.position = Vector2(8, 8)
-	icono.size = Vector2(42, 42)
-	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icono.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	icono.texture = IconStudio.obtener(item.id, IconStudio.CATEGORIA_OBJETO)
-	IconStudio.escuchar(item.id, Callable(self, "_icono_listo").bind(icono))
-	boton.add_child(icono)
-
-	var nombre := Label.new()
-	nombre.position = Vector2(56, 4)
-	nombre.size = Vector2(126, 28)
-	nombre.text = item.nombre
-	nombre.add_theme_font_size_override("font_size", 11)
-	nombre.add_theme_color_override("font_color", _rareza_color(item))
-	nombre.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	nombre.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	boton.add_child(nombre)
-
-	var precio := Label.new()
-	precio.position = Vector2(56, 32)
-	precio.size = Vector2(126, 15)
-	precio.text = ("Forja %d" % item.precio_forja) if _modo_recetas else ("%d oro" % item.precio)
-	precio.add_theme_font_size_override("font_size", 10)
-	precio.add_theme_color_override("font_color", Color(0.95, 0.78, 0.38))
-	precio.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	boton.add_child(precio)
-
-	var resumen := Label.new()
-	resumen.position = Vector2(8, 54)
-	resumen.size = Vector2(172, 38)
-	resumen.text = _resumen_bonos(item)
-	resumen.add_theme_font_size_override("font_size", 9)
-	resumen.add_theme_color_override("font_color", Color(0.72, 0.76, 0.66))
-	resumen.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	resumen.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	boton.add_child(resumen)
-
-	# Franja de rareza a la izquierda y placa de estado (x2, NUEVO, LISTA).
-	var franja := ColorRect.new()
-	franja.color = _rareza_color(item)
-	franja.position = Vector2.ZERO
-	franja.size = Vector2(3, 98)
-	franja.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	boton.add_child(franja)
-	var estado := _estado_carta(item)
-	if not estado.is_empty():
-		_agregar_insignia(boton, estado, _rareza_color(item))
-
-	boton.tooltip_text = item.nombre
-	boton.mouse_entered.connect(_al_entrar_carta.bind(item, boton))
-	boton.mouse_exited.connect(_al_salir_carta.bind(boton))
-	boton.pressed.connect(_seleccionar.bind(item, boton))
-	_lista.add_child(boton)
-	_botones[item.id] = boton
-
-
-func _crear_carta_venta(item: ItemData, indice: int) -> void:
-	var boton := Button.new()
-	boton.custom_minimum_size = Vector2(188, 98)
-	boton.size = Vector2(188, 98)
-	boton.focus_mode = Control.FOCUS_NONE
-	boton.text = ""
-	boton.clip_contents = true
-	_aplicar_estilo_carta(boton, item)
-
-	var icono := TextureRect.new()
-	icono.position = Vector2(8, 8)
-	icono.size = Vector2(42, 42)
-	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icono.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	icono.texture = IconStudio.obtener(item.id, IconStudio.CATEGORIA_OBJETO)
-	IconStudio.escuchar(item.id, Callable(self, "_icono_listo").bind(icono))
-	boton.add_child(icono)
-
-	var nombre := Label.new()
-	nombre.position = Vector2(56, 4)
-	nombre.size = Vector2(126, 28)
-	nombre.text = item.nombre
-	nombre.add_theme_font_size_override("font_size", 11)
-	nombre.add_theme_color_override("font_color", _rareza_color(item))
-	nombre.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	nombre.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	boton.add_child(nombre)
-
-	var precio := Label.new()
-	precio.position = Vector2(56, 24)
-	precio.size = Vector2(124, 15)
-	precio.text = "Vende %d" % _jugador.inventario.precio_venta(indice)
-	precio.add_theme_font_size_override("font_size", 10)
-	precio.add_theme_color_override("font_color", Color(0.72, 0.76, 0.66))
-	precio.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	boton.add_child(precio)
-
-	var btn_vender := Button.new()
-	btn_vender.text = "VENDER"
-	btn_vender.position = Vector2(56, 50)
-	btn_vender.size = Vector2(124, 32)
-	btn_vender.focus_mode = Control.FOCUS_NONE
-	btn_vender.add_theme_font_size_override("font_size", 11)
-	btn_vender.pressed.connect(_vender_ranura.bind(indice))
-	boton.add_child(btn_vender)
-
-	boton.pressed.connect(_seleccionar_ranura.bind(indice))
-	boton.mouse_entered.connect(_al_entrar_carta.bind(item, boton))
-	boton.mouse_exited.connect(_al_salir_carta.bind(boton))
-	_lista.add_child(boton)
-
-	# Resaltar si esta ranura esta seleccionada
-	if _ranura_seleccionada == indice:
-		var estilo := StyleBoxFlat.new()
-		estilo.bg_color = Color(0.96, 0.78, 0.30)
-		estilo.border_color = Color(1.0, 0.9, 0.6)
-		estilo.set_border_width_all(3)
-		estilo.set_corner_radius_all(6)
-		boton.add_theme_stylebox_override("normal", estilo)
-
-func _seleccionar_ranura(indice: int) -> void:
-	if _jugador == null or _jugador.inventario == null:
+			algo = true
+			_grid.add_child(_carta(item, int(ranura.get("cantidad", 1)), _jugador.inventario.precio_venta(i), true, i))
+		if not algo:
+			_grid.add_child(ForjaTema.etiqueta("No llevás nada que vender.", 13, ForjaTema.TENUE))
 		return
-	if _ranura_seleccionada == indice:
-		_ranura_seleccionada = -1
-	elif _ranura_seleccionada >= 0:
-		_jugador.inventario.intercambiar(_ranura_seleccionada, indice)
-		_ranura_seleccionada = -1
+
+	for item in ItemCatalog.vendibles():
+		_grid.add_child(_carta(item, _en_mochila(item.id), item.precio, false, -1))
+
+
+## Tarjeta: icono, nombre y precio. Un toque compra o vende.
+func _carta(item: ItemData, cuantos: int, precio: int, vender: bool, indice: int) -> Button:
+	var boton := Button.new()
+	boton.custom_minimum_size = Vector2(226, 74)
+	boton.focus_mode = Control.FOCUS_NONE
+	boton.text = ""
+	boton.clip_contents = true
+	var acento := _rareza_color(item)
+	boton.add_theme_stylebox_override("normal", ForjaTema.estilo_tarjeta(acento, false, true))
+	boton.add_theme_stylebox_override("hover", ForjaTema.estilo_tarjeta(acento, true, true))
+	boton.add_theme_stylebox_override("pressed", ForjaTema.estilo_tarjeta(ForjaTema.ORO_CLARO, true, true))
+	boton.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+	var fila := HBoxContainer.new()
+	fila.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fila.offset_left = 8
+	fila.offset_right = -8
+	fila.add_theme_constant_override("separation", 8)
+	fila.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boton.add_child(fila)
+
+	var icono := TextureRect.new()
+	icono.custom_minimum_size = Vector2(44, 44)
+	icono.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icono.texture = IconStudio.obtener(item.id, IconStudio.CATEGORIA_OBJETO)
+	IconStudio.escuchar(item.id, Callable(self, "_icono_listo").bind(icono))
+	fila.add_child(icono)
+
+	var textos := VBoxContainer.new()
+	textos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	textos.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	textos.add_theme_constant_override("separation", 1)
+	textos.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fila.add_child(textos)
+
+	var nombre := ForjaTema.etiqueta(item.nombre, 13, ForjaTema.TEXTO_FUERTE)
+	nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	nombre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	textos.add_child(nombre)
+
+	var precio_fila := HBoxContainer.new()
+	precio_fila.add_theme_constant_override("separation", 4)
+	precio_fila.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	textos.add_child(precio_fila)
+
+	var moneda := ForjaTema.IconoStat.new(&"oro", 12.0, acento)
+	moneda.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	precio_fila.add_child(moneda)
+	precio_fila.add_child(ForjaTema.rotulo("%d" % precio, 11, acento))
+	if cuantos > 1:
+		precio_fila.add_child(ForjaTema.rotulo("x%d" % cuantos, 10, ForjaTema.TENUE))
+	if vender:
+		precio_fila.add_child(ForjaTema.rotulo("VENTA", 9, ForjaTema.TENUE))
+
+	if not vender:
+		var alcanza: bool = _puede_comprar(item)
+		boton.disabled = not alcanza
+		boton.modulate = Color(1, 1, 1, 1) if alcanza else Color(0.62, 0.60, 0.56, 1)
+		boton.pressed.connect(_comprar.bind(item))
 	else:
-		_ranura_seleccionada = indice
+		boton.pressed.connect(_vender_ranura.bind(indice))
+	return boton
+
+
+func _comprar(item: ItemData) -> void:
+	if _arena == null or not _arena.has_method("comprar_objeto"):
+		return
+	_arena.comprar_objeto(item)
 	_reconstruir()
+
 
 func _vender_ranura(indice: int) -> void:
-	if _jugador == null or _jugador.inventario == null or _arena == null:
+	if _arena == null or not _arena.has_method("vender_objeto"):
 		return
-	if _arena.has_method("vender_objeto"):
-		_arena.vender_objeto(_jugador, indice)
-	_ranura_seleccionada = -1
-	_reconstruir()
-
-func _al_entrar_carta(item: ItemData, boton: Button) -> void:
-	boton.pivot_offset = boton.size * 0.5
-	var tween := create_tween()
-	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	tween.tween_property(boton, "scale", Vector2(1.035, 1.035), 0.12).set_trans(Tween.TRANS_QUAD)
-	# La ficha lateral ya muestra todos los datos: sin tooltip flotante.
-
-
-func _al_salir_carta(boton: Button) -> void:
-	var tween := create_tween()
-	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	tween.tween_property(boton, "scale", Vector2.ONE, 0.12)
-
-
-func _seleccionar(item: ItemData, _boton: Button) -> void:
-	_seleccionado = item
-	for id in _botones.keys():
-		_aplicar_estilo_carta(_botones[id], _item_por_id(id, item))
-	_actualizar_detalle()
-	if _detalle_tween != null and _detalle_tween.is_valid():
-		_detalle_tween.kill()
-	_detalle_panel.modulate.a = 0.55
-	_detalle_tween = create_tween()
-	_detalle_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
-	_detalle_tween.tween_property(_detalle_panel, "modulate:a", 1.0, 0.18)
-	Sfx.reproducir(&"click", -10.0)
-
-
-func _item_por_id(id: StringName, referencia: ItemData) -> ItemData:
-	var item := ItemCatalog.obtener(id)
-	return item if item != null else referencia
-
-
-func _actualizar_detalle() -> void:
-	if _seleccionado == null:
-		_detalle_titulo.text = "Sin selección"
-		_detalle_tipo.text = ""
-		_detalle_desc.text = "Elige un objeto para ver stats, receta y mejoras."
-		_detalle_stats.text = ""
-		_detalle_receta.text = ""
-		_detalle_icono.texture = null
-		_comprar.disabled = true
-		_comprar.text = "SIN SELECCIÓN"
-		return
-
-	var item := _seleccionado
-	_detalle_icono.texture = IconStudio.obtener(item.id, IconStudio.CATEGORIA_OBJETO)
-	IconStudio.escuchar(item.id, Callable(self, "_icono_listo").bind(_detalle_icono))
-	_detalle_titulo.text = item.nombre
-	_detalle_titulo.add_theme_color_override("font_color", _rareza_color(item))
-	_detalle_tipo.text = "%s  ·  Nivel %d  ·  %s" % [
-		_tipo_item(item), item.nivel,
-		("Forja %d oro" % item.precio_forja) if _modo_recetas else ("%d oro" % item.precio)
-	]
-	_detalle_tipo.add_theme_color_override("font_color", _rareza_color(item))
-	_detalle_desc.text = item.descripcion
-	_detalle_stats.text = _bbcode_stats(item)
-	_detalle_receta.text = _bbcode_receta(item)
-
-	# En el recetario se muestra el coste de forja propio; en el mercado, el
-	# precio de compra más la forja que completaría al comprarlo.
-	var coste := item.precio_forja if _modo_recetas else item.precio + _precio_forja(item)
-	var puede := not _modo_recetas and _puede_comprar(item)
-	if _modo_vender:
-		_comprar.disabled = _ranura_seleccionada < 0
-		_comprar.text = "VENDER SELECCIONADO"
-	else:
-		_comprar.disabled = not puede
-		_comprar.text = ("FORJAR · %d ORO" if _modo_recetas else "COMPRAR · %d ORO") % coste
-	_comprar.add_theme_color_override("font_color", Color(0.05, 0.06, 0.04) if puede else Color(0.55, 0.52, 0.46))
-	var estilo := _estilo_compra(puede)
-	_comprar.add_theme_stylebox_override("normal", estilo)
-	_comprar.add_theme_stylebox_override("hover", estilo)
-	_comprar.add_theme_stylebox_override("pressed", estilo)
-	_detalle_panel.add_theme_stylebox_override("panel", _estilo_detalle(_rareza_color(item)))
-
-
-func _comprar_seleccionado() -> void:
-	if _arena == null:
-		return
-	if _modo_vender and _ranura_seleccionada >= 0:
-		_arena.vender_objeto(_jugador, _ranura_seleccionada)
-		_ranura_seleccionada = -1
-	elif _seleccionado != null and _arena.has_method("comprar_objeto"):
-		_arena.comprar_objeto(_seleccionado)
+	_arena.vender_objeto(_jugador, indice)
 	_reconstruir()
 
 
@@ -594,11 +294,10 @@ func _puede_comprar(item: ItemData) -> bool:
 	return false
 
 
-func _precio_forja(item: ItemData) -> int:
+func _en_mochila(id: StringName) -> int:
 	if _jugador == null or _jugador.inventario == null:
 		return 0
-	var receta: ItemData = _jugador.inventario.receta_completada_por(item)
-	return receta.precio_forja if receta != null else 0
+	return _jugador.inventario.contar(id)
 
 
 func _oro_actual() -> int:
@@ -608,258 +307,24 @@ func _oro_actual() -> int:
 	return int(valor) if valor != null else 0
 
 
-func _bbcode_stats(item: ItemData) -> String:
-	var lineas: PackedStringArray = []
-	var bonos := item.descripcion_bonos()
-	if not bonos.is_empty():
-		for linea in bonos.split("\n"):
-			lineas.append("[color=#7dff9a]%s[/color]" % linea)
-	if item.habilidad != null:
-		if not lineas.is_empty():
-			lineas.append("")
-		lineas.append("[color=#d8b45a]ACTIVO[/color]  %s" % item.habilidad.nombre)
-		lineas.append("Maná %d  ·  Recarga %.0f s" % [int(item.habilidad.coste_mana), item.habilidad.cooldown])
-		if item.habilidad.dano_base > 0.0:
-			lineas.append("Daño base %d + escalado" % int(item.habilidad.dano_base))
-	return "\n".join(lineas)
-
-
-func _bbcode_receta(item: ItemData) -> String:
-	var lineas: PackedStringArray = []
-	if item.receta.is_empty():
-		lineas.append("[color=#c8c0ae]Se compra directamente en el mercado.[/color]")
-	else:
-		lineas.append("[color=#d8b45a]RECETA[/color]")
-		for ingrediente in item.receta:
-			var otro := ItemCatalog.obtener(ingrediente)
-			var nombre := otro.nombre if otro != null else String(ingrediente)
-			var tiene := _jugador != null and _jugador.inventario != null and _jugador.inventario.tiene(ingrediente)
-			lineas.append("%s %s" % ["[color=#7dff9a]•[/color]" if tiene else "[color=#ff8a6a]×[/color]", nombre])
-		lineas.append("[color=#d8b45a]Forja[/color]  %d oro" % item.precio_forja)
-	var mejoras := _mejoras(item.id)
-	if not mejoras.is_empty():
-		lineas.append("")
-		lineas.append("[color=#d8b45a]MEJORA A[/color]")
-		for mejora in mejoras:
-			lineas.append("[color=#c792ff]› %s[/color]" % mejora.nombre)
-	return "\n".join(lineas)
-
-
-func _resumen_bonos(item: ItemData) -> String:
-	var partes: PackedStringArray = []
-	for clave in item.bonificaciones:
-		partes.append("+%d %s" % [int(round(float(item.bonificaciones[clave]))), _abrev_bono(clave)])
-		if partes.size() >= 3:
-			break
-	if partes.is_empty() and item.habilidad != null:
-		return "Activo"
-	return "  ".join(partes)
-
-
-func _abrev_bono(clave: StringName) -> String:
-	match clave:
-		&"fuerza": return "FUE"
-		&"agilidad": return "AGI"
-		&"inteligencia": return "INT"
-		&"vida": return "VID"
-		&"armadura": return "ARM"
-		&"dano_fisico", &"dano_magico": return "DAÑO"
-		&"critico": return "CRIT"
-		&"velocidad_ataque": return "V.ATQ"
-		&"velocidad_movimiento": return "V.MOV"
-		&"regeneracion", &"regeneracion_mana": return "REG"
-		&"robo_vida": return "ROBO"
-	return String(clave).to_upper()
-
-
-func _mejoras(id: StringName) -> Array[ItemData]:
-	var lista: Array[ItemData] = []
-	for receta in ItemCatalog.recetas():
-		if receta.receta.has(id):
-			lista.append(receta)
-	return lista
-
-
-## Placa pequeña arriba a la derecha de la tarjeta (cantidad, nuevo, forjable).
-func _agregar_insignia(boton: Button, texto: String, color: Color) -> void:
-	var placa := Panel.new()
-	placa.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ancho := 10.0 + float(texto.length()) * 6.4
-	placa.position = Vector2(188.0 - ancho - 5.0, 5.0)
-	placa.size = Vector2(ancho, 15)
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.035, 0.030, 0.025, 0.95)
-	estilo.border_color = color
-	estilo.set_border_width_all(1)
-	estilo.set_corner_radius_all(2)
-	placa.add_theme_stylebox_override("panel", estilo)
-	boton.add_child(placa)
-	var etiqueta := ForjaTema.etiqueta(texto, 9, color, true)
-	etiqueta.size = placa.size
-	etiqueta.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	placa.add_child(etiqueta)
-
-
-## Estado de la tarjeta según el inventario y el modo de la tienda.
-func _estado_carta(item: ItemData) -> String:
-	var en_mochila := 0
-	if _jugador != null and _jugador.inventario != null:
-		en_mochila = _jugador.inventario.contar(item.id)
-	if en_mochila > 1:
-		return "x%d" % en_mochila
-	if _modo_recetas:
-		var receta: ItemData = null
-		if _jugador != null and _jugador.inventario != null:
-			receta = _jugador.inventario.receta_completada_por(item)
-		if receta != null and receta.id == item.id:
-			return "FORJABLE"
-		return ""
-	if en_mochila == 1:
-		return "EN MOCHILA"
-	return "NUEVO"
-
-
-func _tipo_item(item: ItemData) -> String:
-	# La rareza manda: un épico forjable no es "intermedio" para el jugador.
-	match item.rareza:
-		ItemData.Rareza.EPICO:
-			return "Épico"
-		ItemData.Rareza.LEGENDARIO:
-			return "Legendario"
-	match item.tipo:
-		ItemData.Tipo.POCION: return "Poción"
-		ItemData.Tipo.PERGAMINO: return "Pergamino"
-		ItemData.Tipo.COMPONENTE: return "Componente"
-		ItemData.Tipo.INTERMEDIO: return "Intermedio"
-		ItemData.Tipo.LEGENDARIO: return "Legendario"
-	return "Objeto"
-
-
-func _rareza_color(item: ItemData) -> Color:
-	# La rareza manda: épico = púrpura, legendario = dorado.
-	match item.rareza:
-		ItemData.Rareza.COMUN:
-			return _color_por_tipo(item)
-		ItemData.Rareza.EPICO:
-			return Color(0.72, 0.52, 1.0)  # púrpura
-		ItemData.Rareza.LEGENDARIO:
-			return Color(1.0, 0.78, 0.30)  # dorado
-	return _color_por_tipo(item)
-
-
-## Color de respaldo por tipo para objetos comunes (pociones, pergaminos...).
-func _color_por_tipo(item: ItemData) -> Color:
-	match item.tipo:
-		ItemData.Tipo.POCION: return Color(0.45, 0.90, 0.55)
-		ItemData.Tipo.PERGAMINO: return Color(0.72, 0.52, 1.0)
-		ItemData.Tipo.INTERMEDIO: return Color(0.38, 0.72, 1.0)
-		ItemData.Tipo.LEGENDARIO: return Color(1.0, 0.78, 0.30)
-	return Color(0.70, 0.66, 0.58)
-
-
-func _aplicar_estilo_carta(boton: Button, item: ItemData) -> void:
-	var seleccionada := _seleccionado != null and _seleccionado.id == item.id
-	var acento := _rareza_color(item)
-	boton.add_theme_stylebox_override("normal", ForjaTema.estilo_tarjeta(acento, seleccionada, false))
-	boton.add_theme_stylebox_override("hover", ForjaTema.estilo_tarjeta(acento, true, true))
-	boton.add_theme_stylebox_override("pressed", ForjaTema.estilo_tarjeta(acento, true, true))
-
-
-## Filtro activo de la cuadrícula.
-func _pasa_filtro(item: ItemData) -> bool:
-	match _filtro:
-		&"consumible":
-			return item.es_pocion() or item.tipo == ItemData.Tipo.PERGAMINO
-		&"equipo":
-			return item.es_equipo()
-		&"epico":
-			return item.rareza == ItemData.Rareza.EPICO
-		&"legendario":
-			return item.rareza == ItemData.Rareza.LEGENDARIO
-	return true
-
-
-func _cambiar_filtro(filtro: StringName) -> void:
-	if _filtro == filtro:
-		return
-	_filtro = filtro
-	_seleccionado = null
-	if _hud != null:
-		_hud.ocultar_tooltip()
-	_reconstruir()
-	Sfx.reproducir(&"click", -12.0)
-
-
-func _actualizar_chips() -> void:
-	for par in _chips:
-		var clave: StringName = par[0]
-		var chip: Button = par[1]
-		if chip == null:
-			continue
-		var activo := clave == _filtro
-		var estilo := StyleBoxFlat.new()
-		estilo.bg_color = ForjaTema.ORO if activo else Color(0.11, 0.10, 0.088, 0.9)
-		estilo.border_color = ForjaTema.ORO_CLARO if activo else Color(0.34, 0.28, 0.19)
-		estilo.set_border_width_all(1)
-		estilo.set_corner_radius_all(3)
-		chip.add_theme_stylebox_override("normal", estilo)
-		chip.add_theme_stylebox_override("hover", estilo)
-		chip.add_theme_stylebox_override("pressed", estilo)
-		chip.add_theme_color_override("font_color", ForjaTema.TINTA if activo else ForjaTema.TENUE)
-
-
-func _estilo_compra(activo: bool) -> StyleBoxFlat:
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.32, 0.62, 0.29) if activo else Color(0.16, 0.15, 0.13)
-	estilo.border_color = Color(0.65, 0.95, 0.52) if activo else Color(0.32, 0.30, 0.26)
-	estilo.set_border_width_all(2)
-	estilo.set_corner_radius_all(6)
-	estilo.shadow_color = Color(0, 0, 0, 0.35)
-	estilo.shadow_size = 3
-	return estilo
-
-
-func _boton_tab(texto: String) -> Button:
-	var boton := Button.new()
-	boton.text = texto
-	boton.focus_mode = Control.FOCUS_NONE
-	boton.custom_minimum_size = Vector2(130, 30)
-	boton.add_theme_font_size_override("font_size", 12)
-	return boton
-
-
-func _estilo_tab(activo: bool) -> StyleBoxFlat:
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.85, 0.66, 0.28) if activo else Color(0.13, 0.11, 0.09)
-	estilo.border_color = Color(0.95, 0.78, 0.38) if activo else Color(0.38, 0.30, 0.20)
-	estilo.set_border_width_all(1)
-	estilo.set_corner_radius_all(4)
-	return estilo
-
-
 func _icono_listo(textura: Texture2D, destino) -> void:
-	# `destino` puede estar liberado si la lista se reconstruyó mientras el
-	# icono se renderizaba: sin anotar el tipo no hay error de conversión.
+	# `destino` puede estar liberado si la lista se reconstruyó mientras el icono
+	# se renderizaba: sin anotar el tipo no hay error de conversión.
 	if is_instance_valid(destino):
 		destino.texture = textura
 
 
-func _estilo_panel() -> StyleBoxFlat:
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.065, 0.058, 0.05, 1.0)
-	estilo.border_color = Color(0.72, 0.52, 0.24)
-	estilo.set_border_width_all(3)
-	estilo.set_corner_radius_all(10)
-	estilo.shadow_color = Color(0, 0, 0, 0.55)
-	estilo.shadow_size = 12
-	estilo.shadow_offset = Vector2(0, 5)
-	return estilo
-
-
-func _estilo_detalle(acento := Color(0.36, 0.30, 0.22)) -> StyleBoxFlat:
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.095, 0.085, 0.075)
-	estilo.border_color = acento
-	estilo.set_border_width_all(2)
-	estilo.set_corner_radius_all(6)
-	return estilo
+func _rareza_color(item: ItemData) -> Color:
+	match item.rareza:
+		ItemData.Rareza.EPICO:
+			return Color(0.72, 0.52, 1.0)
+		ItemData.Rareza.LEGENDARIO:
+			return Color(1.0, 0.78, 0.30)
+	match item.tipo:
+		ItemData.Tipo.POCION:
+			return Color(0.45, 0.90, 0.55)
+		ItemData.Tipo.PERGAMINO:
+			return Color(0.72, 0.52, 1.0)
+		ItemData.Tipo.COMPONENTE:
+			return Color(0.38, 0.72, 1.0)
+	return ForjaTema.TEXTO

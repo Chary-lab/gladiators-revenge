@@ -156,7 +156,7 @@ func _ready() -> void:
 		_iniciar_local()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-inicio" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-ficha" in args or "--captura-inicio" in args:
 		_capturar()
 
 	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
@@ -2454,7 +2454,8 @@ func _capturar() -> void:
 	var campeon := "--captura-campeon" in args
 	var menu_red := "--captura-menu" in args
 	var capturar_apodo := "--captura-apodo" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo
+	var capturar_ficha := "--captura-ficha" in args
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha
 	if combate:
 		var sin_arma: bool = _jugador != null and _jugador.arma_actual != null and _jugador.arma_actual.clase == WeaponItem.Clase.PRISIONERO
 		if sin_arma:
@@ -2487,6 +2488,9 @@ func _capturar() -> void:
 			_hud.alternar_tienda()
 		elif cerca and _camara != null:
 			_camara.size = 7.0
+		if capturar_ficha and _tactil != null:
+			_tactil.alternar_ficha()
+			await get_tree().create_timer(0.6).timeout
 		if capturar_apodo:
 			var modal := NombreJugador.new()
 			add_child(modal)
@@ -2499,7 +2503,7 @@ func _capturar() -> void:
 		if fin:
 			_finalizar("DERROTA", "Los gladiadores han caído en la arena.")
 			await get_tree().create_timer(1.2).timeout
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo) else 8.5).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -2524,6 +2528,8 @@ func _capturar() -> void:
 		ruta = "res://captura_menu.png"
 	elif capturar_apodo:
 		ruta = "res://captura_apodo.png"
+	elif capturar_ficha:
+		ruta = "res://captura_ficha.png"
 	elif combate:
 		ruta = "res://captura_combate.png"
 	var error := imagen.save_png(ProjectSettings.globalize_path(ruta))

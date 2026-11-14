@@ -355,18 +355,20 @@ func _ejecutar() -> void:
 	oleadas.al_morir_enemigo(0)
 	_comprobar(oleadas.bajas == bajas_antes + 1, "cada muerte suma una baja")
 
-	# --- Tienda: pestañas y recetario ---
+	# --- Tienda simple: una lista y dos modos -----------------------------
 	hud.alternar_tienda()
 	await process_frame
 	var panel_tienda = hud.get("_tienda")
-	var grid: GridContainer = panel_tienda.get("_lista")
+	var grid: GridContainer = panel_tienda.get("_grid")
 	var cartas_mercado := grid.get_child_count()
-	panel_tienda._cambiar_tab(1)
+	_comprobar(cartas_mercado == ItemCatalog.vendibles().size(), "la tienda lista lo vendible en una sola cuadrícula")
+	_comprobar(panel_tienda.get("_chip_vender") != null, "la tienda tiene el modo VENDER")
+	panel_tienda._cambiar_modo(true)
 	await process_frame
-	var cartas_recetas := grid.get_child_count()
-	_comprobar(cartas_mercado == ItemCatalog.vendibles().size(), "la pestaña MERCADO lista solo lo vendible")
-	_comprobar(cartas_recetas == ItemCatalog.recetas().size(), "la pestaña RECETARIO lista todas las recetas")
-	_comprobar(cartas_recetas > cartas_mercado, "el recetario muestra los objetos forjables")
+	var cartas_venta := grid.get_child_count()
+	_comprobar(cartas_venta >= 1, "el modo VENDER lista las ranuras con objeto")
+	panel_tienda._cambiar_modo(false)
+	await process_frame
 
 	# --- Iconos 3D de los objetos nuevos ---
 	var nuevos := [&"armadura_brasas", &"anillo_vampiro", &"corazon_fenix", &"capa_comandante", &"guadana_verdugo_ancestral"]

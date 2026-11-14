@@ -4,7 +4,7 @@ Arena de supervivencia con perspectiva isométrica 2.5D en **Godot 4.7**, pensad
 para publicarse en **Web (HTML5 / WebAssembly)**. IP original: gladiadores orcos
 de las Tierras Baldías se rebelan contra el Imperio Humano de Hierro.
 
-## Estado (v1.8.3 jugable)
+## Estado (v1.8.5 jugable)
 
 Partida completa de principio a fin: 20 oleadas, tres clases de arma, zona
 segura con campeón, fuente, mercader y obelisco, jefes con dos fases de furia,
@@ -38,8 +38,9 @@ para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
   real), la capa táctil existe también dentro de una sala y elegir campeón
   acorta la espera. El maestro pre-arranca una sola sala.
 - **HUD táctil**: joystick con aro de runas y una rueda con INTERACTUAR en el
-  centro y Q/W/E/R alrededor (enfriamiento radial y segundos), pastilla de
-  vida/maná, mercader/talentos/mochila y pausa. En móvil la consola de
+  centro y Q/W/E/R alrededor (nivel de cada habilidad, enfriamiento radial y
+  segundos), pastilla de vida/maná, mercader/talentos/mochila, **FICHA** con
+  atributos y descripción de las habilidades, y pausa. En móvil la consola de
   escritorio se apaga: la arena queda despejada.
 - **Controles táctiles** en móvil: joystick de movimiento a la izquierda y
   botones grandes de Q/W/E/R, INTERACTUAR y DETENER. Las habilidades apuntan al
