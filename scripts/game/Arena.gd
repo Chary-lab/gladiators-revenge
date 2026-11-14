@@ -134,6 +134,11 @@ func _ready() -> void:
 	get_tree().root.theme = ForjaTema.tema_global()
 	_ajustes = Ajustes.cargar()
 	_ajustes.aplicar()
+	# Precalentar los catálogos aquí (medido: 15 ms el de armas y ~48 ms el de
+	# objetos la primera vez). Así el tirón cae en el arranque, mientras el
+	# jugador escribe su apodo, y no al abrir la forja o el mercader.
+	WeaponItem.crear_catalogo_base()
+	ItemCatalog.crear_catalogo()
 	if "--maestro" in OS.get_cmdline_user_args():
 		_iniciar_maestro()
 		return

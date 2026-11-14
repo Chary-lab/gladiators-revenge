@@ -141,7 +141,14 @@ static func crear_prisionero() -> WeaponItem:
 
 
 ## Las cinco clases jugables con las que se compra el rol en la armería.
+## El catálogo se construye una vez y se comparte: cada llamada creaba 5 armas,
+## 20 habilidades, ~40 talentos y dos escenas procedurales (medido: 15 ms por
+## llamada), y se pedía al abrir la forja, al elegir clase y desde los menús.
+static var _catalogo_cache: Array[WeaponItem] = []
+
 static func crear_catalogo_base() -> Array[WeaponItem]:
+	if not _catalogo_cache.is_empty():
+		return _catalogo_cache
 	var catalogo: Array[WeaponItem] = []
 	catalogo.append(_crear_bastion())
 	catalogo.append(_crear_filo())
@@ -151,7 +158,8 @@ static func crear_catalogo_base() -> Array[WeaponItem]:
 	for arma in catalogo:
 		_aplicar_iconos(arma)
 		_configurar_rangos(arma)
-	return catalogo
+	_catalogo_cache = catalogo
+	return _catalogo_cache
 
 
 ## Glifos de texto para las ranuras de habilidad; no requieren texturas.
