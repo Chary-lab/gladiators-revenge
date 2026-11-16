@@ -379,7 +379,7 @@ func _ejecutar() -> void:
 	for code in [0x25C6, 0x2714, 0x2718]:
 		if fuente.has_char(code):
 			continue
-		for ruta in ["res://scripts/ui/ShopPanel.gd", "res://scripts/ui/ArenaHUD.gd"]:
+		for ruta in ["res://scripts/ui/ShopPanel.gd", "res://scripts/ui/BuildTreePanel.gd", "res://scripts/ui/ArenaHUD.gd"]:
 			if FileAccess.get_file_as_string(ruta).contains(String.chr(code)):
 				glifos_ok = false
 	_comprobar(glifos_ok, "la UI no usa glifos que la fuente no dibuja")
@@ -488,6 +488,36 @@ func _ejecutar() -> void:
 		_comprobar(cartas_venta >= 1, "el modo VENDER lista las ranuras con objeto")
 		panel_tienda._cambiar_modo(false)
 		await process_frame
+
+		# --- Árbol de construcción ampliado -------------------------------
+		panel_tienda._abrir_arbol()
+		await process_frame
+		var arbol = panel_tienda.get("_arbol")
+		_comprobar(arbol != null and arbol.visible, "la tienda abre el árbol ampliado")
+		_comprobar(
+			arbol.cantidad_nodos() == ItemCatalog.crear_catalogo().size() and arbol.cantidad_conexiones() > 0,
+			"el árbol dibuja todos los objetos y sus conexiones de receta"
+		)
+		arbol.seleccionar_por_id(&"nucleo_ferreo")
+		await process_frame
+		_comprobar(
+			(arbol.get("_detalle_entra") as HBoxContainer).get_child_count() > 0,
+			"el árbol muestra los ingredientes del objeto elegido"
+		)
+		arbol.seleccionar_por_id(&"brasa_forja")
+		await process_frame
+		_comprobar(
+			(arbol.get("_detalle_sale") as HBoxContainer).get_child_count() > 0,
+			"los chips del árbol permiten saltar a los objetos que lo usan"
+		)
+		arbol._al_buscar("zzz")
+		await process_frame
+		_comprobar(not arbol.nodo_visible(&"nucleo_ferreo"), "la búsqueda del árbol oculta los nodos que no coinciden")
+		arbol._al_buscar("")
+		await process_frame
+		panel_tienda._cerrar_arbol()
+		await process_frame
+		_comprobar(not panel_tienda.arbol_abierto() and panel_tienda.visible, "cerrar el árbol vuelve a la lista sin cerrar la tienda")
 
 		# --- Pausa: los paneles no dejan la partida congelada ------------------
 		hud.alternar_tienda()

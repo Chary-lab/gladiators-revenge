@@ -164,7 +164,7 @@ func _ready() -> void:
 		_iniciar_local()
 
 	var args := OS.get_cmdline_user_args()
-	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-ficha" in args or "--captura-inicio" in args or "--captura-arquetipos" in args or "--captura-oleada" in args:
+	if "--captura" in args or "--captura-combate" in args or "--captura-cerca" in args or "--captura-talentos" in args or "--captura-habilidad" in args or "--captura-jefe" in args or "--captura-tienda" in args or "--captura-arbol" in args or "--captura-fin" in args or "--captura-campeon" in args or "--captura-menu" in args or "--captura-apodo" in args or "--captura-ficha" in args or "--captura-inicio" in args or "--captura-arquetipos" in args or "--captura-oleada" in args:
 		_capturar()
 
 	# Cargar un GLB cuesta ~55 ms la primera vez (medido) y se notaba como tirón
@@ -2506,6 +2506,7 @@ func _capturar() -> void:
 	var habilidad := "--captura-habilidad" in args
 	var capturar_jefe := "--captura-jefe" in args
 	var tienda := "--captura-tienda" in args
+	var arbol := "--captura-arbol" in args
 	var fin := "--captura-fin" in args
 	var campeon := "--captura-campeon" in args
 	var menu_red := "--captura-menu" in args
@@ -2513,7 +2514,7 @@ func _capturar() -> void:
 	var capturar_ficha := "--captura-ficha" in args
 	var arquetipos := "--captura-arquetipos" in args
 	var oleada := "--captura-oleada" in args
-	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos or oleada
+	var combate := "--captura-combate" in args or cerca or talentos or habilidad or capturar_jefe or tienda or arbol or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos or oleada
 	# Permite fotografiar cualquier campeón: --captura-cerca --clase=saeta.
 	var clase_forzada := ""
 	for arg in args:
@@ -2548,7 +2549,7 @@ func _capturar() -> void:
 			jefe.objetivo = _jugador
 			if _camara != null:
 				_camara.size = 14.0
-		elif tienda:
+		elif tienda or arbol:
 			oro = 1600
 			_jugador.inventario.agregar(ItemCatalog.obtener(&"brasa_forja"))
 			_hud.alternar_tienda()
@@ -2557,7 +2558,12 @@ func _capturar() -> void:
 			await get_tree().process_frame
 			var panel_tienda = _hud.get("_tienda")
 			if panel_tienda != null:
-				panel_tienda.call("_seleccionar_por_id", &"nucleo_ferreo")
+				if arbol:
+					panel_tienda.call("_abrir_arbol")
+				await get_tree().process_frame
+				var vista = panel_tienda.get("_arbol") if arbol else panel_tienda
+				if vista != null:
+					vista.call("seleccionar_por_id", &"nucleo_ferreo")
 		elif cerca and _camara != null:
 			_camara.size = 7.0
 		if arquetipos:
@@ -2611,7 +2617,7 @@ func _capturar() -> void:
 		if fin:
 			_finalizar("DERROTA", "Los gladiadores han caído en la arena.")
 			await get_tree().create_timer(1.2).timeout
-		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos or oleada) else 8.5).timeout
+		await get_tree().create_timer(3.0 if (cerca or talentos or habilidad or capturar_jefe or tienda or arbol or fin or campeon or menu_red or capturar_apodo or capturar_ficha or arquetipos or oleada) else 8.5).timeout
 	else:
 		await get_tree().create_timer(2.5).timeout
 	await get_tree().process_frame
@@ -2645,6 +2651,8 @@ func _capturar() -> void:
 		ruta = "res://captura_jefe.png"
 	elif tienda:
 		ruta = "res://captura_tienda.png"
+	elif arbol:
+		ruta = "res://captura_arbol.png"
 	elif fin:
 		ruta = "res://captura_fin.png"
 	elif campeon:

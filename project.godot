@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Gladiators Revenge"
 config/description="Arena de supervivencia cooperativa isométrica para Web (Godot 4)."
-config/version="1.8.6"
+config/version="1.8.7"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"

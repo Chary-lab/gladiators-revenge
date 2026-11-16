@@ -340,12 +340,13 @@ scripts/
     DamageNumbers.gd        números de daño/curación con pool
     TalentPanel.gd          panel de talentos con rangos y requisitos
     ShopPanel.gd            tienda, forjables y tooltips
+    BuildTreePanel.gd       árbol de construcción ampliado (grafo de recetas)
     IconStudio.gd           miniaturas 3D 64x64 con SubViewport y caché
     ItemModelFactory.gd     modelos de objetos y comandos con primitivas
     GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
   smoke_test.gd             smoke crítico headless (15 comprobaciones, ~2 s)
-  regression_test.gd        cobertura completa (135 comprobaciones)
+  regression_test.gd        cobertura completa (155 comprobaciones)
   net_smoke.gd              cliente coop: conexión, compra y clase única
   net_smoke_b.gd            segundo cliente: clase única y revivir
   wave_sim.gd               simulación acelerada de las 20 oleadas
@@ -401,6 +402,7 @@ godot --path . -- --captura-combate    # oleada 1 en curso
 godot --path . -- --captura-cerca      # close-up del orco
 godot --path . -- --captura-talentos   # panel de talentos
 godot --path . -- --captura-tienda     # mercader y recetario
+godot --path . -- --captura-arbol      # árbol de construcción ampliado
 godot --path . -- --captura-habilidad  # invocación del Cetro
 godot --path . -- --captura-jefe       # Liche de la Arena
 ```

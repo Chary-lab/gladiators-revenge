@@ -30,6 +30,10 @@ var _chip_comprar: Button
 var _chip_vender: Button
 var _campo_busqueda: LineEdit
 var _busqueda := ""
+## Vista ampliada del árbol de construcción (se abre desde la tienda).
+var _arbol: BuildTreePanel
+## Botón de apertura, en la misma barra que COMPRAR/VENDER (no es un filtro).
+var _boton_arbol: Button
 var _vender := false
 var _pausado := false
 
@@ -140,6 +144,11 @@ func _crear_barra_modos() -> Control:
 	_chip_vender.custom_minimum_size = Vector2(140, 34)
 	_chip_vender.pressed.connect(_cambiar_modo.bind(true))
 	fila.add_child(_chip_vender)
+
+	_boton_arbol = ForjaTema.boton("ÁRBOL DE FORJA", 13)
+	_boton_arbol.custom_minimum_size = Vector2(150, 34)
+	_boton_arbol.pressed.connect(_abrir_arbol)
+	fila.add_child(_boton_arbol)
 
 	_campo_busqueda = LineEdit.new()
 	_campo_busqueda.placeholder_text = "Buscar objeto…"
@@ -294,6 +303,13 @@ func configurar(jugador: GladiatorController, arena: Node, hud: ArenaHUD = null)
 	if _jugador != null and _jugador.inventario != null:
 		if not _jugador.inventario.cambiado.is_connected(_al_cambiar_inventario):
 			_jugador.inventario.cambiado.connect(_al_cambiar_inventario)
+	# El árbol es un PanelContainer hermano de la tienda dentro del CanvasLayer
+	# del HUD: si fuera hijo del PanelContainer, el contenedor le forzaría su
+	# propio rect y la vista ampliada quedaría del tamaño de la lista.
+	if _hud != null and _arbol == null:
+		_arbol = BuildTreePanel.new()
+		_hud.add_child(_arbol)
+		_arbol.configurar(_jugador, _arena, self)
 
 
 ## Comprar cambia oro y cantidades, no la lista: refrescar en sitio cuesta
@@ -313,6 +329,7 @@ func alternar() -> void:
 	if visible:
 		cerrar_panel()
 		return
+	_cerrar_arbol()
 	visible = true
 	modo_abierto()
 	_reconstruir()
@@ -324,14 +341,31 @@ func alternar() -> void:
 
 
 func cerrar_panel() -> void:
-	if not visible and not _pausado:
+	if not visible and not _pausado and not arbol_abierto():
 		return
+	_cerrar_arbol()
 	visible = false
 	if _hud != null:
 		_hud.forzar_ocultar_tooltip()
 	if _pausado:
 		_pausado = false
 		Pausa.cerrar()
+
+
+# --- Árbol de construcción ampliado ----------------------------------------
+
+func _abrir_arbol() -> void:
+	if _arbol != null:
+		_arbol.abrir()
+
+
+func _cerrar_arbol() -> void:
+	if _arbol != null:
+		_arbol.cerrar()
+
+
+func arbol_abierto() -> bool:
+	return _arbol != null and _arbol.visible
 
 
 func modo_abierto() -> void:
@@ -349,7 +383,7 @@ func modo_abierto() -> void:
 
 
 func _unhandled_input(evento: InputEvent) -> void:
-	if not visible or not (evento is InputEventKey):
+	if not visible or arbol_abierto() or not (evento is InputEventKey):
 		return
 	var tecla := evento as InputEventKey
 	if not tecla.pressed or tecla.echo:
