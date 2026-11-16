@@ -6,6 +6,9 @@ extends PanelContainer
 const ANCHO := 760.0
 const ALTO := 500.0
 
+## Avisa al HUD de que el árbol de talentos se cerró (también por ESC/T).
+signal cerrado
+
 var _jugador: GladiatorController
 var _pausado := false
 var _lista: VBoxContainer
@@ -73,6 +76,15 @@ func _ready() -> void:
 	_lista.add_theme_constant_override("separation", 6)
 	scroll.add_child(_lista)
 
+	_aplicar_marco()
+	var viewport := get_viewport()
+	if viewport != null and not viewport.size_changed.is_connected(_aplicar_marco):
+		viewport.size_changed.connect(_aplicar_marco)
+
+
+func _aplicar_marco() -> void:
+	SafeArea.aplicar(self, ANCHO, ALTO)
+
 
 func configurar(jugador: GladiatorController) -> void:
 	_jugador = jugador
@@ -90,6 +102,7 @@ func alternar() -> void:
 		cerrar_panel()
 		return
 	visible = true
+	Eventos.emitir(&"panel_solicitado", [&"talentos", true])
 	_reconstruir()
 	move_to_front()
 	if not _pausado:
@@ -102,9 +115,11 @@ func cerrar_panel() -> void:
 	if not visible and not _pausado:
 		return
 	visible = false
+	Eventos.emitir(&"panel_solicitado", [&"talentos", false])
 	if _pausado:
 		_pausado = false
 		Pausa.cerrar()
+	cerrado.emit()
 
 
 ## ESC y T cierran el panel incluso con el árbol en pausa.

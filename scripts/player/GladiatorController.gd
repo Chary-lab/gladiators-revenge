@@ -99,7 +99,12 @@ var dano_infligido := 0.0
 var dano_recibido := 0.0
 var escudo_actual := 0.0
 
+const BUFFER_HABILIDAD_SEG := 0.15
+
 var _cooldowns := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+## Órdenes que llegaron durante el cooldown: se ejecutan solas al liberarse.
+var _buffer_habilidades: Array[Dictionary] = []
+var _procesando_buffer := false
 var _tiene_orden_movimiento := false
 var _acumulador_regeneracion := 0.0
 var _temporizador_ataque := 0.0
@@ -255,6 +260,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_temporizador_ataque = combat._temporizador_ataque
+	_actualizar_buffer(delta)
 	_actualizar_objetivo(delta)
 	_actualizar_marcador_objetivo()
 
@@ -474,6 +480,67 @@ func _resolver_punto(habilidad: AbilityData, punto_objetivo = null) -> Vector3:
 	if apuntado != null:
 		punto = apuntado
 	return punto
+
+
+## Auto-apuntado suave: gira el modelo hacia el objetivo con lerp_angle en vez
+## de pegar un giro instantáneo. Lo llaman el ataque básico y el HUD táctil.
+func apuntar_suave(punto: Vector3, delta: float) -> void:
+	var hacia := punto - global_position
+	hacia.y = 0.0
+	if hacia.length_squared() < 0.0004:
+		return
+	var nodo := modelo if modelo != null else self
+	nodo.rotation.y = lerp_angle(
+		nodo.rotation.y,
+		atan2(hacia.x, hacia.z),
+		clampf(14.0 * delta, 0.0, 1.0)
+	)
+
+
+## Guarda (o refresca) una orden durante 0,15 s. Un mismo slot nunca se acumula:
+## dos toques rápidos significan "la última intención", no dos hechizos.
+func _guardar_orden_habilidad(slot: int, punto_objetivo) -> void:
+	for entrada: Dictionary in _buffer_habilidades:
+		if int(entrada.get("slot", -1)) == slot:
+			entrada["punto"] = punto_objetivo
+			entrada["restante"] = BUFFER_HABILIDAD_SEG
+			return
+	_buffer_habilidades.append({
+		"slot": slot,
+		"punto": punto_objetivo,
+		"restante": BUFFER_HABILIDAD_SEG,
+	})
+
+
+func _actualizar_buffer(delta: float) -> void:
+	if _buffer_habilidades.is_empty():
+		return
+	for i in range(_buffer_habilidades.size() - 1, -1, -1):
+		var entrada: Dictionary = _buffer_habilidades[i]
+		entrada["restante"] = float(entrada.get("restante", 0.0)) - delta
+		if float(entrada.get("restante", 0.0)) <= 0.0:
+			_buffer_habilidades.remove_at(i)
+			continue
+		_procesando_buffer = true
+		var ejecutada := intentar_habilidad(
+			int(entrada.get("slot", -1)), entrada.get("punto"), true
+		)
+		_procesando_buffer = false
+		if ejecutada:
+			_buffer_habilidades.remove_at(i)
+
+
+## Empuje 3D real recibido desde un origen. Se usa desde el hurtbox y desde el
+## componente de daño: el CharacterBody3D se mueve con velocity, no con Tween.
+func aplicar_empuje(origen: Vector3, fuerza: float) -> void:
+	if fuerza <= 0.0 or esta_muerto:
+		return
+	var lejos := global_position - origen
+	lejos.y = 0.0
+	if lejos.length_squared() < 0.0004:
+		return
+	velocity += lejos.normalized() * fuerza
+	_tiempo_impulso = maxf(_tiempo_impulso, 0.15)
 
 
 func _enemigo_bajo_raton(posicion_pantalla: Vector2) -> Node3D:
@@ -1007,8 +1074,18 @@ func _al_cambiar_experiencia(actual: int, requerida: int, nivel: int) -> void:
 	progreso_cambiado.emit(nivel, actual, requerida)
 
 
+## El botón ATAQUE táctil fuerza el mismo golpe básico del autoataque.
+func atacar_ahora() -> bool:
+	if esta_muerto or arma_actual == null or combat._temporizador_ataque > 0.0:
+		return false
+	_atacar_basico()
+	return true
+
+
 ## Intenta lanzar la habilidad del slot. Devuelve true si se ejecutó.
-func intentar_habilidad(slot: int, punto_objetivo = null) -> bool:
+## `desde_buffer` evita que una orden diferida vuelva a encolarse si sigue
+## bloqueada; las órdenes viven como máximo BUFFER_HABILIDAD_SEG.
+func intentar_habilidad(slot: int, punto_objetivo = null, desde_buffer := false) -> bool:
 	if red != null and es_local_red and not red.es_servidor and red.estado == NetCoop.Estado.CONECTADO:
 		var punto_envio = punto_objetivo
 		if punto_envio == null:
@@ -1019,13 +1096,14 @@ func intentar_habilidad(slot: int, punto_objetivo = null) -> bool:
 		return false
 	if slot < 0 or slot >= combat._cooldowns.size():
 		return false
-	if combat._cooldowns[slot] > 0.0:
-		return false
 
 	var habilidad := arma_actual.obtener_habilidad(slot)
 	if habilidad == null or not habilidad_desbloqueada(slot):
 		return false
-	if mana_actual < habilidad.coste_mana:
+	var bloqueada := combat._cooldowns[slot] > 0.0 or mana_actual < habilidad.coste_mana
+	if bloqueada:
+		if not desde_buffer:
+			_guardar_orden_habilidad(slot, punto_objetivo)
 		return false
 
 	mana_actual -= habilidad.coste_mana
@@ -1049,6 +1127,7 @@ func intentar_habilidad(slot: int, punto_objetivo = null) -> bool:
 	if visual != null:
 		visual.lanzar()
 	habilidad_lanzada.emit(slot, habilidad)
+	Eventos.habilidad(slot, habilidad)
 	var sonido := &"habilidad"
 	if arma_actual != null and arma_actual.clase == WeaponItem.Clase.CETRO:
 		sonido = &"magia"
@@ -1116,6 +1195,10 @@ func lanzar_habilidad_item(habilidad: AbilityData, punto_objetivo = null) -> boo
 		_reduccion_temporal = habilidad.reduccion_dano
 		_tiempo_reduccion = duracion_habilidad(habilidad)
 	if habilidad.tipo == AbilityData.Tipo.MOVILIDAD:
+		# Cancelación: el dash manda aunque el ataque básico esté en animación.
+		combat.cancelar_recarga_ataque()
+		_temporizador_ataque = 0.0
+		_otorgar_inmunidad_daño(0.18)
 		_ejecutar_dash(habilidad, punto)
 	elif habilidad.tipo == AbilityData.Tipo.INVOCACION:
 		_invocar_espiritu(habilidad, punto)
@@ -1280,16 +1363,21 @@ func _atacar_basico() -> void:
 
 	var direccion := objetivo.global_position - global_position
 	direccion.y = 0.0
-	_orientar(direccion.normalized(), 1.0)
+	apuntar_suave(objetivo.global_position, get_physics_process_delta_time())
 	if visual != null:
 		# El clip se acelera con la cadencia real del arma: a más velocidad de
 		# ataque, el golpe visual acompaña al daño en vez de llegar tarde.
 		visual.ajustar_ritmo(estadisticas.velocidad_ataque / 0.6)
 		visual.atacar()
 
-	if objetivo.has_method("recibir_dano"):
+	var golpeados := HitboxGolpe3D.golpear(
+		get_world_3d(), objetivo.global_position, 1.15, dano, &"fisico", critico, self
+	)
+	if golpeados == 0 and objetivo.has_method("recibir_dano"):
+		# Red/headless sin áreas registradas todavía: mantiene el daño fiable.
 		objetivo.recibir_dano(dano, &"fisico", self, critico)
 	ataque_basico.emit(objetivo, dano, critico)
+	Eventos.dano(objetivo, dano, critico)
 	dano_infligido += dano
 	estadisticas_combate_cambiadas.emit()
 	# Aura de robo de vida: objetos épicos/legendarios de ti y aliados cercanos.

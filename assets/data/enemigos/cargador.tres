@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/EnemyData.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"cargador"
+nombre = "Cargador Imperial"
+rol = 1
+arquetipo_base = &"sabueso"
+vida_mult = 0.95
+dano_mult = 1.25
+velocidad_mult = 1.15
+cadencia_mult = 0.9
+escala_mult = 1.0
+recompensa_mult = 1.2
+periodo_carga = 3.4
+multiplicador_carga = 2.6
+duracion_carga = 0.35

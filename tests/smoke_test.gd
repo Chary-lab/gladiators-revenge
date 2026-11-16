@@ -671,6 +671,38 @@ func _ejecutar() -> void:
 		if not ArenaEnemy.ARQUETIPOS.has(tipo) or not ArenaEnemy.VISUALES.has(tipo):
 			arquetipos_ok = false
 	_comprobar(arquetipos_ok, "cada arquetipo tiene estadísticas y modelo visual")
+	var catalogo_enemigos := EnemyCatalog.todos()
+	_comprobar(
+		catalogo_enemigos.size() == 4
+		and EnemyCatalog.obtener(&"soldado_mezcla") != null
+		and EnemyCatalog.obtener(&"cargador") != null
+		and EnemyCatalog.obtener(&"arquero_granja") != null
+		and EnemyCatalog.obtener(&"muralla") != null,
+		"el catálogo data-driven carga los cuatro roles desde .tres"
+	)
+	_comprobar(
+		EnemyCatalog.obtener(&"cargador").rol == EnemyData.Rol.CHARGER
+		and EnemyCatalog.obtener(&"muralla").rol == EnemyData.Rol.TANK,
+		"los recursos definen roles Melee/Charger/Ranged/Tank"
+	)
+	var plan_carga := load("res://assets/data/oleadas/spawn_default.tres") as SpawnPlan
+	_comprobar(
+		plan_carga != null and plan_carga.intervalo_spawn > 0.0
+		and plan_carga.probabilidad_data > 0.0 and oleadas.plan != null,
+		"el spawner carga su plan data-driven y el WaveManager lo usa"
+	)
+	var eventos := Eventos.new()
+	_comprobar(
+		eventos.has_method("mensaje") and eventos.has_method("oro")
+		and eventos.has_method("inventario") and eventos.has_method("talentos"),
+		"tienda, inventario y talentos tienen puente al EventBus"
+	)
+	if not enemigos.is_empty():
+		var base := enemigos[0] as EnemyBase
+		_comprobar(
+			base != null and (base.agente != null or base.get_node_or_null("NavigationAgent3D") != null),
+			"los enemigos heredan EnemyBase con NavigationAgent3D"
+		)
 	_comprobar(
 		BalanceOlas.perfil(7)["tipos"].has(BalanceOlas.SABUESO)
 		and BalanceOlas.perfil(11)["tipos"].has(BalanceOlas.BRUTO)
@@ -741,6 +773,61 @@ func _ejecutar() -> void:
 		_comprobar(
 			(tactil.get("_velos") as Array).size() == 4 and (tactil.get("_cd_textos") as Array).size() == 4,
 			"las habilidades táctiles muestran enfriamiento radial y segundos"
+		)
+		var barras: Array = tactil.get("_cd_barras")
+		var barras_ok := barras.size() == 4
+		for barra in barras:
+			barras_ok = barras_ok and barra is TextureProgressBar
+		_comprobar(barras_ok, "cada habilidad táctil tiene su barra TextureProgressBar")
+		_comprobar(
+			tactil.has_signal("ataque") and tactil.has_signal("dash")
+			and tactil.get("_boton_ataque") != null and tactil.get("_boton_dash") != null,
+			"la botonera derecha expone ataque y dash al alcance del pulgar"
+		)
+		tactil.sincronizar_estado(false)
+		_comprobar(
+			not tactil.visible and not tactil.is_processing_input(),
+			"fuera de PLAYING el HUD táctil se oculta y no recibe toques"
+		)
+		tactil.sincronizar_estado(true)
+		_comprobar(
+			tactil.visible and tactil.is_processing_input(),
+			"volver a PLAYING restaura el HUD táctil"
+		)
+		_comprobar(
+			SafeArea.marco(Vector2(1280, 720), 1280.0, 720.0) == Rect2(0, 0, 1280, 720),
+			"el marco de safe area respeta 1280×720 cuando no hay notch"
+		)
+		# --- Fase 3: game feel y control de combate --------------------------
+		var camara = escena.get("_camara")
+		_comprobar(
+			camara != null and camara.has_method("agitar") and camara.has_method("ajustar_intensidad"),
+			"la cámara expone shake por trauma con intensidad configurable"
+		)
+		var impacto = escena.get("_impactos")
+		var emisores := 0
+		if impacto != null:
+			var grupo = impacto.get("_pool")
+			for hijo in grupo.get_children():
+				if hijo is CPUParticles3D:
+					emisores += 1
+		_comprobar(emisores == 12, "los impactos usan un pool de 12 CPUParticles3D")
+		var receptor = jugador.get_node_or_null("ReceptorGolpes")
+		_comprobar(
+			receptor != null and receptor is Area3D
+			and int(receptor.collision_layer) == ReceptorGolpes3D.CAPA_HURTBOX,
+			"el jugador tiene hurtbox Area3D en su propia capa"
+		)
+		var constantes: Dictionary = jugador.get_script().get_script_constant_map()
+		_comprobar(
+			float(constantes.get("BUFFER_HABILIDAD_SEG", 0.0)) == 0.15
+			and jugador.has_method("apuntar_suave") and jugador.has_method("aplicar_empuje"),
+			"el jugador tiene buffer de 0,15 s, apuntado suave y empuje 3D"
+		)
+		var hitbox := HitboxGolpe3D.new()
+		_comprobar(
+			hitbox.has_method("golpear") and ReceptorGolpes3D.CAPA_HITBOX != ReceptorGolpes3D.CAPA_HURTBOX,
+			"hitbox y hurtbox usan capas de colisión distintas"
 		)
 		_comprobar(tactil.has_signal("pausa"), "el HUD táctil tiene botón de pausa")
 		var perfiles: Array = escena._perfiles_campeon()

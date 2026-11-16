@@ -54,6 +54,7 @@ var oro:
 		_oro_local = value
 		if game_state != null:
 			game_state.oro = value
+		Eventos.oro(value)
 
 var puntos_atributo:
 	get:
@@ -65,6 +66,7 @@ var puntos_atributo:
 
 var _jugador: GladiatorController
 var _camara: ArenaCamera
+var _impactos: Impactos3D
 var _bandera: RebellionBanner
 
 ## Barra de vida del jefe
@@ -486,6 +488,12 @@ func _instanciar_gladiador(posicion: Vector3, indice: int) -> GladiatorControlle
 	agente.name = "NavigationAgent3D"
 	cuerpo.add_child(agente)
 
+	var receptor := ReceptorGolpes3D.new()
+	receptor.name = "ReceptorGolpes"
+	receptor.configurar(0.5, 1.8)
+	receptor.position.y = 0.9
+	cuerpo.add_child(receptor)
+
 	cuerpo.tinte_skin = SKIN_TIERRA_BALDIA
 	cuerpo.estadisticas = GladiatorStats.new()
 	cuerpo.arma_inicial = WeaponItem.crear_prisionero()
@@ -500,6 +508,7 @@ func _instanciar_gladiador(posicion: Vector3, indice: int) -> GladiatorControlle
 	cuerpo.add_child(inventario)
 	cuerpo.inventario = inventario
 	inventario.configurar(cuerpo)
+	inventario.cambiado.connect(func() -> void: Eventos.inventario())
 	inventario.agregar(ItemCatalog.obtener(&"pocion_vida"))
 	return cuerpo
 
@@ -1587,6 +1596,9 @@ func _crear_camara() -> void:
 	_camara.size = 26.0
 	_camara.global_position = _jugador.global_position + _camara.desplazamiento
 	_camara.current = true
+	_impactos = Impactos3D.new()
+	_impactos.name = "Impactos"
+	add_child(_impactos)
 
 
 func _crear_armeria() -> void:
@@ -1637,6 +1649,8 @@ func _crear_controles_tactiles() -> void:
 	if _ajustes != null:
 		_tactil.aplicar_escala(_ajustes.escala_tactil)
 	_tactil.habilidad.connect(_al_habilidad_tactil)
+	_tactil.ataque.connect(_al_ataque_tactil)
+	_tactil.dash.connect(_al_dash_tactil)
 	_tactil.mover.connect(_al_mover_tactil)
 	_tactil.pausa.connect(_al_pausa_tactil)
 	_tactil.interactuar.connect(_interactuar_cercano)
@@ -1646,10 +1660,39 @@ func _crear_controles_tactiles() -> void:
 	# quedaría detrás: al abrir cualquiera de ellas se cierran los paneles.
 	_tactil.al_abrir_panel = Callable(self, "_cerrar_paneles_juego")
 	_tactil.talentos.connect(_al_talentos_tactil)
+	# Fase 2: el HUD táctil sigue a la máquina de estados global. Acceso
+	# dinámico porque las suites `--script` no registran autoloads.
+	var bus := get_node_or_null("/root/EventBus")
+	if bus != null:
+		if not bus.is_connected("estado_cambiado", Callable(self, "_al_estado_juego")):
+			bus.connect("estado_cambiado", Callable(self, "_al_estado_juego"))
+		if not bus.is_connected("tactil_cambiado", Callable(self, "_al_tactil_evento")):
+			bus.connect("tactil_cambiado", Callable(self, "_al_tactil_evento"))
+	var manager := get_node_or_null("/root/GameManager")
+	if manager != null and manager.has_method("iniciar_partida"):
+		manager.call("iniciar_partida", not es_cliente)
+		var estado_actual := int(manager.get("estado"))
+		_tactil.sincronizar_estado(estado_actual == 1)  # GameManager.Estado.PLAYING
 	# En móvil manda el HUD táctil: se apaga la consola de escritorio (comandos
 	# QWER, ficha y estadísticas) para dejar la arena despejada.
 	if _hud != null:
 		_hud.establecer_modo_tactil(true)
+
+
+## Cambio de estado global: PLAYING (1) es el único que permite tocar la arena.
+func _al_estado_juego(nuevo_estado: int, _anterior: int, _motivo: StringName) -> void:
+	if _tactil != null:
+		_tactil.sincronizar_estado(nuevo_estado == 1)
+
+
+func _al_tactil_evento(activo: bool) -> void:
+	if _tactil != null:
+		_tactil.sincronizar_estado(activo)
+
+
+func _input(evento: InputEvent) -> void:
+	if evento is InputEventMouseButton or evento is InputEventScreenTouch or evento is InputEventKey:
+		Sfx.desbloquear_web()
 
 
 ## Cierra tienda y talentos (deja el árbol jugable) antes de abrir otro panel.
@@ -1731,7 +1774,32 @@ func _al_pausa_tactil() -> void:
 func _al_habilidad_tactil(slot: int) -> void:
 	if _jugador == null or _jugador.esta_muerto:
 		return
-	_jugador.intentar_habilidad(slot, _punto_habilidad())
+	var punto := _punto_habilidad()
+	if _jugador.has_method("apuntar_suave"):
+		_jugador.call("apuntar_suave", punto, get_process_delta_time())
+	_jugador.intentar_habilidad(slot, punto)
+
+
+func _al_ataque_tactil() -> void:
+	if _jugador != null and _jugador.has_method("atacar_ahora"):
+		_jugador.call("atacar_ahora")
+
+
+## El botón DASH elige la primera habilidad de movilidad desbloqueada.
+func _al_dash_tactil() -> void:
+	if _jugador == null or _jugador.esta_muerto or _jugador.arma_actual == null:
+		return
+	var punto := _punto_habilidad()
+	for slot in range(4):
+		var hab := _jugador.arma_actual.obtener_habilidad(slot)
+		if hab == null or hab.tipo != AbilityData.Tipo.MOVILIDAD:
+			continue
+		if not _jugador.habilidad_desbloqueada(slot):
+			continue
+		if _jugador.has_method("apuntar_suave"):
+			_jugador.call("apuntar_suave", punto, get_process_delta_time())
+		_jugador.intentar_habilidad(slot, punto)
+		return
 
 
 func _al_detener_tactil() -> void:
@@ -1816,9 +1884,53 @@ func _conectar() -> void:
 	_publico.furia_iniciada.connect(_al_furia_iniciada)
 	if _jugador != null and _camara != null:
 		_jugador.recibio_dano.connect(_camara.agitar)
+		_jugador.recibio_dano.connect(_al_impacto_recibido)
+	if _jugador != null and not _jugador.ataque_basico.is_connected(_al_impacto_golpe):
+		_jugador.ataque_basico.connect(_al_impacto_golpe)
+	if _jugador != null and not _jugador.habilidad_lanzada.is_connected(_al_habilidad_efecto):
+		_jugador.habilidad_lanzada.connect(_al_habilidad_efecto)
 	_oleadas.jefe_invocado.connect(_al_jefe_invocado)
 	if _jugador != null:
 		_jugador.habilidad_mejorada.connect(_al_habilidad_mejorada)
+
+
+# --- Game feel: impactos agrupados -----------------------------------------
+
+func _al_impacto_golpe(objetivo: Node3D, cantidad: float, critico: bool) -> void:
+	if _impactos == null or objetivo == null or not is_instance_valid(objetivo):
+		return
+	var color := Color(1.0, 0.72, 0.28) if critico else Color(0.95, 0.92, 0.78)
+	_impactos.reproducir(
+		(objetivo as Node3D).global_position + Vector3(0, 1.0, 0),
+		color,
+		1.15 if critico else 0.85,
+		18 if critico else 10
+	)
+	if critico and _camara != null:
+		_camara.agitar(0.35)
+
+
+func _al_habilidad_efecto(_slot: int, habilidad: AbilityData) -> void:
+	if _impactos == null or _jugador == null or habilidad == null:
+		return
+	var color := Color(0.45, 0.75, 1.0) if habilidad.tipo_dano == GladiatorStats.TIPO_MAGICO else Color(1.0, 0.78, 0.32)
+	_impactos.reproducir(
+		_jugador.global_position + Vector3(0, 1.2, 0),
+		color,
+		1.0,
+		14
+	)
+
+
+func _al_impacto_recibido(_intensidad: float = 1.0) -> void:
+	if _impactos == null or _jugador == null:
+		return
+	_impactos.reproducir(
+		_jugador.global_position + Vector3(0, 1.1, 0),
+		Color(0.95, 0.28, 0.22),
+		0.9,
+		12
+	)
 
 
 # --- Notificaciones de habilidad ------------------------------------------
@@ -1947,6 +2059,7 @@ func _interactuar_bandera(jugador: GladiatorController) -> void:
 func _avisar(texto: String, duracion := 2.0) -> void:
 	if _hud != null:
 		_hud.mostrar_mensaje(texto, duracion)
+	Eventos.mensaje(texto, duracion)
 
 
 func _interactuar_cercano() -> void:
@@ -2563,7 +2676,10 @@ func _capturar() -> void:
 				await get_tree().process_frame
 				var vista = panel_tienda.get("_arbol") if arbol else panel_tienda
 				if vista != null:
-					vista.call("seleccionar_por_id", &"nucleo_ferreo")
+					if arbol:
+						vista.call("seleccionar_por_id", &"nucleo_ferreo")
+					else:
+						vista.call("_seleccionar_por_id", &"nucleo_ferreo")
 		elif cerca and _camara != null:
 			_camara.size = 7.0
 		if arquetipos:

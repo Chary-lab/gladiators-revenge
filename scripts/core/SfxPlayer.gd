@@ -32,6 +32,31 @@ static var _streams: Dictionary = {}
 static var _reproductores: Array[AudioStreamPlayer] = []
 static var _siguiente := 0
 static var _conectado := false
+static var _desbloqueado_web := false
+
+
+## Los navegadores suspenden el AudioContext hasta un gesto del usuario. Un
+## primer sonido silencioso en el primer toque/click lo despierta; luego Sfx
+## funciona con normalidad sin depender de JavaScript específico de Godot.
+static func desbloquear_web() -> void:
+	if not OS.has_feature("web") or _desbloqueado_web:
+		return
+	_desbloqueado_web = true
+	var arbol := Engine.get_main_loop() as SceneTree
+	if arbol == null:
+		return
+	var onda := AudioStreamWAV.new()
+	onda.format = AudioStreamWAV.FORMAT_16_BITS
+	onda.mix_rate = FRECUENCIA
+	onda.stereo = false
+	onda.data = PackedByteArray([0, 0, 0, 0])
+	var reproductor := AudioStreamPlayer.new()
+	reproductor.bus = &"Master"
+	reproductor.volume_db = -80.0
+	reproductor.stream = onda
+	arbol.root.add_child(reproductor)
+	reproductor.finished.connect(reproductor.queue_free)
+	reproductor.play()
 
 
 static func reproducir(nombre: StringName, volumen_db := 0.0) -> void:

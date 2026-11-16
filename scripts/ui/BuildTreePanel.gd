@@ -86,6 +86,14 @@ func _ready() -> void:
 	offset_bottom = 20.0 + ALTO
 	add_theme_stylebox_override("panel", ForjaTema.estilo_ventana())
 	_construir_interfaz()
+	_aplicar_marco()
+	var viewport := get_viewport()
+	if viewport != null and not viewport.size_changed.is_connected(_aplicar_marco):
+		viewport.size_changed.connect(_aplicar_marco)
+
+
+func _aplicar_marco() -> void:
+	SafeArea.aplicar(self, ANCHO, ALTO)
 
 
 func configurar(jugador: GladiatorController, arena: Node, tienda: ShopPanel = null) -> void:

@@ -99,6 +99,9 @@ signal salir_lobby
 var _cd_antes: Array = [0.0, 0.0, 0.0, 0.0]
 var _talentos: TalentPanel
 var _tienda: ShopPanel
+## Capa propia del mercader; el HUD de combate queda en la capa base y los
+## tooltips por encima (60). La tienda no debe tapar ni ser tapada por el HUD.
+var _capa_tienda: CanvasLayer
 # Dirty flags: evita reescribir controles del HUD cada frame cuando nada cambió.
 var _ficha_vida_anterior: int = -1
 var _ficha_mana_anterior: int = -1
@@ -145,15 +148,26 @@ func configurar(
 	_talentos = TalentPanel.new()
 	add_child(_talentos)
 	_talentos.configurar(_jugador)
+	_talentos.cerrado.connect(_al_cerrar_talentos)
+	_capa_tienda = CanvasLayer.new()
+	_capa_tienda.layer = 50
+	add_child(_capa_tienda)
 	_tienda = ShopPanel.new()
-	add_child(_tienda)
+	_capa_tienda.add_child(_tienda)
 	_tienda.configurar(_jugador, _arena, self)
+	_tienda.cerrado.connect(_al_cerrar_tienda)
 	if _oleadas != null:
 		_oleadas.mensaje.connect(mostrar_mensaje)
 	if _jugador != null and not _jugador.nivel_alcanzado.is_connected(_al_subir_nivel):
 		_jugador.nivel_alcanzado.connect(_al_subir_nivel)
 	if _jugador != null and not _jugador.habilidad_mejorada.is_connected(_al_mejorar_habilidad):
 		_jugador.habilidad_mejorada.connect(_al_mejorar_habilidad)
+	if _jugador != null and not _jugador.talentos_cambiados.is_connected(_al_talentos_cambiados):
+		_jugador.talentos_cambiados.connect(_al_talentos_cambiados)
+
+
+func _al_talentos_cambiados() -> void:
+	Eventos.talentos()
 
 
 func _al_subir_nivel(nivel: int) -> void:
@@ -180,6 +194,10 @@ func construir() -> void:
 	_raiz.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_raiz.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_raiz)
+	_aplicar_marco()
+	var viewport := get_viewport()
+	if viewport != null and not viewport.size_changed.is_connected(_aplicar_marco):
+		viewport.size_changed.connect(_aplicar_marco)
 
 	_hud_arriba = Control.new()
 	_hud_arriba.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1089,6 +1107,11 @@ func mostrar_final(texto: String, puede_reintentar := true) -> void:
 	_final_detalle.text = texto.get_slice("\n", 1) if texto.contains("\n") else ""
 	_boton_reintentar.visible = puede_reintentar
 	_boton_lobby.visible = true
+	_sincronizar_tactil()
+	var manager := _manager_partida()
+	if manager != null and manager.has_method("terminar_partida"):
+		var victoria := texto.contains("VICTORIA")
+		manager.call("terminar_partida", _final_titulo.text, _final_detalle.text, victoria)
 
 
 func _crear_panel_final() -> void:
@@ -1149,26 +1172,92 @@ func alternar_talentos() -> void:
 	if _tienda != null:
 		_tienda.cerrar_panel()
 	_talentos.alternar()
+	_sincronizar_tactil()
 
 
 func cerrar_talentos() -> void:
 	_talentos.cerrar_panel()
+	_sincronizar_tactil()
+
+
+func _al_cerrar_talentos() -> void:
+	# El botón/ESC del propio panel también cuenta: no basta con cerrarlo desde
+	# el HUD, o el HUD táctil seguiría oculto con la pantalla despejada.
+	_sincronizar_tactil()
 
 
 func alternar_tienda() -> void:
 	if _talentos != null:
 		_talentos.cerrar_panel()
+	if _tienda != null and _tienda.visible:
+		cerrar_tienda()
+		return
+	_llamar_manager(&"abrir_tienda")
 	_tienda.alternar()
+	_sincronizar_tactil()
 
 
 func cerrar_tienda() -> void:
-	_tienda.cerrar_panel()
+	if _tienda != null:
+		_tienda.cerrar_panel()
+	_llamar_manager(&"cerrar_tienda")
 	forzar_ocultar_tooltip()
 	_limpiar_seleccion_swap()
+	_sincronizar_tactil()
+
+
+func _al_cerrar_tienda() -> void:
+	_llamar_manager(&"cerrar_tienda")
+	_sincronizar_tactil()
 
 
 func tienda_abierta() -> bool:
 	return _tienda != null and _tienda.visible
+
+
+# --- Marco seguro -----------------------------------------------------------
+
+func _aplicar_marco() -> void:
+	SafeArea.aplicar(_raiz, ANCHO, 720.0)
+
+
+# --- Puente con los autoloads (Fase 1) ------------------------------------
+## Acceso dinámico: los tests corren con `--script`, donde los autoloads no se
+## registran. Referenciar `EventBus`/`GameManager` por identificador rompería
+## la compilación de ArenaHUD en esas suites.
+
+func _bus_eventos() -> Node:
+	return get_node_or_null("/root/EventBus")
+
+
+func _manager_partida() -> Node:
+	return get_node_or_null("/root/GameManager")
+
+
+func _llamar_manager(metodo: StringName) -> void:
+	var manager := _manager_partida()
+	if manager != null and manager.has_method(metodo):
+		manager.call(metodo)
+
+
+func _emitir_evento(nombre: String) -> void:
+	var bus := _bus_eventos()
+	if bus != null:
+		bus.emit_signal(nombre)
+
+
+func _hay_panel_bloqueante() -> bool:
+	return (
+		(_tienda != null and _tienda.visible)
+		or (_talentos != null and _talentos.visible)
+		or (_panel_final != null and _panel_final.visible)
+	)
+
+
+func _sincronizar_tactil() -> void:
+	var bus := _bus_eventos()
+	if bus != null:
+		bus.emit_signal("tactil_cambiado", not _hay_panel_bloqueante())
 
 
 # --- Acciones -------------------------------------------------------------

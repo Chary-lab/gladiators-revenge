@@ -14,6 +14,9 @@ signal detener
 signal pausa
 signal tienda
 signal talentos
+## Ganchos de combate que se conectarán en la Fase 3 (ataque básico y dash).
+signal ataque
+signal dash
 
 const CLAVES := ["Q", "W", "E", "R"]
 const CENTRO_JOY := Vector2(178, 530)
@@ -33,6 +36,21 @@ var _perilla: Panel
 var _botones: Array = []
 var _velos: Array = []
 var _cd_textos: Array = []
+var _cd_barras: Array[TextureProgressBar] = []
+var _cd_anteriores: Array[float] = []
+var _cd_enfriamiento: Array[bool] = []
+var _pulso_tweens: Array = []
+static var _textura_barra: Texture2D = null
+## Joystick flotante: aparece donde el pulgar toca la mitad inferior izquierda.
+var _joy_centro := CENTRO_JOY
+var _joy_activo := false
+var _joy_indice := -1
+## Marco escalado por SafeArea: convierte coordenadas de evento a diseño 1280×720.
+var _origen_marco := Vector2.ZERO
+var _escala_marco := 1.0
+## Botonera derecha ergonómica: ataque y dash al alcance del pulgar.
+var _boton_ataque: Button
+var _boton_dash: Button
 var _panel_vital: PanelContainer
 var _barra_vida: ForjaTema.BarraSegmentada
 var _barra_mana: ForjaTema.BarraSegmentada
@@ -71,6 +89,18 @@ func configurar(jugador: GladiatorController) -> void:
 	_raiz.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_raiz.theme = ForjaTema.tema_global()
 	add_child(_raiz)
+	_velos.clear()
+	_cd_textos.clear()
+	_cd_barras.clear()
+	_cd_anteriores.clear()
+	_cd_enfriamiento.clear()
+	_pulso_tweens.clear()
+	_botones.clear()
+	_niveles.clear()
+	_aplicar_marco()
+	var viewport := get_viewport()
+	if viewport != null and not viewport.size_changed.is_connected(_aplicar_marco):
+		viewport.size_changed.connect(_aplicar_marco)
 
 	_crear_vitales()
 	_crear_accesos()
@@ -92,6 +122,27 @@ func configurar(jugador: GladiatorController) -> void:
 		cd.add_theme_color_override("font_outline_color", Color(0.02, 0.02, 0.02, 0.9))
 		boton.add_child(cd)
 		_cd_textos.append(cd)
+		# Barra de recarga en tiempo real, además del velo radial y el número.
+		var barra := TextureProgressBar.new()
+		barra.min_value = 0.0
+		barra.max_value = 1.0
+		barra.value = 1.0
+		barra.fill_mode = TextureProgressBar.FILL_BOTTOM_TO_TOP
+		barra.nine_patch_stretch = false
+		barra.modulate = Color(0.95, 0.73, 0.32, 1.0)
+		barra.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		barra.offset_left = 8.0
+		barra.offset_right = -8.0
+		barra.offset_top = -34.0
+		barra.offset_bottom = -24.0
+		barra.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		boton.add_child(barra)
+		barra.texture_progress = _textura_blanca()
+		_cd_barras.append(barra)
+		_cd_anteriores.append(1.0)
+		_cd_enfriamiento.append(false)
+		_pulso_tweens.append(null)
+		boton.pivot_offset = Vector2(LADO_HABILIDAD * 0.5, LADO_HABILIDAD * 0.5)
 		var nv := ForjaTema.rotulo("Nv 1", 10, ForjaTema.ORO_CLARO)
 		nv.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 		nv.offset_top = -19
@@ -117,6 +168,13 @@ func configurar(jugador: GladiatorController) -> void:
 	_boton_interactuar.add_theme_stylebox_override("hover", estilo_hub)
 	_boton_interactuar.pressed.connect(func() -> void: interactuar.emit())
 
+	# Botonera derecha: ataque grande abajo, dash un poco más arriba y a la
+	# izquierda; las cuatro habilidades quedan en el arco por encima del pulgar.
+	_boton_ataque = _crear_boton("ATAQUE", Vector2(1150, 650), 104, 14, true)
+	_boton_ataque.pressed.connect(func() -> void: ataque.emit())
+	_boton_dash = _crear_boton("DASH", Vector2(960, 650), 78, 13, true)
+	_boton_dash.pressed.connect(func() -> void: dash.emit())
+
 	_boton_pausa = ForjaTema.boton("II", 18)
 	_boton_pausa.position = Vector2(1216, 96)
 	_boton_pausa.custom_minimum_size = Vector2(52, 40)
@@ -125,6 +183,31 @@ func configurar(jugador: GladiatorController) -> void:
 	_raiz.add_child(_boton_pausa)
 
 	aplicar_escala(escala)
+
+
+func _aplicar_marco() -> void:
+	var viewport := get_viewport()
+	if _raiz == null or viewport == null:
+		return
+	SafeArea.aplicar(_raiz, 1280.0, 720.0)
+	var destino := SafeArea.marco(viewport.size, 1280.0, 720.0)
+	_origen_marco = destino.position
+	_escala_marco = maxf(destino.size.x / 1280.0, 0.1)
+
+
+## Textura 1×1 cacheada para las barras: no creamos assets nuevos.
+static func _textura_blanca() -> Texture2D:
+	if _textura_barra != null:
+		return _textura_barra
+	var imagen := Image.create(76, 10, false, Image.FORMAT_RGBA8)
+	imagen.fill(Color(1, 1, 1, 1))
+	_textura_barra = ImageTexture.create_from_image(imagen)
+	return _textura_barra
+
+
+## Coordenada de evento (viewport) -> coordenada de diseño 1280×720.
+func _a_diseno(posicion: Vector2) -> Vector2:
+	return (posicion - _origen_marco) / _escala_marco
 
 
 ## Factor de radio: al agrandar los botones el anillo crece menos que ellos,
@@ -458,8 +541,9 @@ func _refrescar_ficha() -> void:
 func _crear_joystick() -> void:
 	_base = Panel.new()
 	_base.size = Vector2(RADIO_JOY, RADIO_JOY) * 2.0
-	_base.position = CENTRO_JOY - Vector2(RADIO_JOY, RADIO_JOY)
+	_base.position = _joy_centro - Vector2(RADIO_JOY, RADIO_JOY)
 	_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_base.visible = false
 	var estilo := StyleBoxFlat.new()
 	estilo.bg_color = Color(0, 0, 0, 0)
 	estilo.border_color = Color(ForjaTema.ORO_OSCURO.r, ForjaTema.ORO_OSCURO.g, ForjaTema.ORO_OSCURO.b, 0.55)
@@ -469,13 +553,15 @@ func _crear_joystick() -> void:
 	_raiz.add_child(_base)
 
 	_aro = ForjaTema.AroRunas.new(RADIO_JOY)
-	_aro.position = CENTRO_JOY - Vector2(RADIO_JOY, RADIO_JOY)
+	_aro.position = _joy_centro - Vector2(RADIO_JOY, RADIO_JOY)
+	_aro.visible = false
 	_raiz.add_child(_aro)
 
 	_perilla = Panel.new()
 	_perilla.size = Vector2(RADIO_JOY, RADIO_JOY)
-	_perilla.position = CENTRO_JOY - _perilla.size * 0.5
+	_perilla.position = _joy_centro - _perilla.size * 0.5
 	_perilla.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_perilla.visible = false
 	var estilo_perilla := StyleBoxFlat.new()
 	estilo_perilla.bg_color = Color(0.72, 0.58, 0.30, 0.32)
 	estilo_perilla.border_color = ForjaTema.ORO
@@ -527,75 +613,121 @@ func aplicar_escala(nueva: float) -> void:
 	escala = clampf(nueva, 0.75, 1.6)
 	if _raiz == null or _aro == null:
 		return
-	_aro.escala = escala
-	_aro.queue_redraw()
-	if _base != null:
-		_base.size = Vector2(RADIO_JOY, RADIO_JOY) * 2.0 * escala
-		_base.position = CENTRO_JOY - _base.size * 0.5
+	var base_tam := Vector2(RADIO_JOY, RADIO_JOY) * 2.0 * escala
+	_base.size = base_tam
+	_base.position = _joy_centro - base_tam * 0.5
+	if _aro != null:
+		_aro.escala = escala
+		_aro.position = _joy_centro - base_tam * 0.5
+		_aro.queue_redraw()
 	if _perilla != null:
 		_perilla.size = Vector2(RADIO_JOY, RADIO_JOY) * escala
-		_perilla.position = CENTRO_JOY - _perilla.size * 0.5
+		_perilla.position = _joy_centro - _perilla.size * 0.5
 	for i in _botones.size():
 		var boton: Button = _botones[i]
 		boton.size = Vector2(LADO_HABILIDAD, LADO_HABILIDAD) * escala
 		boton.custom_minimum_size = boton.size
 		boton.position = _posicion_rueda(i)
+		boton.pivot_offset = boton.size * 0.5
 		boton.add_theme_font_size_override("font_size", int(26 * escala))
 	if _boton_interactuar != null:
 		_boton_interactuar.size = Vector2(LADO_INTERACTUAR, LADO_INTERACTUAR) * escala
 		_boton_interactuar.custom_minimum_size = _boton_interactuar.size
 		_boton_interactuar.position = _centro_rueda() - _boton_interactuar.size * 0.5
 		_boton_interactuar.add_theme_font_size_override("font_size", int(11 * escala))
+	if _boton_ataque != null:
+		_boton_ataque.size = Vector2(104, 104) * escala
+		_boton_ataque.custom_minimum_size = _boton_ataque.size
+		_boton_ataque.position = Vector2(1150, 650) - _boton_ataque.size * 0.5
+		_boton_ataque.add_theme_font_size_override("font_size", int(14 * escala))
+	if _boton_dash != null:
+		_boton_dash.size = Vector2(78, 78) * escala
+		_boton_dash.custom_minimum_size = _boton_dash.size
+		_boton_dash.position = Vector2(960, 650) - _boton_dash.size * 0.5
+		_boton_dash.add_theme_font_size_override("font_size", int(13 * escala))
 
 
 func _input(evento: InputEvent) -> void:
-	# Joystick: acepta toque y ratón (para probar en escritorio).
-	var inicio := Vector2.ZERO
-	var posicion := Vector2.ZERO
-	var activo := false
+	if not visible:
+		return
+	# Joystick flotante: cualquier toque de la mitad inferior izquierda mueve
+	# el aro hasta el dedo. Se sigue aceptando ratón para probar en escritorio.
 	if evento is InputEventScreenTouch:
 		var toque := evento as InputEventScreenTouch
-		inicio = toque.position
-		posicion = toque.position
-		activo = toque.pressed
+		var local := _a_diseno(toque.position)
 		if not toque.pressed:
+			if _joy_indice != -1 and toque.index != _joy_indice:
+				return
 			_soltar_joystick()
 			return
-	elif evento is InputEventScreenDrag:
-		if not _arrastrando:
+		if _joy_activo:
 			return
-		_mover_perilla((evento as InputEventScreenDrag).position)
+		if local.x > 588.0 or local.y < 324.0:
+			return
+		_joy_centro = local
+		_joy_activo = true
+		_joy_indice = toque.index
+		_arrastrando = true
+		_ubicar_joystick()
+		_mover_perilla(local)
 		return
-	elif evento is InputEventMouseButton:
+	if evento is InputEventScreenDrag:
+		if not _arrastrando or _joy_indice == -1:
+			return
+		var arrastre := evento as InputEventScreenDrag
+		if arrastre.index != _joy_indice:
+			return
+		_mover_perilla(_a_diseno(arrastre.position))
+		return
+	if evento is InputEventMouseButton:
 		var clic := evento as InputEventMouseButton
 		if clic.button_index != MOUSE_BUTTON_LEFT:
 			return
-		inicio = clic.position
-		posicion = clic.position
-		activo = clic.pressed
+		var local := _a_diseno(clic.position)
 		if not clic.pressed:
 			_soltar_joystick()
 			return
-	elif evento is InputEventMouseMotion and _arrastrando:
-		_mover_perilla((evento as InputEventMouseMotion).position)
-		return
-	else:
-		return
-
-	if not activo:
-		return
-	# Zona generosa: el pulgar no siempre acierta el centro del aro.
-	if inicio.distance_to(CENTRO_JOY) <= RADIO_JOY * escala * 1.45:
+		if _joy_activo or local.x > 588.0 or local.y < 324.0:
+			return
+		_joy_centro = local
+		_joy_activo = true
+		_joy_indice = -1
 		_arrastrando = true
-		_mover_perilla(posicion)
+		_ubicar_joystick()
+		_mover_perilla(local)
+		return
+	if evento is InputEventMouseMotion and _arrastrando and _joy_indice == -1:
+		_mover_perilla(_a_diseno((evento as InputEventMouseMotion).position))
+
+
+## Estado global (GameManager): fuera de PLAYING el HUD táctil desaparece y
+## deja de recibir input, así la tienda no recibe toques fantasma del joystick.
+func sincronizar_estado(jugable: bool) -> void:
+	visible = jugable
+	set_process(jugable)
+	set_process_input(jugable)
+	if not jugable:
+		_soltar_joystick()
+
+
+func _ubicar_joystick() -> void:
+	if _base == null or _aro == null or _perilla == null:
+		return
+	var base_tam := Vector2(RADIO_JOY, RADIO_JOY) * 2.0 * escala
+	_base.position = _joy_centro - base_tam * 0.5
+	_aro.position = _joy_centro - base_tam * 0.5
+	_perilla.position = _joy_centro - _perilla.size * 0.5
+	_base.visible = true
+	_aro.visible = true
+	_perilla.visible = true
 
 
 func _mover_perilla(posicion: Vector2) -> void:
-	var delta := posicion - CENTRO_JOY
+	var delta := posicion - _joy_centro
 	var limite := RADIO_JOY * escala
 	if delta.length() > limite:
 		delta = delta.normalized() * limite
-	_perilla.position = CENTRO_JOY + delta - _perilla.size * 0.5
+	_perilla.position = _joy_centro + delta - _perilla.size * 0.5
 	var direccion := delta / limite
 	if direccion.length() < 0.16:
 		direccion = Vector2.ZERO
@@ -606,11 +738,17 @@ func _mover_perilla(posicion: Vector2) -> void:
 
 func _soltar_joystick() -> void:
 	_arrastrando = false
-	if _perilla != null:
-		_perilla.position = CENTRO_JOY - _perilla.size * 0.5
+	_joy_activo = false
+	_joy_indice = -1
+	if _base != null:
+		_base.visible = false
 	if _aro != null:
+		_aro.visible = false
 		_aro.direccion = Vector2.ZERO
 		_aro.queue_redraw()
+	if _perilla != null:
+		_perilla.visible = false
+		_perilla.position = _joy_centro - _perilla.size * 0.5
 	mover.emit(Vector2.ZERO)
 
 
@@ -647,9 +785,40 @@ func _process(_delta: float) -> void:
 		var cd: Label = _cd_textos[i]
 		if cd != null:
 			cd.text = ("%d" % int(ceil(restante))) if restante > 0.5 else ""
+		if i < _cd_barras.size():
+			var barra: TextureProgressBar = _cd_barras[i]
+			var listo := 1.0 - fraccion
+			if absf(listo - _cd_anteriores[i]) > 0.01:
+				barra.value = listo
+				_cd_anteriores[i] = listo
+			var enfriando := restante > 0.05
+			if _cd_enfriamiento[i] and not enfriando and total > 1.0:
+				_pulso_recarga(i)
+			_cd_enfriamiento[i] = enfriando
 		boton.modulate = Color(1, 1, 1, 1) if _disponible(i) else Color(0.55, 0.52, 0.46, 0.8)
 		if i < _niveles.size():
 			_actualizar_nivel_habilidad(i)
+
+
+## Un solo tween por recarga completada: escala arriba y vuelve, sin crear un
+## Tween por fotograma (eso costaba más que el propio cooldown).
+func _pulso_recarga(slot: int) -> void:
+	if slot >= _botones.size():
+		return
+	var boton: Button = _botones[slot]
+	if boton == null or not is_instance_valid(boton):
+		return
+	if slot < _pulso_tweens.size():
+		var anterior = _pulso_tweens[slot]
+		if anterior != null and is_instance_valid(anterior):
+			anterior.kill()
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(boton, "scale", Vector2(1.12, 1.12), 0.10)
+	tween.tween_property(boton, "scale", Vector2(1.0, 1.0), 0.18)
+	if slot < _pulso_tweens.size():
+		_pulso_tweens[slot] = tween
 
 
 ## Rótulo de nivel bajo cada habilidad: el rango actual o, si está bloqueada,

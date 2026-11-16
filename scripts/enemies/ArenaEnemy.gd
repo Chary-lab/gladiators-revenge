@@ -1,10 +1,10 @@
 class_name ArenaEnemy
-extends CharacterBody3D
-## Enemigo básico de oleada (orco imperial / gladiador rival).
+extends EnemyBase
+## Enemigo de oleada (orco imperial / gladiador rival).
 ##
-## IA deliberadamente simple: sin NavigationAgent. La arena es convexa y sin
-## obstáculos, así que la persecución directa es más barata en Web que mantener
-## decenas de agentes de navegación. El jugador sí usa NavigationAgent3D.
+## Hereda `EnemyBase`, que lleva el NavigationAgent3D sobre la malla de la
+## arena. La IA de arquetipos sigue aquí: los nueve tipos clásicos se mantienen
+## y los cuatro `EnemyData` data-driven los extienden sin duplicar código.
 ##
 ## Prioridad de objetivo:
 ## 1. Quien lo haya provocado (taunt) mientras dure el efecto.
@@ -60,6 +60,10 @@ var es_bruto := false
 var es_nigromante := false
 var _reduccion_fisica := 0.0
 var _ritual_restante := 0.0
+var datos: EnemyData = null
+var es_cargador := false
+var _tiempo_carga := 0.0
+var _duracion_embestida := 0.0
 var _escala_base := 1.0
 ## Altura local de la barra de vida: se calcula por arquetipo para que quede
 ## sobre la cabeza aunque el modelo sea 1.4× (bruto) o 0.8× (sabueso).
@@ -84,6 +88,7 @@ var _fuente_provocacion: Node3D
 var _provocado := 0.0
 var _temporizador := 0.0
 var _flash := 0.0
+var _flash_barra := 0.0  # parpadeo de la barra al recibir daño
 var _tipo_visual := &""
 var _tiempo_muerte := 0.0
 var _marca_verdugo := 0.0
@@ -108,6 +113,12 @@ func _construir() -> void:
 	forma.shape = capsula
 	forma.position.y = 0.75
 	add_child(forma)
+
+	var receptor := ReceptorGolpes3D.new()
+	receptor.name = "ReceptorGolpes"
+	receptor.configurar(0.48, 1.5)
+	receptor.position.y = 0.75
+	add_child(receptor)
 
 
 ## Ruta, tinte y perfil de animación de cada arquetipo de enemigo.
@@ -177,7 +188,8 @@ func preparar(
 	xp: int = 0,
 	tipo: StringName = &"",
 	vida_mult: float = 1.0,
-	dano_mult: float = 1.0
+	dano_mult: float = 1.0,
+	datos_enemigo: EnemyData = null
 ) -> void:
 	es_elite = elite
 	xp_recompensa = xp
@@ -203,6 +215,12 @@ func preparar(
 			arquetipo = &"espectro"
 	if elite:
 		arquetipo = &"elite"
+
+	datos = datos_enemigo
+	if datos == null:
+		datos = EnemyCatalog.obtener(tipo)
+	if datos != null and ARQUETIPOS.has(datos.arquetipo_base) and not elite:
+		arquetipo = datos.arquetipo_base
 
 	var mods: Dictionary = ARQUETIPOS[arquetipo]
 	es_ligero = arquetipo == &"espectro" or arquetipo == &"sabueso"
@@ -236,6 +254,18 @@ func preparar(
 		escudo_tanque_maxima = 0.0
 		escudo_tanque_actual = 0.0
 	recompensa = (12 + ronda) * (3 if elite else 1)
+	if datos != null:
+		salud_maxima *= maxf(0.1, datos.vida_mult)
+		dano *= maxf(0.1, datos.dano_mult)
+		velocidad *= maxf(0.1, datos.velocidad_mult)
+		cadencia /= maxf(0.1, datos.cadencia_mult)
+		recompensa = int(recompensa * maxf(0.1, datos.recompensa_mult))
+		salud_actual = salud_maxima
+		dano_magia = dano * 1.15
+		es_cargador = datos.rol == EnemyData.Rol.CHARGER and datos.periodo_carga > 0.0
+		_tiempo_carga = datos.periodo_carga
+		usa_navegacion = true
+	_duracion_embestida = 0.0
 	_temporizador = randf_range(0.0, 0.5)
 	_provocado = 0.0
 	_fuente_provocacion = null
@@ -245,7 +275,8 @@ func preparar(
 	_vulnerable_magico = 0.0
 	_aturdido = 0.0
 	_configurar_visual(arquetipo)
-	scale = Vector3.ONE * _escala_base
+	var escala_datos := maxf(0.1, datos.escala_mult) if datos != null else 1.0
+	scale = Vector3.ONE * _escala_base * escala_datos
 	if _barra_raiz != null:
 		_barra_raiz.visible = false
 	_actualizar_barra_vida()
@@ -260,6 +291,8 @@ func al_obtener() -> void:
 	activo = false
 	_tiempo_muerte = 0.0
 	_aturdido = 0.0
+	_duracion_embestida = 0.0
+	reiniciar_navegacion()
 	if _barra_raiz != null:
 		_barra_raiz.visible = false
 	if visual != null:
@@ -296,11 +329,13 @@ func aplicar_remoto(posicion: Vector3, rotacion: float, vida: float, vida_max: f
 	# sin vida y no podía leer la oleada.
 	_actualizar_barra_vida()
 
-
 ## Espejo de red: el servidor manda 15 posiciones por segundo; sin esto el
 ## enemigo avanza a saltos de ~1 m y en el móvil se siente trabado.
 func _process(delta: float) -> void:
 	_sincronizar_barra()
+	if _flash_barra > 0.0:
+		_flash_barra = maxf(0.0, _flash_barra - delta)
+		_actualizar_barra_vida()
 	if not _es_remoto:
 		return
 	var peso := clampf(16.0 * delta, 0.0, 1.0)
@@ -346,10 +381,8 @@ func _physics_process(delta: float) -> void:
 	# Arquero: mantener distancia y disparar proyectiles.
 	if es_arquero:
 		if distancia > rango_ataque_distancia:
-			var direccion := objetivo.global_position - global_position
-			direccion.y = 0.0
+			var direccion := direccion_hacia(objetivo.global_position, delta)
 			if direccion.length_squared() > 0.0004:
-				direccion = direccion.normalized()
 				velocity = direccion * velocidad
 				rotation.y = lerp_angle(rotation.y, atan2(direccion.x, direccion.z), 10.0 * delta)
 				move_and_slide()
@@ -368,10 +401,8 @@ func _physics_process(delta: float) -> void:
 	# Hechicero / nigromante: mantener distancia y lanzar magia de área.
 	if es_hechicero:
 		if distancia > rango_ataque_magia:
-			var direccion := objetivo.global_position - global_position
-			direccion.y = 0.0
+			var direccion := direccion_hacia(objetivo.global_position, delta)
 			if direccion.length_squared() > 0.0004:
-				direccion = direccion.normalized()
 				velocity = direccion * velocidad
 				rotation.y = lerp_angle(rotation.y, atan2(direccion.x, direccion.z), 10.0 * delta)
 				move_and_slide()
@@ -388,11 +419,18 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if distancia > rango:
-		var direccion := objetivo.global_position - global_position
-		direccion.y = 0.0
+		var direccion := direccion_hacia(objetivo.global_position, delta)
 		if direccion.length_squared() > 0.0004:
-			direccion = direccion.normalized()
-			velocity = direccion * velocidad
+			var multiplier := 1.0
+			if es_cargador and datos != null:
+				_tiempo_carga -= delta
+				if _tiempo_carga <= 0.0 and _duracion_embestida <= 0.0:
+					_duracion_embestida = datos.duracion_carga
+					_tiempo_carga = datos.periodo_carga
+				if _duracion_embestida > 0.0:
+					_duracion_embestida -= delta
+					multiplier = datos.multiplicador_carga
+			velocity = direccion * velocidad * multiplier
 			rotation.y = lerp_angle(rotation.y, atan2(direccion.x, direccion.z), 10.0 * delta)
 			move_and_slide()
 			if visual != null:
@@ -571,9 +609,30 @@ func recibir_dano(cantidad: float, tipo: StringName = &"fisico", _fuente: Node =
 	NumerosDano.mostrar(global_position + Vector3(0, 1.3, 0), cantidad, tipo, critico)
 	_golpe_visual()
 	_actualizar_barra_vida()
+	_flash_barra = 0.25  # la barra parpadea en blanco al recibir golpe
+	var receptor := get_node_or_null("ReceptorGolpes")
+	if receptor != null and receptor.has_method("empujar") and _fuente is Node3D:
+		receptor.call("empujar", (_fuente as Node3D).global_position, minf(cantidad * 0.035, 2.4))
+	else:
+		var origen := Vector3.ZERO
+		if _fuente is Node3D:
+			origen = (_fuente as Node3D).global_position
+		aplicar_empuje(origen, minf(cantidad * 0.035, 2.4))
 
 	if salud_actual <= 0.0:
 		_morir()
+
+
+## Empuje recibido por golpe. El agente sigue con NavigationAgent3D, así que
+## basta con sumar velocidad: el propio CharacterBody3D amortigua el impulso.
+func aplicar_empuje(origen: Vector3, fuerza: float) -> void:
+	if fuerza <= 0.0 or not activo:
+		return
+	var lejos := global_position - origen
+	lejos.y = 0.0
+	if lejos.length_squared() < 0.0004:
+		return
+	velocity += lejos.normalized() * fuerza
 
 
 func _morir() -> void:
@@ -704,7 +763,6 @@ func _construir_barra() -> void:
 func _barra_visible(_frac: float) -> bool:
 	return true
 
-
 func _actualizar_barra_vida() -> void:
 	if _barra_raiz == null:
 		_construir_barra()
@@ -716,6 +774,8 @@ func _actualizar_barra_vida() -> void:
 		if material != null:
 			# Color por arquetipo, pero virando a rojo cuando queda poca vida.
 			var base := _barra_color()
+			if _flash_barra > 0.0:
+				base = Color(1.0, 1.0, 1.0)  # golpe: barra blanca un instante
 			material.albedo_color = base.lerp(Color(1.0, 0.22, 0.18), clampf(1.0 - frac * 2.2, 0.0, 1.0))
 	_barra_raiz.visible = activo and _barra_visible(frac)
 

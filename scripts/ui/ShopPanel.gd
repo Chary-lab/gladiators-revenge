@@ -17,6 +17,9 @@ const LADO_TARJETA := 96.0
 const ALTO_TARJETA := 112.0
 const ANCHO_FICHA := 330.0
 
+## Avisa al HUD de que la tienda se cerró (incluso desde su propio botón).
+signal cerrado
+
 var _jugador: GladiatorController
 var _arena: Node
 var _hud: ArenaHUD
@@ -32,6 +35,7 @@ var _campo_busqueda: LineEdit
 var _busqueda := ""
 ## Vista ampliada del árbol de construcción (se abre desde la tienda).
 var _arbol: BuildTreePanel
+var _capa_arbol: CanvasLayer
 ## Botón de apertura, en la misma barra que COMPRAR/VENDER (no es un filtro).
 var _boton_arbol: Button
 var _vender := false
@@ -101,6 +105,14 @@ func _ready() -> void:
 
 	_actualizar_chips()
 	_actualizar_ficha()
+	_aplicar_marco()
+	var viewport := get_viewport()
+	if viewport != null and not viewport.size_changed.is_connected(_aplicar_marco):
+		viewport.size_changed.connect(_aplicar_marco)
+
+
+func _aplicar_marco() -> void:
+	SafeArea.aplicar(self, ANCHO, ALTO)
 
 
 # --- Construcción -----------------------------------------------------------
@@ -303,12 +315,15 @@ func configurar(jugador: GladiatorController, arena: Node, hud: ArenaHUD = null)
 	if _jugador != null and _jugador.inventario != null:
 		if not _jugador.inventario.cambiado.is_connected(_al_cambiar_inventario):
 			_jugador.inventario.cambiado.connect(_al_cambiar_inventario)
-	# El árbol es un PanelContainer hermano de la tienda dentro del CanvasLayer
-	# del HUD: si fuera hijo del PanelContainer, el contenedor le forzaría su
-	# propio rect y la vista ampliada quedaría del tamaño de la lista.
+	# El árbol vive en su propio CanvasLayer (encima de la tienda, debajo de los
+	# tooltips) en vez de colgar directamente del HUD: así la tienda y el árbol
+	# son capas independientes y ningún PanelContainer les fuerza su rect.
 	if _hud != null and _arbol == null:
+		_capa_arbol = CanvasLayer.new()
+		_capa_arbol.layer = 51
+		_hud.add_child(_capa_arbol)
 		_arbol = BuildTreePanel.new()
-		_hud.add_child(_arbol)
+		_capa_arbol.add_child(_arbol)
 		_arbol.configurar(_jugador, _arena, self)
 
 
@@ -331,6 +346,7 @@ func alternar() -> void:
 		return
 	_cerrar_arbol()
 	visible = true
+	Eventos.emitir(&"panel_solicitado", [&"tienda", true])
 	modo_abierto()
 	_reconstruir()
 	if not _pausado:
@@ -345,11 +361,13 @@ func cerrar_panel() -> void:
 		return
 	_cerrar_arbol()
 	visible = false
+	Eventos.emitir(&"panel_solicitado", [&"tienda", false])
 	if _hud != null:
 		_hud.forzar_ocultar_tooltip()
 	if _pausado:
 		_pausado = false
 		Pausa.cerrar()
+	cerrado.emit()
 
 
 # --- Árbol de construcción ampliado ----------------------------------------
@@ -357,11 +375,13 @@ func cerrar_panel() -> void:
 func _abrir_arbol() -> void:
 	if _arbol != null:
 		_arbol.abrir()
+		Eventos.emitir(&"panel_solicitado", [&"arbol", true])
 
 
 func _cerrar_arbol() -> void:
-	if _arbol != null:
+	if _arbol != null and _arbol.visible:
 		_arbol.cerrar()
+		Eventos.emitir(&"panel_solicitado", [&"arbol", false])
 
 
 func arbol_abierto() -> bool:

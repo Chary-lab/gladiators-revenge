@@ -25,6 +25,8 @@ enum Estado { ESPERA, ENTRADA, COMBATE, FIN }
 @export var espera_entre_oleadas := 30.0
 @export var duracion_entrada := 8.0
 @export var intervalo_spawn := 0.80
+## Plan data-driven cargado en `_ready` si no se inyecta otro desde el editor.
+@export var plan: SpawnPlan
 
 var oleada_actual := 0
 
@@ -47,7 +49,16 @@ var _perfil_actual: Dictionary = {}
 
 
 func _ready() -> void:
+	if plan == null:
+		plan = load("res://assets/data/oleadas/spawn_default.tres") as SpawnPlan
+	if plan != null:
+		intervalo_spawn = plan.intervalo_spawn
 	set_process(false)
+
+
+func _avisar(texto: String, duracion: float) -> void:
+	mensaje.emit(texto, duracion)
+	Eventos.mensaje(texto, duracion)
 
 
 func iniciar(
@@ -76,7 +87,7 @@ func iniciar(
 	_temporizador = espera_inicial
 	set_process(true)
 	preparacion_iniciada.emit(espera_inicial)
-	mensaje.emit("Preparación: compra, forja y elige talentos. La arena abre en 30 s.", 5.0)
+	_avisar("Preparación: compra, forja y elige talentos. La arena abre en 30 s.", 5.0)
 
 
 func enemigos_restantes() -> int:
@@ -130,8 +141,12 @@ func _procesar_combate(delta: float) -> void:
 		_temporizador -= delta
 		if _temporizador <= 0.0:
 			_temporizador = intervalo_spawn
-			_invocar_enemigo()
-			_pendientes -= 1
+			var lote: int = maxi(1, plan.tamano_lote) if plan != null else 1
+			for _i in range(lote):
+				if _pendientes <= 0:
+					break
+				_invocar_enemigo()
+				_pendientes -= 1
 
 	if _pendientes == 0 and get_tree().get_nodes_in_group("enemigos").is_empty():
 		_terminar_oleada()
@@ -142,7 +157,7 @@ func _iniciar_oleada() -> void:
 	_estado = Estado.ENTRADA
 	_temporizador = duracion_entrada
 	entrada_iniciada.emit(duracion_entrada)
-	mensaje.emit("¡Portones abiertos! Entra a la arena: %d s" % int(duracion_entrada), 3.0)
+	_avisar("¡Portones abiertos! Entra a la arena: %d s" % int(duracion_entrada), 3.0)
 
 
 func _comenzar_combate() -> void:
@@ -162,7 +177,8 @@ func _comenzar_combate() -> void:
 
 	entrada_terminada.emit()
 	oleada_iniciada.emit(oleada_actual, total_oleadas)
-	mensaje.emit("Oleada %d / %d · %s" % [oleada_actual, total_oleadas, str(_perfil_actual.get("titulo", ""))], 3.0)
+	Eventos.oleada_iniciada(oleada_actual, total_oleadas)
+	_avisar("Oleada %d / %d · %s" % [oleada_actual, total_oleadas, str(_perfil_actual.get("titulo", ""))], 3.0)
 
 	if jefe:
 		_invocar_jefe()
@@ -170,6 +186,7 @@ func _comenzar_combate() -> void:
 
 func _terminar_oleada() -> void:
 	oleada_terminada.emit(oleada_actual)
+	Eventos.oleada_terminada(oleada_actual)
 	if oleada_actual >= total_oleadas:
 		_estado = Estado.FIN
 		set_process(false)
@@ -179,7 +196,7 @@ func _terminar_oleada() -> void:
 	_estado = Estado.ESPERA
 	_temporizador = espera_entre_oleadas
 	preparacion_iniciada.emit(espera_entre_oleadas)
-	mensaje.emit("Oleada superada. 30 s para comprar, forjar y subir habilidades.", 4.0)
+	_avisar("Oleada superada. 30 s para comprar, forjar y subir habilidades.", 4.0)
 
 
 func _invocar_enemigo() -> void:
@@ -197,6 +214,11 @@ func _invocar_enemigo() -> void:
 	var elite := tipo == BalanceOlas.ELITE or (tipo != BalanceOlas.TANQUE and randf() < _probabilidad_elite() * 0.5)
 	var peso := CurvaNivel.PESO_ELITE if elite else CurvaNivel.PESO_NORMAL
 	var xp := CurvaNivel.xp_enemigo(_xp_presupuesto, peso, _xp_peso_total)
+	var datos: EnemyData = null
+	if plan != null and plan.probabilidad_data > 0.0 and randf() < plan.probabilidad_data:
+		var roles: Array = EnemyCatalog.todos().values()
+		if not roles.is_empty():
+			datos = roles[randi() % roles.size()] as EnemyData
 	enemigo.preparar(
 		oleada_actual,
 		elite,
@@ -207,7 +229,8 @@ func _invocar_enemigo() -> void:
 		xp,
 		tipo,
 		float(_perfil_actual.get("vida", 1.0)),
-		float(_perfil_actual.get("dano", 1.0))
+		float(_perfil_actual.get("dano", 1.0)),
+		datos
 	)
 
 
@@ -229,16 +252,23 @@ func _invocar_jefe() -> void:
 	jefe.salud_cambiada.connect(_cb_jefe_salud_cambiada.bind(jefe))
 	jefe_invocado.emit(jefe)
 
-	mensaje.emit("¡El Liche de la Arena despierta!" if lich else "¡Un campeón del Imperio entra en la arena!", 3.0)
+	_avisar("¡El Liche de la Arena despierta!" if lich else "¡Un campeón del Imperio entra en la arena!", 3.0)
 
 
 func _probabilidad_elite() -> float:
-	return clampf((oleada_actual - 2) * 0.06, 0.0, 0.35)
+	if plan == null:
+		return clampf((oleada_actual - 2) * 0.06, 0.0, 0.35)
+	return clampf(
+		plan.probabilidad_elite_base + maxi(0, oleada_actual - 2) * plan.probabilidad_elite_por_oleada,
+		0.0,
+		plan.probabilidad_elite_maxima
+	)
 
 
 func al_morir_enemigo(oro: int, xp: int = 0) -> void:
 	bajas += 1
 	enemigo_abatido.emit(bajas)
+	Eventos.bajas(bajas)
 	oro_ganado.emit(oro)
 	_otorgar_xp(xp)
 
@@ -246,9 +276,10 @@ func al_morir_enemigo(oro: int, xp: int = 0) -> void:
 func _al_morir_jefe() -> void:
 	bajas += 1
 	enemigo_abatido.emit(bajas)
+	Eventos.bajas(bajas)
 	oro_ganado.emit(120 + oleada_actual * 20)
 	_otorgar_xp(_xp_jefe)
-	mensaje.emit("¡Campeón del Imperio derrotado!", 3.0)
+	_avisar("¡Campeón del Imperio derrotado!", 3.0)
 
 
 func _otorgar_xp(cantidad: int) -> void:
@@ -262,7 +293,7 @@ func _otorgar_xp(cantidad: int) -> void:
 		excedente_total += jugador.estadisticas.reclamar_excedente()
 	if excedente_total > 0:
 		oro_ganado.emit(max(1, excedente_total / 4))
-		mensaje.emit("Nivel máximo: %d XP convertida en oro." % excedente_total, 2.0)
+		_avisar("Nivel máximo: %d XP convertida en oro." % excedente_total, 2.0)
 
 
 func aplicar_estado_red(numero: int, pendientes: int, estado: int, tiempo: float) -> void:

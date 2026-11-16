@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/EnemyData.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"soldado_mezcla"
+nombre = "Soldado de la Mezcla"
+rol = 0
+arquetipo_base = &"esqueleto"
+vida_mult = 1.0
+dano_mult = 1.0
+velocidad_mult = 1.0
+cadencia_mult = 1.0
+escala_mult = 1.0
+recompensa_mult = 1.0

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="SpawnPlan" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/SpawnPlan.gd" id="1_plan"]
+
+[resource]
+script = ExtResource("1_plan")
+intervalo_spawn = 0.8
+tamano_lote = 1
+probabilidad_elite_base = 0.06
+probabilidad_elite_por_oleada = 0.06
+probabilidad_elite_maxima = 0.35
+probabilidad_data = 0.2

@@ -299,7 +299,17 @@ scenes/main.tscn            raíz Arena
 assets/kaykit/              modelos, texturas y props CC0
 assets/audio/               efectos CC0 de Kenney
 scripts/
+  combat/
+    ReceptorGolpes3D.gd     hurtbox Area3D con capa propia y empuje 3D
+    HitboxGolpe3D.gd        consulta de golpe por capacidad contra hurtboxes
+  fx/
+    Impactos3D.gd           pool de 12 CPUParticles3D para impactos
   core/
+    SafeArea.gd             marco 1280×720 dentro del área segura del móvil
+    EventBus.gd             autoload de señales globales
+    Eventos.gd              emisiones al bus sin depender del autoload en --script
+    GameManager.gd          autoload de estados MENU/PLAYING/SHOP/PAUSED/GAMEOVER
+    SpawnPlan.gd            recurso con ritmo y mezcla del spawner
     GladiatorStats.gd       atributos y escalado
     BalanceOlas.gd          perfiles de oleada (arquetipos, vida y jefe)
     AbilityData.gd          datos de habilidad
@@ -315,6 +325,9 @@ scripts/
     SpiritSummon.gd         invocación que hereda INT
   visual/CharacterVisual.gd modelos, skins, animaciones y armas
   enemies/
+    EnemyBase.gd            CharacterBody3D con NavigationAgent3D en la arena
+    EnemyData.gd            Resource de rol/estadísticas data-driven
+    EnemyCatalog.gd         catálogo que carga los cuatro .tres
     ArenaEnemy.gd           esbirro de persecución directa
     ArenaBossAI.gd          FSM + Enrage 75 % / 50 %
   world/
@@ -346,7 +359,7 @@ scripts/
     GladiatorPortrait.gd    busto 3D animado para la consola
 tests/
   smoke_test.gd             smoke crítico headless (15 comprobaciones, ~2 s)
-  regression_test.gd        cobertura completa (155 comprobaciones)
+  regression_test.gd        cobertura completa (170 comprobaciones)
   net_smoke.gd              cliente coop: conexión, compra y clase única
   net_smoke_b.gd            segundo cliente: clase única y revivir
   wave_sim.gd               simulación acelerada de las 20 oleadas

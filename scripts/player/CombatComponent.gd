@@ -71,6 +71,12 @@ func _actualizar_cooldowns(delta: float) -> void:
 func iniciar_recarga_ataque(segundos: float) -> void:
 	_temporizador_ataque = maxf(0.0, segundos)
 
+
+## Cancelar el ataque en curso la usan los dashes: así una orden de movilidad
+## no espera a que termine el clip y se siente instantánea.
+func cancelar_recarga_ataque() -> void:
+	_temporizador_ataque = 0.0
+
 func cooldown_restante(slot: int) -> float:
 	if slot < 0 or slot >= _cooldowns.size():
 		return 0.0
@@ -201,6 +207,14 @@ func recibir_dano(
 	if visual != null:
 		visual.recibir_golpe()
 	Sfx.reproducir("dano", -6.0)
+	var origen := Vector3.ZERO
+	if fuente is Node3D:
+		origen = (fuente as Node3D).global_position
+	var receptor := controlador.get_node_or_null("ReceptorGolpes")
+	if receptor != null and receptor.has_method("empujar"):
+		receptor.call("empujar", origen, minf(recibido * 0.03, 3.0))
+	elif controlador.has_method("aplicar_empuje"):
+		controlador.call("aplicar_empuje", origen, minf(recibido * 0.03, 3.0))
 
 	if salud_actual <= 0.0:
 		_morir()
