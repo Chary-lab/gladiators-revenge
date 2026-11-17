@@ -46,6 +46,9 @@ var game_state: GameState
 var enemy_tracker: EnemyTracker
 var gladiador_tracker: GladiadorTracker
 
+## Legado de Renegados: renombre local derivado de estado ya sincronizado.
+var legado := Legado.new()
+
 var _oro_local := 200
 var _puntos_local := 0
 
@@ -1044,6 +1047,9 @@ func _aplicar_snapshot(datos: Dictionary) -> void:
 		)
 	if _hud != null and _hud.has_method("establecer_bajas"):
 		_hud.establecer_bajas(int(datos.get("bajas", 0)))
+	# Legado: en cliente se deriva del snapshot (WaveManager no corre aquí).
+	legado.sincronizar(int(datos.get("oleada", 0)), int(datos.get("bajas", 0)))
+	_publicar_legado()
 	_lobby_red_activo = bool(datos.get("espera", _lobby_red_activo))
 	_lobby_red_restante = float(datos.get("prep", _lobby_red_restante))
 	_lobby_red_conectados = maxi(1, int(datos.get("conectados", _lobby_red_conectados)))
@@ -1874,6 +1880,7 @@ func _conectar() -> void:
 	_oleadas.entrada_iniciada.connect(_al_entrada_iniciada)
 	_oleadas.oleada_iniciada.connect(_al_iniciar_oleada)
 	_oleadas.oleada_terminada.connect(_al_terminar_oleada)
+	_oleadas.enemigo_abatido.connect(_al_abatir_para_legado)
 	_oleadas.oro_ganado.connect(_al_ganar_oro)
 	_oleadas.victoria.connect(_al_victoria)
 	_bandera.destruida.connect(_al_destruir_bandera)
@@ -1990,8 +1997,29 @@ func _al_terminar_oleada(numero: int) -> void:
 		jugador.estadisticas.otorgar_puntos(2)
 		jugador.otorgar_puntos_rojos(1)
 		jugador.curar(jugador.estadisticas.salud_maxima * 0.25)
+	# Legado: el renombre se deriva de estado ya sincronizado (oleada + bajas).
+	legado.sincronizar(_oleadas.oleada_actual, _oleadas.bajas)
+	_publicar_legado()
 	if _hud != null:
 		_hud.mostrar_mensaje("Oleada %d superada  ·  +2 puntos" % numero, 2.5)
+
+
+## Alimenta el Legado con el total de bajas acumulado (ya viene en la señal).
+func _al_abatir_para_legado(total: int) -> void:
+	legado.sincronizar(_oleadas.oleada_actual, total)
+	_publicar_legado()
+
+
+var _grado_legado_anunciado: StringName = &"aspirante"
+func _publicar_legado() -> void:
+	var titulo := str(legado.estado()["titulo"])
+	if _hud != null and _hud.has_method("establecer_legado"):
+		_hud.establecer_legado(titulo)
+	# Sólo se anuncian los ascensos de grado: un mensaje por baja saturaría el HUD.
+	if legado.grado == _grado_legado_anunciado:
+		return
+	_grado_legado_anunciado = legado.grado
+	Eventos.mensaje("Legado: %s" % titulo, 2.2)
 
 
 func _al_ganar_oro(cantidad: int) -> void:

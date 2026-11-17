@@ -450,6 +450,30 @@ func _ejecutar() -> void:
 	oleadas.al_morir_enemigo(0)
 	_comprobar(oleadas.bajas == bajas_antes + 1, "cada muerte suma una baja")
 
+	# --- Legado de Renegados: renombre determinista por oleada y bajas ------
+	var legado := Legado.new()
+	_comprobar(legado.renombre == 0 and legado.grado == &"aspirante", "el legado arranca en cero como aspirante")
+	legado.registrar_oleada(3)
+	legado.registrar_bajas(10)
+	_comprobar(legado.renombre == Legado.renombre_por(3, 10), "el legado acumula renombre de oleada y bajas")
+	var grado_antes := legado.grado
+	legado.registrar_oleada(8)
+	_comprobar(legado.grado != grado_antes, "el legado asciende de grado al superar un umbral")
+	var legado2 := Legado.new()
+	legado2.registrar_oleada(3)
+	legado2.registrar_bajas(10)
+	_comprobar(legado2.renombre == legado.renombre - Legado.renombre_por(8, 0), "el legado es determinista e incremental")
+	# Sincronización desde totales (como hace el cliente con el snapshot).
+	legado2.sincronizar(8, 10)
+	_comprobar(legado2.renombre == Legado.renombre_por(8, 10), "el legado se sincroniza desde totales del snapshot")
+	# El HUD refleja el rango del legado de la escena.
+	escena.legado.sincronizar(9, 40)
+	escena._publicar_legado()
+	_comprobar(
+		(hud.get("_legado_jugador") as Label).text == Legado.titulo_de(escena.legado.grado).to_upper(),
+		"la ficha del HUD muestra el rango del Legado"
+	)
+
 	if _completo():
 		# --- Tienda simple: una lista y dos modos -----------------------------
 		hud.alternar_tienda()

@@ -12,10 +12,10 @@ Rama: `visual/identidad-arena` (misma rama de trabajo; push al final) · Estrate
 
 ## Tasks
 
-- **T1** — S1-S3 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e16abe75affeYFQ12s8zYKbH2j`) — estado: en curso — mapear ciclo de oleada, hooks, red y tests; decidir el sistema concreto.
-- **T2** — S2-S3 — ruta: inline — estado: pendiente — implementar el sistema (1 archivo nuevo + 2-3 enganches), sin tocar balance ni snapshots.
-- **T3** — S2-S3 — ruta: inline — estado: pendiente — tests deterministas (RED→GREEN) + gate completo.
-- **T4** — S1-S3 — ruta: inline — estado: pendiente — docs (README/AGENTS) y commit + assess RDD.
+- **T1** — S1-S3 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e16abe75affeYFQ12s8zYKbH2j`) — estado: ✅ — mapa: `WaveManager.oleada_terminada`/`enemigo_abatido`, arena reparte oro en `_al_terminar_oleada`, snapshot trae `oleada`/`bajas`, Eventos es el puente seguro sin autoload. Decidido: "Legado de Renegados".
+- **T2** — S2-S3 — ruta: inline — estado: ✅ — `scripts/game/Legado.gd` (puro, SIN snapshots): renombre determinista por oleada+bajas, 5 grados (Aspirante→Inmortal), `sincronizar(oleada,bajas)` para cliente. Enganches en `Arena.gd`: `legado`, `enemigo_abatido`→`_al_abatir_para_legado`, `_al_terminar_oleada`, `_aplicar_snapshot` (cliente), `_publicar_legado()` (anuncia sólo ascensos). Indicador en `ArenaHUD._ficha_jugador` + `establecer_legado()`. Sin tocar BalanceOlas/red daño.
+- **T3** — S2-S3 — ruta: inline — estado: ✅ — RED→GREEN: 6 checks en `smoke_test.gd` (renombre, grados, determinismo, sincronía desde totales, HUD). Gate: import 0, smoke 15/15, regression 178/178, wave sim 3/3, boot limpio. Captura inspeccionada: "ASPIRANTE" visible en ascua junto a ABATIDOS.
+- **T4** — S1-S3 — ruta: inline — estado: pendiente — docs + commit + assess RDD.
 
 ## Log
 
@@ -26,6 +26,12 @@ Rama: `visual/identidad-arena` (misma rama de trabajo; push al final) · Estrate
 
 **L3** — 2026-11-17 — Explorador mapeando el flujo de oleadas antes de decidir el sistema concreto, para elegir el que encaje con menor riesgo (sin tocar snapshots de red ni tablas de balance).
 
+**L4** — 2026-11-17 — Explorador entregó el mapa. Decisión: "Legado de Renegados" — renombre cosmético/narrativo por jugador y partida, derivado de `oleada`/`bajas` (ya en snapshot). Sin claves nuevas en red, sin tocar `GladiatorStats`/`BalanceOlas`, sin buffs que afecten a otros jugadores (eso exigiría autoridad del servidor).
+
+**L5** — 2026-11-17 — Implementación: `Legado.gd` con `renombre_por()`/`grado_por()` estáticos, 5 grados con títulos originales (Aspirante, Renegado, Veterano, Campeón de ceniza, Inmortal). El cliente usa `sincronizar(oleada,bajas)` del snapshot porque no corre WaveManager (`AGENTS.md:76`); el servidor usa los mismos totales. Así ambos calculan idéntico. `_publicar_legado` actualiza la ficha cada snapshot pero sólo emite mensaje en ascenso de grado (evita spam).
+
+**L6** — 2026-11-17 — caption: el indicador de rango aparece en la barra superior junto a ABATIDOS, en color `ForjaTema.ASCUA`, con separador "·". Sin glyphs tofu (`AGENTS.md:145`).
+
 ---
 
-Registro de entregas: T1 → ⏳ · T2 → [pendiente] · T3 → [pendiente] · T4 → [pendiente]
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ⏳ docs/commit/assess

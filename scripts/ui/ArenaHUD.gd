@@ -47,6 +47,7 @@ var _ficha_jugador: PanelContainer
 var _nombre_jugador: Label
 var _nivel_jugador: Label
 var _bajas_jugador: Label
+var _legado_jugador: Label
 var _bajas := 0
 var _oro_mostrado := 0.0
 var _tiempo_pausa_colgada := 0.0
@@ -531,6 +532,14 @@ func _crear_ficha_jugador() -> void:
 	_bajas_jugador.pivot_offset = Vector2(8, 10)
 	datos.add_child(_bajas_jugador)
 
+	# Legado de Renegados: rango narrativo derivado de oleadas y bajas.
+	var separador_legado := ForjaTema.rotulo("·", 11, ForjaTema.TENUE)
+	separador_legado.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	datos.add_child(separador_legado)
+	_legado_jugador = ForjaTema.rotulo("ASPIRANTE", 9, ForjaTema.ASCUA)
+	_legado_jugador.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	datos.add_child(_legado_jugador)
+
 	var relleno := Control.new()
 	relleno.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	relleno.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -549,6 +558,12 @@ func establecer_jugador(nombre: String) -> void:
 	if _nombre_jugador == null:
 		return
 	_nombre_jugador.text = nombre.to_upper() if not nombre.strip_edges().is_empty() else "GLADIADOR"
+
+
+## Legado de Renegados: muestra el rango narrativo actual en la ficha.
+func establecer_legado(titulo: String) -> void:
+	if _legado_jugador != null:
+		_legado_jugador.text = titulo.to_upper()
 
 
 ## Enemigos abatidos: pulso dorado cuando sube la cuenta.
