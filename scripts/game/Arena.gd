@@ -1253,12 +1253,14 @@ func _unhandled_input(evento: InputEvent) -> void:
 # --- Construcción del mundo ----------------------------------------------
 
 func _crear_entorno() -> void:
+	# Atmósfera de arena de brasas: fondo carbón y luz ambiental cálida, en la
+	# misma familia que ForjaTema (FONDO/PANEL/ASCUA), sin arte de terceros.
 	var entorno := Environment.new()
 	entorno.background_mode = Environment.BG_COLOR
-	entorno.background_color = Color(0.07, 0.06, 0.10)
+	entorno.background_color = Color(0.055, 0.042, 0.038)
 	entorno.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	entorno.ambient_light_color = Color(0.78, 0.72, 0.88)
-	entorno.ambient_light_energy = 0.65
+	entorno.ambient_light_color = Color(0.82, 0.66, 0.52)
+	entorno.ambient_light_energy = 0.62
 	entorno.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 
 	var mundo := WorldEnvironment.new()
@@ -1267,8 +1269,8 @@ func _crear_entorno() -> void:
 
 	var sol := DirectionalLight3D.new()
 	sol.rotation_degrees = Vector3(-55.0, 35.0, 0.0)
-	sol.light_energy = 1.15
-	sol.light_color = Color(1.0, 0.93, 0.82)
+	sol.light_energy = 1.08
+	sol.light_color = Color(1.0, 0.85, 0.70)
 	sol.shadow_enabled = false
 	add_child(sol)
 
@@ -1317,6 +1319,8 @@ func _crear_suelo() -> void:
 				if tile != null:
 					tile.position = Vector3(float(x) + 3.0, 0.0, float(z) + 3.0)
 					tile.scale = Vector3.ONE * 1.05
+					# Integramos el GLB en la paleta carbón/ascua sin tocar su textura.
+					MaterialTinte.aplicar(tile, "floor_dirt", Color(0.42, 0.33, 0.28))
 					# Va dentro del StaticBody del suelo: hereda su colisión.
 					suelo.add_child(tile)
 
@@ -1328,6 +1332,7 @@ func _crear_suelo() -> void:
 				if tile != null:
 					tile.position = Vector3(float(x) + 3.0, 0.015, float(z) + 3.0)
 					tile.scale = Vector3.ONE * 1.05
+					MaterialTinte.aplicar(tile, "floor_tile", Color(0.50, 0.42, 0.35))
 					add_child(tile)
 
 	add_child(suelo)
@@ -1338,10 +1343,10 @@ func _crear_suelo() -> void:
 	plano_exterior.size = Vector2(ANCHO * 2.4, LARGO * 2.4)
 	exterior.mesh = plano_exterior
 	exterior.position.y = -0.05
-	exterior.material_override = _material(Color(0.33, 0.27, 0.22))
+	exterior.material_override = _material(Color(0.11, 0.085, 0.07))
 	add_child(exterior)
 
-	# Anillo central bajo el estandarte.
+	# Anillo central bajo el estandarte: ascua apagada.
 	var anillo := MeshInstance3D.new()
 	var cilindro := CylinderMesh.new()
 	cilindro.top_radius = 5.0
@@ -1349,22 +1354,22 @@ func _crear_suelo() -> void:
 	cilindro.height = 0.04
 	anillo.mesh = cilindro
 	anillo.position = CENTRO_ARENA + Vector3(0, 0.02, 0)
-	anillo.material_override = _material(Color(0.45, 0.32, 0.20))
+	anillo.material_override = _material(Color(0.32, 0.16, 0.10))
 	add_child(anillo)
 
-	# Losa de la zona segura: más clara para separar base y arena.
+	# Losa de la zona segura: carbón calcáreo, separada de la arena por tono.
 	var base := MeshInstance3D.new()
 	var plano_base := PlaneMesh.new()
 	plano_base.size = Vector2(20.0, LARGO)
 	base.mesh = plano_base
 	base.position = Vector3(20.0, 0.015, 0)
-	base.material_override = _material(Color(0.43, 0.35, 0.27))
+	base.material_override = _material(Color(0.20, 0.165, 0.13))
 	add_child(base)
 
 	# Gradas de la arena: tres graderíos, la base queda abierta al este.
-	_crear_prop(Vector3(0, 1.5, -LARGO * 0.5 - 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.16, 0.14, 0.18))
-	_crear_prop(Vector3(0, 1.5, LARGO * 0.5 + 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.16, 0.14, 0.18))
-	_crear_prop(Vector3(-ANCHO * 0.5 - 4.0, 1.5, 0), Vector3(6.0, 3.0, LARGO), Color(0.13, 0.12, 0.16))
+	_crear_prop(Vector3(0, 1.5, -LARGO * 0.5 - 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.085, 0.07, 0.09))
+	_crear_prop(Vector3(0, 1.5, LARGO * 0.5 + 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.085, 0.07, 0.09))
+	_crear_prop(Vector3(-ANCHO * 0.5 - 4.0, 1.5, 0), Vector3(6.0, 3.0, LARGO), Color(0.07, 0.06, 0.075))
 
 	_puntos_spawn = [
 		Vector3(-ANCHO * 0.5 + 4.0, 0, -LARGO * 0.5 + 3.0),
@@ -1375,7 +1380,7 @@ func _crear_suelo() -> void:
 
 
 func _crear_muros() -> void:
-	var piedra := Color(0.24, 0.22, 0.21)
+	var piedra := Color(0.13, 0.115, 0.105)
 	_crear_caja_estatica(Vector3(0, ALTO_MURO * 0.5, -LARGO * 0.5), Vector3(ANCHO, ALTO_MURO, 1.0), piedra)
 	_crear_caja_estatica(Vector3(0, ALTO_MURO * 0.5, LARGO * 0.5), Vector3(ANCHO, ALTO_MURO, 1.0), piedra)
 	_crear_caja_estatica(Vector3(-ANCHO * 0.5, ALTO_MURO * 0.5, 0), Vector3(1.0, ALTO_MURO, LARGO), piedra)
@@ -1493,10 +1498,10 @@ func _crear_zona_segura() -> void:
 	disco.height = 0.08
 	agua.mesh = disco
 	agua.position = _fuente + Vector3(0, 0.53, 0)
-	var material_agua := _material(Color(0.18, 0.62, 0.68))
+	var material_agua := _material(Color(0.55, 0.22, 0.10))
 	material_agua.emission_enabled = true
-	material_agua.emission = Color(0.15, 0.75, 0.80)
-	material_agua.emission_energy_multiplier = 0.8
+	material_agua.emission = Color(0.90, 0.30, 0.10)
+	material_agua.emission_energy_multiplier = 0.7
 	agua.material_override = material_agua
 	add_child(agua)
 
@@ -1507,12 +1512,12 @@ func _crear_zona_segura() -> void:
 	pilar.position = _fuente + Vector3(0, 1.4, 0)
 	pilar.material_override = _material(Color(0.45, 0.38, 0.28))
 	add_child(pilar)
-	_etiqueta_mundo("FUENTE", _fuente + Vector3(0, 2.9, 0), Color(0.55, 0.95, 0.95))
+	_etiqueta_mundo("FUENTE", _fuente + Vector3(0, 2.9, 0), Color(1.0, 0.72, 0.40))
 	var luz_agua := OmniLight3D.new()
 	luz_agua.position = _fuente + Vector3(0, 2.0, 0)
 	luz_agua.omni_range = 7.0
-	luz_agua.light_energy = 0.8
-	luz_agua.light_color = Color(0.35, 0.85, 0.95)
+	luz_agua.light_energy = 0.9
+	luz_agua.light_color = Color(1.0, 0.52, 0.22)
 	add_child(luz_agua)
 
 	# Obelisco de talentos.

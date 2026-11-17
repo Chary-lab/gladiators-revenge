@@ -1,0 +1,39 @@
+# Identidad visual original de la arena — frente 2 (dos fases)
+
+Rama: `visual/identidad-arena` (desde `audit/bugs-limpieza`) · Estrategia: `ask-on-risk` · Runner: `godot --headless --script res://tests/<suite>.gd` + capturas `--captura-*`
+
+## Specs
+
+**S1** — Pedido original (verbatim): "necesitamos que se paresca a orc gladiators revenge de warcraft 3 pero sin caer en la similitud, hay que tener originalidad, vamos a mejorar visual". Restricción de `AGENTS.md:152`: "Do not use Warcraft/Blizzard/Valve names or art. Keep Spanish original names, lore and icons." La UI ya tiene identidad propia (carbón/oro/ascua + Cinzel, `ForjaTema.gd`); el punto débil es la arena 3D: suelo claro ajedrezado, fuente cian fluorescente, modelos KayKit genéricos.
+
+**S2** — Decisión del usuario (verbatim de la opción elegida): "Todo lo anterior en dos fases" = "Primero atmósfera/color (entrega 1) y después modelos propios (entrega 2), con revisión entre medias". O sea: **Fase 1** (esta entrega) = recolorizar suelo/fuente/muros a la paleta carbón-ascua, mejorar luces y atmósfera; **Fase 2** (pendiente de revisión) = modelos propios para gladiadores/enemigos. No se arranca la Fase 2 sin mostrar capturas de la Fase 1.
+
+**S3** — Alcance de la Fase 1 (entrega actual). Archivo主要为 `scripts/game/Arena.gd`, funciones `_crear_entorno()` (~1255), `_crear_suelo()` (~1283), `_crear_muros()` (~1377), `_crear_decoracion()` (~1390) y bloque de la fuente/obelisco (~1490-1536). Criterios: (a) fuente deja de ser cian y pasa a ámbar/ascua coherente con `ForjaTema.ASCUA`/`ORO`; (b) suelos y muros en tonos carbón en vez de claros; (c) luz ambiental y sol cálidos; (d) se mantiene legibilidad de zonas (fuente vs obelisco vs tienda) y se evitan caracteres tofu (`AGENTS.md:145`); (e) gate en verde + capturas `--captura-combate` y `--captura-arquetipos` inspeccionadas. Fuera de alcance: tintes de personajes (ya son originales: skins Tierra Baldía/Ceniza/Sangre/Hielo) y modelos (Fase 2).
+
+## Tasks
+
+- **T1** — S1-S2 — ruta: inline — estado: ✅ — rama `visual/identidad-arena` desde `audit/bugs-limpieza`; documento creado.
+- **T2** — S3 — ruta: inline — estado: ✅ — `Arena.gd`: environment carbón/ámbar, sol cálido, suelos/muros/gradas oscurecidos, fuente de cian → ascua; nuevo `scripts/visual/MaterialTinte.gd` tiñe los GLB del suelo reutilizando materiales por caché.
+- **T3** — S3 — ruta: inline — estado: ✅ — capturas `--captura-combate` y `--captura-arquetipos` inspeccionadas (2 iteraciones: fuente amarilla → ascua rojiza). Gate: import 0, smoke 15/15, regression 171/171, wave sim 3/3, boot 600 limpio.
+- **T4** — S2 — ruta: inline — estado: ⏳ **checkpoint** — mostrar capturas Fase 1 al usuario; NO arrancar Fase 2 (modelos propios) hasta su visto bueno.
+
+## Log
+
+**L1** — Pedido original (verbatim):
+> "D:\Orc Gladiators" necesitamos que se paresca a orc gladiators revenge de warcraft 3 pero sin caer en la similitud, hay que tener originalidad, vamos a mejorar visual, errores, bugs, ideas, optimizar el codigo, y borrar cosas huerfanas sin uso
+
+**L2** — 2026-11-17 — Frente 1 (auditoría/bugs/limpieza) entregado en rama `audit/bugs-limpieza`, commits `3f12dec` y `949615c`. El usuario confirmó: "ese es el repo esta bien la identidad, y si sigamos con que sigue". Se continúa con el frente visual.
+
+**L3** — 2026-11-17 — Se inspeccionaron capturas reales (`captura_menu.png`, `captura_hud.png`, `captura_campeon.png`, `captura_arquetipos.png`). Menú y forja: identidad sólida y original. Arena 3D: suelo claro ajedrezado, fuente cian, modelos genéricos → foco del frente.
+
+**L4** — 2026-11-17 — El usuario eligió alcance (verbatim): "Todo lo anterior en dos fases". Se respeta el checkpoint de revisión entre fases (S2).
+
+**L5** — 2026-11-17 — Mapa del código visual: `_crear_entorno()` usa `Environment` con fondo `Color(0.07,0.06,0.10)` y luz ambiental fría `Color(0.78,0.72,0.88)`; sol `Color(1.0,0.93,0.82)`; fuente con `material_agua` cian `Color(0.18,0.62,0.68)` + emisión `Color(0.15,0.75,0.80)` + luz `Color(0.35,0.85,0.95)`; obelisco violeta. Los tintes de personajes (`VISUALES`, skins) ya son originales y no se tocan en Fase 1.
+
+**L6** — 2026-11-17 — Fase 1 implementada. Decisión de diseño: la fuente pasó de cian a ascua rojiza (`Color(0.55,0.22,0.10)` base, emisión `Color(0.90,0.30,0.10)`) para alinear con `ForjaTema.ASCUA` sin competir con el oro de la UI. Los GLB del suelo se tiñen multiplicando albedo (`MaterialTinte`) con caché por (modelo,malla,tinte), mismo patrón que `CharacterVisual`, sin assets nuevos.
+
+**L7** — 2026-11-17 — Resultado visual inspeccionado en capturas reales: arena ahora carbón cálido con textura, fuente ascua, contraste con HUD coherente. Se descartó teñir los personajes en esta fase (sus skins Tierra Baldía/Ceniza/Sangre/Hielo ya son identidad original) y los modelos quedan para Fase 2.
+
+---
+
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ⏳ checkpoint de revisión con el usuario
