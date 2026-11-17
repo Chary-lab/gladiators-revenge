@@ -1,6 +1,6 @@
 # Identidad visual original de la arena — frente 2 (dos fases)
 
-Rama: `visual/identidad-arena` (desde `audit/bugs-limpieza`) · Estrategia: `ask-on-risk` · Runner: `godot --headless --script res://tests/<suite>.gd` + capturas `--captura-*`
+Rama: `visual/identidad-arena` (desde `audit/bugs-limpieza`) · Estrategia: `ask-on-risk` · Runner: `godot --headless --script res://tests/<suite>.gd` + capturas `--captura-*` · Commit Fase 1: `8031b5b` (`feat(visual): arena en paleta carbón y ascua, fuente ámbar`)
 
 ## Specs
 
@@ -34,6 +34,8 @@ Rama: `visual/identidad-arena` (desde `audit/bugs-limpieza`) · Estrategia: `ask
 
 **L7** — 2026-11-17 — Resultado visual inspeccionado en capturas reales: arena ahora carbón cálido con textura, fuente ascua, contraste con HUD coherente. Se descartó teñir los personajes en esta fase (sus skins Tierra Baldía/Ceniza/Sangre/Hielo ya son identidad original) y los modelos quedan para Fase 2.
 
+**L8** — 2026-11-17 — Commit Fase 1 `8031b5b` (4 archivos, +143/−20: `Arena.gd`, `MaterialTinte.gd` + su `.uid`, doc ODD). Assess RDD con base `949615c`: `risk: medium`, `review_due: false`, reason `under_budget` (el primer intento fue `unassessable` por el hash de untracked desactualizado; se obtuvo el canónico con `review status --next-transition` y se re-corrió). Sin review obligatoria.
+
 ---
 
-Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ⏳ checkpoint de revisión con el usuario
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ⏳ checkpoint de revisión con el usuario (Fase 2 no iniciada)
