@@ -10,15 +10,21 @@ Rama: `visual/identidad-arena` (push al final, cuando todo esté listo) · Estra
 
 ## Tasks
 
-- **T1** — S1-S2 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e16a31da7ffeWm3Z7geoQRxY3i`) — estado: en curso — mapear extracciones seguras, coste por frame, red, presupuesto Web y tests de cobertura.
-- **T2** — S1-S2 — ruta: inline — estado: pendiente — aplicar el cambio de mayor valor y menor riesgo del informe.
-- **T3** — S1-S2 — ruta: inline — estado: pendiente — gate completo + assess RDD + docs.
+- **T1** — S1-S2 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e16a31da7ffeWm3Z7geoQRxY3i`) — estado: ✅ — mapa: código ya optimizado (dirty flags en HUD/enemigos, var_to_bytes reutilizado en NetCoop). Candidatos: extracción de ArenaMundo (1263-1561, alto riesgo), micro-opt táctil, assets sin ref en build.
+- **T2** — S1-S2 — ruta: inline — estado: ✅ — aplicadas 2 optimizaciones seguras: (a) dirty flags en `TouchControls._process` para vida/maná/nivel; (b) `exclude_filter` en `export_presets.cfg` excluye `assets/kenney/audio/*` (290 archivos) y `assets/kenney/particles/Rotated/*` (32), 1.8 MB, CERO referencias en código. NO se extrajo ArenaMundo (riesgo NavMesh/colisiones sin cobertura de tests antes del push).
+- **T3** — S1-S2 — ruta: inline — estado: en curso — gate verde (import 0, smoke 15/15, regression 178/178, wave sim 3/3, boot limpio). Export Web pendiente: faltan export templates de Godot (descargándose) para verificar el ahorro. Assess RDD + docs pendientes.
 - **T4** — estado: pendiente — push final (sólo cuando el usuario confirme "todo listo").
 
 ## Log
 
 **L1** — 2026-11-17 — Frentes 1 (auditoría/bugs), 2 (visual) y 3 (jugabilidad/Legado) completos. Push diferido al final por decisión del usuario. Se abre frente 4 (optimización/deuda), el último.
 
+**L2** — 2026-11-17 — Explorador confirmó: `NetCoop` ya calcula `var_to_bytes` una vez y reutiliza bytes; HUD/enemigos/trackers usan dirty flags; `Arena._process` limpio. Nada obvio y seguro en red. Mejor candidato de refactor (extraer `ArenaMundo`, ~300 líneas, 0 señales/0 call sites externos) **NO ejecutado**: toca `NavigationRegion3D`, colisiones y orden de `add_child`, y no hay tests que cubran la jerarquía del mundo → regresión silenciosa. Queda documentado como deuda pendiente con plan para entrega futura (L4).
+
+**L3** — 2026-11-17 — Optimizaciones aplicadas: dirty flags en `TouchControls` (evita `queue_redraw` y reasignación de texto cada frame en vida/maná/nivel) y `exclude_filter` para 322 archivos sin referencia (1.8 MB). Verificado por grep: CERO referencias a `kenney/audio` o `particles/Rotated` fuera del propio `exclude_filter`. No se borra nada del repo, sólo se excluye del paquete Web (reversible).
+
+**L4** — 2026-11-17 — Deuda pendiente documentada: extraer `ArenaMundo` (`Arena.gd:1263-1561` + utilitarios `:2564-2601` + constantes), con `puntos_spawn()` público; requiere tests nuevos de jerarquía del mundo antes de hacerse. No es parte de este frente para no arriesgar el push final.
+
 ---
 
-Registro de entregas: T1 → ⏳ · T2 → [pendiente] · T3 → [pendiente] · T4 → [pendiente]
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ⏳ (export pendiente de templates) · T4 → [pendiente]

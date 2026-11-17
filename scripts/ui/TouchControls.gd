@@ -38,6 +38,12 @@ var _velos: Array = []
 var _cd_textos: Array = []
 var _cd_barras: Array[TextureProgressBar] = []
 var _cd_anteriores: Array[float] = []
+
+## Cachés para no redibujar barras de vida/maná ni reasignar texto cada frame
+## cuando el valor no cambia (mismo patrón que los cooldowns).
+var _vida_fraccion_anterior := -1.0
+var _mana_fraccion_anterior := -1.0
+var _nivel_anterior := -1
 var _cd_enfriamiento: Array[bool] = []
 var _pulso_tweens: Array = []
 static var _textura_barra: Texture2D = null
@@ -758,15 +764,22 @@ func _process(_delta: float) -> void:
 	if _mochila_abierta:
 		_refrescar_mochila()
 	var vida_max := maxf(1.0, _jugador.estadisticas.salud_maxima)
-	_barra_vida.valor = clampf(_jugador.salud_actual / vida_max, 0.0, 1.0)
-	_barra_vida.queue_redraw()
-	_texto_vida.text = "%d/%d" % [int(ceil(_jugador.salud_actual)), int(vida_max)]
+	var vida_fraccion := clampf(_jugador.salud_actual / vida_max, 0.0, 1.0)
+	if absf(vida_fraccion - _vida_fraccion_anterior) > 0.001:
+		_vida_fraccion_anterior = vida_fraccion
+		_barra_vida.valor = vida_fraccion
+		_barra_vida.queue_redraw()
+		_texto_vida.text = "%d/%d" % [int(ceil(_jugador.salud_actual)), int(vida_max)]
 	var mana_max := maxf(1.0, _jugador.estadisticas.mana_maximo)
-	_barra_mana.valor = clampf(_jugador.mana_actual / mana_max, 0.0, 1.0)
-	_barra_mana.queue_redraw()
-	_texto_mana.text = "%d/%d" % [int(ceil(_jugador.mana_actual)), int(mana_max)]
-	if _nivel != null:
-		_nivel.text = "NIVEL %d" % _jugador.estadisticas.nivel
+	var mana_fraccion := clampf(_jugador.mana_actual / mana_max, 0.0, 1.0)
+	if absf(mana_fraccion - _mana_fraccion_anterior) > 0.001:
+		_mana_fraccion_anterior = mana_fraccion
+		_barra_mana.valor = mana_fraccion
+		_barra_mana.queue_redraw()
+		_texto_mana.text = "%d/%d" % [int(ceil(_jugador.mana_actual)), int(mana_max)]
+	if _nivel != null and _jugador.estadisticas.nivel != _nivel_anterior:
+		_nivel_anterior = _jugador.estadisticas.nivel
+		_nivel.text = "NIVEL %d" % _nivel_anterior
 
 	for i in mini(_botones.size(), CLAVES.size()):
 		var boton: Button = _botones[i]
