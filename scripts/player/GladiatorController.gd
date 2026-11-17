@@ -1100,13 +1100,16 @@ func intentar_habilidad(slot: int, punto_objetivo = null, desde_buffer := false)
 	var habilidad := arma_actual.obtener_habilidad(slot)
 	if habilidad == null or not habilidad_desbloqueada(slot):
 		return false
-	var bloqueada := combat._cooldowns[slot] > 0.0 or mana_actual < habilidad.coste_mana
+	var bloqueada := combat._cooldowns[slot] > 0.0 or combat.mana_actual < habilidad.coste_mana
 	if bloqueada:
 		if not desde_buffer:
 			_guardar_orden_habilidad(slot, punto_objetivo)
 		return false
 
-	mana_actual -= habilidad.coste_mana
+	# Gastar en CombatComponent (fuente de verdad): el controlador sincroniza
+	# desde ahí cada frame, así el gasto persiste y el HUD lo ve bajar.
+	combat.gastar_mana(habilidad.coste_mana)
+	mana_actual = combat.mana_actual
 	combat.set_cooldown(slot, cooldown_habilidad(habilidad))
 	_cooldowns[slot] = combat.cooldown_restante(slot)
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)

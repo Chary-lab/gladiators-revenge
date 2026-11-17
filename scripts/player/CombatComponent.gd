@@ -239,6 +239,16 @@ func restaurar_mana(cantidad: float) -> void:
 	mana_actual = minf(estadisticas.mana_maximo, mana_actual + cantidad)
 	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
 
+
+## Gasta maná en la fuente de verdad. El controlador sincroniza su `mana_actual`
+## desde aquí cada frame, así descontar allí se perdía al instante (bug: el maná
+## nunca bajaba al lanzar habilidades).
+func gastar_mana(cantidad: float) -> void:
+	if cantidad <= 0.0:
+		return
+	mana_actual = maxf(0.0, mana_actual - cantidad)
+	mana_cambiada.emit(mana_actual, estadisticas.mana_maximo)
+
 ## --- Buffs --------------------------------------------------------------
 
 func aplicar_grito_guerra(duracion: float, bonus_ataque: float, robo: float) -> void:

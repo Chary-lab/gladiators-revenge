@@ -274,7 +274,19 @@ func _ejecutar() -> void:
 	jugador.estadisticas.nivel = 6
 	jugador._sincronizar_desbloqueos()
 	jugador.mana_actual = jugador.estadisticas.mana_maximo
+	jugador.combat.mana_actual = jugador.estadisticas.mana_maximo
+	var ult := cetro.habilidades[3]
+	var mana_antes := jugador.combat.mana_actual
 	_comprobar(jugador.intentar_habilidad(3), "el cetro lanza la ultimate")
+	_comprobar(
+		is_equal_approx(jugador.combat.mana_actual, mana_antes - ult.coste_mana),
+		"el maná baja el coste de la ultimate y persiste en CombatComponent"
+	)
+	await process_frame
+	_comprobar(
+		jugador.mana_actual < mana_antes - ult.coste_mana + 1.0,
+		"el maná sigue bajo tras el frame (no se restaura al sincronizar)"
+	)
 	_comprobar(not get_nodes_in_group("aliados").is_empty(), "la ultimate invoca un espíritu aliado")
 	_comprobar(get_nodes_in_group("aliados")[0].is_in_group("aliados"), "el espíritu pertenece al equipo aliado")
 	_comprobar(not get_nodes_in_group("aliados")[0].is_in_group("enemigos"), "el espíritu no se registra como enemigo")

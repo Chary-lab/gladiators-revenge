@@ -40,7 +40,7 @@ godot -- --captura-oleada                  # oleada 9 con 14 enemigos en círcul
 godot -- --captura-cerca --clase=lanza     # primer plano de cualquier clase (lanza, saeta…)
 ```
 
-- Expected baseline: smoke **15/15**, regression **212/212**, wave sim **3/3**, net smoke A **12/12**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **15/15**, regression **214/214**, wave sim **3/3**, net smoke A **12/12**, net smoke B **12/12**, clean 600-frame run.
 - `tests/smoke_test.gd` corre en modo smoke (solo las comprobaciones críticas: arranque, identidad, Supabase/salas, tienda/forja, progresión, combate, cierre). `tests/regression_test.gd` hereda de ese script y fuerza el modo completo; no dupliques cuerpo de pruebas, añade el check con `_comprobar(..., true)` si es crítico o sin el tercer argumento si es regresión.
 - Los bloques caros de regresión (anti-camping, tema, UI de tienda/pausa/iconos, auras, táctil, ajustes) están dentro de `if _completo():`. Un check crítico no debe depender de estado que solo crea un bloque de regresión.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
@@ -55,7 +55,7 @@ godot -- --captura-cerca --clase=lanza     # primer plano de cualquier clase (la
 
 - `scripts/core/GladiatorStats.gd` is the single source for damage/heal/shield scaling. New abilities and items must call its `escalar_dano`, `escalar_invocacion` or getters; do not hardcode final damage.
 - Weapon stats use `aplicar_bonos_equipo`; inventory stats use `aplicar_bonos_inventario`. Both are dictionary bonuses summed by `_bono()`.
-- `GladiatorController.gd` owns input, movement, autoattack, ability casting, level unlocks, ability ranks and talents.
+- `GladiatorController.gd` owns input, movement, autoattack, level unlocks, ability ranks and talents. **CombatComponent is the source of truth for salud/maná/escudo**: `GladiatorController._physics_process` copia `combat.mana_actual` al controlador cada frame, así que TODO gasto debe hacerse en `combat.gastar_mana()` (o recibir daño en `combat`), nunca restando directo en el controlador o se pierde al sincronizar. El HUD lee el valor sincronizado del controlador.
 - `WeaponItem.gd` owns the four-slot class kit and `_configurar_rangos()`: Q/W/E max rank 4, R max rank 3. Rank descriptions and numeric improvements must stay in sync.
 - Progression: level 1 unlocks a random Q/W/E; levels 2–3 unlock the rest; R at 6. Every level-up grows the class stats automatically and upgrades one random unlocked ability; there are no manual skill points. XP curves live only in `scripts/core/CurvaNivel.gd` (`80+40L+6L²` per level, `80+55w+4w²` per wave).
 - The chosen champion/class is permanent for the run. Choosing one disables the other armory pedestals (`ArmoryPedestal.desactivar()`), so the choice disappears for that player.
@@ -181,7 +181,7 @@ Rutas que NO cambian: editar `.gd` sigue siendo con `patch` (el filtro no incluy
 
 1. `godot --headless --editor --quit`
 2. `godot --headless --script res://tests/smoke_test.gd` → 15/15
-3. `godot --headless --script res://tests/regression_test.gd` → 212/212
+3. `godot --headless --script res://tests/regression_test.gd` → 214/214
 4. `godot --headless --script res://tests/wave_sim.gd` → 3/3
 5. `godot --headless --quit-after 600` → no script/parse errors
 6. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`
