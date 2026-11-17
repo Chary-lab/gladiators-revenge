@@ -12,7 +12,7 @@ Rama: `visual/identidad-arena` (push al final, cuando todo esté listo) · Estra
 
 - **T1** — S1-S2 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e16a31da7ffeWm3Z7geoQRxY3i`) — estado: ✅ — mapa: código ya optimizado (dirty flags en HUD/enemigos, var_to_bytes reutilizado en NetCoop). Candidatos: extracción de ArenaMundo (1263-1561, alto riesgo), micro-opt táctil, assets sin ref en build.
 - **T2** — S1-S2 — ruta: inline — estado: ✅ — aplicadas 2 optimizaciones seguras: (a) dirty flags en `TouchControls._process` para vida/maná/nivel; (b) `exclude_filter` en `export_presets.cfg` excluye `assets/kenney/audio/*` (290 archivos) y `assets/kenney/particles/Rotated/*` (32), 1.8 MB, CERO referencias en código. NO se extrajo ArenaMundo (riesgo NavMesh/colisiones sin cobertura de tests antes del push).
-- **T3** — S1-S2 — ruta: inline — estado: en curso — gate verde (import 0, smoke 15/15, regression 178/178, wave sim 3/3, boot limpio). Export Web pendiente: faltan export templates de Godot (descargándose) para verificar el ahorro. Assess RDD + docs pendientes.
+- **T3** — S1-S2 — ruta: inline — estado: ✅ — gate verde (import 0, smoke 15/15, regression 178/178, wave sim 3/3, boot limpio). Commit `69bcbca`, assess `medium/under_budget` sin review. Export Web: faltan export templates de Godot en esta máquina; descargándose en background para verificar el ahorro (no bloquea el frente).
 - **T4** — estado: pendiente — push final (sólo cuando el usuario confirme "todo listo").
 
 ## Log
