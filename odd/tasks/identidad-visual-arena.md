@@ -15,7 +15,8 @@ Rama: `visual/identidad-arena` (desde `audit/bugs-limpieza`) · Estrategia: `ask
 - **T1** — S1-S2 — ruta: inline — estado: ✅ — rama `visual/identidad-arena` desde `audit/bugs-limpieza`; documento creado.
 - **T2** — S3 — ruta: inline — estado: ✅ — `Arena.gd`: environment carbón/ámbar, sol cálido, suelos/muros/gradas oscurecidos, fuente de cian → ascua; nuevo `scripts/visual/MaterialTinte.gd` tiñe los GLB del suelo reutilizando materiales por caché.
 - **T3** — S3 — ruta: inline — estado: ✅ — capturas `--captura-combate` y `--captura-arquetipos` inspeccionadas (2 iteraciones: fuente amarilla → ascua rojiza). Gate: import 0, smoke 15/15, regression 171/171, wave sim 3/3, boot 600 limpio.
-- **T4** — S2 — ruta: inline — estado: ⏳ **checkpoint** — mostrar capturas Fase 1 al usuario; NO arrancar Fase 2 (modelos propios) hasta su visto bueno.
+- **T4** — S2 — ruta: inline — estado: ✅ — checkpoint mostrado; usuario aprobó seguir con todas las fases y push al final (L9).
+- **T5** — S2 — ruta: inline (mapeo delegado) — estado: en curso — Fase 2: modelos propios para gladiadores/enemigos. Explorador mapeando viabilidad (rig/animación/presupuesto). Decisión de enfoque pendiente de su informe.
 
 ## Log
 
@@ -36,6 +37,8 @@ Rama: `visual/identidad-arena` (desde `audit/bugs-limpieza`) · Estrategia: `ask
 
 **L8** — 2026-11-17 — Commit Fase 1 `8031b5b` (4 archivos, +143/−20: `Arena.gd`, `MaterialTinte.gd` + su `.uid`, doc ODD). Assess RDD con base `949615c`: `risk: medium`, `review_due: false`, reason `under_budget` (el primer intento fue `unassessable` por el hash de untracked desactualizado; se obtuvo el canónico con `review status --next-transition` y se re-corrió). Sin review obligatoria.
 
+**L9** — 2026-11-17 — El usuario aprobó continuar TODAS las fases sin más checkpoints y hacer push al final, cuando todo esté listo: "sigue con las fases y luego subimos cuando tengamos todo listo". Se arranca Fase 2 (modelos propios). Explorador `gentle-ai-explore` (sesión `ses_e16bbd4ceffeuO7r2FY3CfXf3g3`) mapeando modelo/animación/presupuesto antes de decidir el enfoque. Dato: KayKit pesa 21.4 MB (13.9 skeletons, 7.0 adventurers) dentro del build Web de ~47 MB.
+
 ---
 
-Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ⏳ checkpoint de revisión con el usuario (Fase 2 no iniciada)
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ (aprobado por usuario) · T5 → ⏳ Fase 2 modelos propios (mapeo en curso)
