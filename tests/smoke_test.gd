@@ -670,6 +670,26 @@ func _ejecutar() -> void:
 		fabricante.queue_free()
 		await process_frame
 
+	# --- Balance: atributos base por clase (perfil moderado) ---------------
+	var base_bastion := GladiatorStats.new()
+	base_bastion.configurar_clase(&"bastion")
+	_comprobar(
+		base_bastion.fuerza == 14 and base_bastion.agilidad == 8 and base_bastion.inteligencia == 8,
+		"el Bastión arranca con perfil de tanque (14/8/8)"
+	)
+	var base_saeta := GladiatorStats.new()
+	base_saeta.configurar_clase(&"saeta")
+	_comprobar(base_saeta.agilidad == 16, "la Saetera arranca con 16 de Agilidad")
+	var base_cetro := GladiatorStats.new()
+	base_cetro.configurar_clase(&"cetro")
+	_comprobar(base_cetro.inteligencia == 15, "el Cetro arranca con 15 de Inteligencia")
+	var base_prisionero := GladiatorStats.new()
+	base_prisionero.configurar_clase(&"prisionero")
+	_comprobar(
+		base_prisionero.fuerza == 10 and base_prisionero.agilidad == 10 and base_prisionero.inteligencia == 10,
+		"el Prisionero conserva el perfil neutro (10/10/10)"
+	)
+
 	# --- Balance: daño mín-máx, ritmo de ataque y arquetipos ---
 	var stats := GladiatorStats.new()
 	stats.configurar_clase(&"bastion")
@@ -692,6 +712,17 @@ func _ejecutar() -> void:
 	var vel_antes := stats.velocidad_ataque
 	stats.agilidad = 40
 	_comprobar(stats.velocidad_ataque > vel_antes, "la Agilidad sube la velocidad de ataque")
+	# Curva de velocidad: incluso Saeta (86 AGI, nivel 20) no debe topar 2.20.
+	stats.agilidad = 86
+	stats.nivel = 20
+	_comprobar(
+		stats.velocidad_ataque < GladiatorStats.VEL_ATAQUE_MAX,
+		"la velocidad no se topa en nivel 20 ni con agilidad extrema"
+	)
+	_comprobar(
+		is_equal_approx(stats.velocidad_ataque, 0.15 + 86.0 * 0.015 + 19.0 * 0.025),
+		"la velocidad usa 0.015 por agilidad (curva más larga)"
+	)
 	_comprobar(
 		is_equal_approx(GladiatorStats.new().salud_maxima, GladiatorStats.VIDA_BASE + 10.0 * GladiatorStats.VIDA_POR_FUERZA),
 		"la vida base sale solo de Fuerza y de la constante VIDA_BASE",

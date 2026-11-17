@@ -40,6 +40,18 @@ const MULT_DANO_POR_CLASE := {
 	&"saeta": 1.10,
 }
 
+## Atributos base al equipar cada clase (FUE, AGI, INT). Todas suman 30, igual
+## que el perfil neutro del Prisionero: cambian la forma, no el poder total.
+## Así las clases son distintas desde el nivel 1 y no sólo por su crecimiento.
+const ATRIBUTOS_BASE_POR_CLASE := {
+	&"prisionero": Vector3i(10, 10, 10),
+	&"bastion": Vector3i(14, 8, 8),
+	&"filo": Vector3i(8, 15, 7),
+	&"cetro": Vector3i(7, 8, 15),
+	&"lanza": Vector3i(12, 11, 7),
+	&"saeta": Vector3i(7, 16, 7),
+}
+
 ## Crecimiento automático por nivel según la clase (FUE, AGI, INT). Los
 ## decimales se acumulan para no perder fracciones entre niveles.
 const CRECIMIENTO_POR_CLASE := {
@@ -66,7 +78,7 @@ const MITIGACION_FISICA_MAXIMA := 0.60
 ## Ataques por segundo. La base es el suelo de un novato: casi todo el ritmo
 ## lo aportan la Agilidad y el nivel.
 const VEL_ATAQUE_BASE := 0.15
-const VEL_ATAQUE_POR_AGI := 0.050
+const VEL_ATAQUE_POR_AGI := 0.015
 const VEL_ATAQUE_POR_NIVEL := 0.025
 const VEL_ATAQUE_MIN := 0.15
 const VEL_ATAQUE_MAX := 2.20
@@ -268,6 +280,13 @@ func configurar_clase(nueva_clase: StringName) -> void:
 	clase = nueva_clase
 	_crecimiento = CRECIMIENTO_POR_CLASE.get(nueva_clase, CRECIMIENTO_POR_CLASE[&"prisionero"])
 	_resto_crecimiento = Vector3.ZERO
+	# Perfil inicial por clase: sólo al equipar por primera vez (nivel 1, sin
+	# puntos ganados), para no pisar la progresión si se re-equipara después.
+	if nivel == 1 and puntos_libres == 0:
+		var base: Vector3i = ATRIBUTOS_BASE_POR_CLASE.get(nueva_clase, Vector3i(10, 10, 10))
+		fuerza = base.x
+		agilidad = base.y
+		inteligencia = base.z
 
 
 ## Aplica el crecimiento de un nivel, acumulando las fracciones pendientes.
