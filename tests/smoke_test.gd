@@ -149,6 +149,10 @@ func _ejecutar() -> void:
 	)
 	_comprobar(escena.oro == oro_antes, "elegir campeón no cuesta oro")
 	_comprobar(jugador.estadisticas.fuerza_total > fuerza_antes, "el arma aplica bonos de atributo")
+	_comprobar(
+		is_equal_approx(jugador.combat.salud_actual, jugador.estadisticas.salud_maxima),
+		"elegir campeón da la vida máxima completa (sin recuperación gradual)"
+	)
 	var clase_fijada := jugador.arma_actual.clase
 	escena._al_elegir_campeon(&"filo")
 	_comprobar(

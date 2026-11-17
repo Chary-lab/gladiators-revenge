@@ -880,13 +880,15 @@ func equipar_arma(nueva_arma: WeaponItem) -> bool:
 		push_warning("Se intentó equipar un arma inválida; revisa WeaponItem.validar().")
 		return false
 
+	# Capturar la vida máxima ANTES de cambiar la clase: configurar_clase cambia
+	# los atributos base (ej. Bastión 14 FUE) y con ellos salud_maxima. Si se
+	# mide después, la diferencia de clase se pierde y el campeón "recupera"
+	# vida poco a poco en vez de arrancar lleno al elegir.
+	var vida_max_antes := estadisticas.salud_maxima
 	arma_actual = nueva_arma
 	estadisticas.configurar_clase(nueva_arma.id_clase())
 	estadisticas.aplicar_bonos_equipo(nueva_arma.bonificaciones_atributos)
-	# Un arma que otorga vida máxima también entrega esa vida al campeón.
-	var vida_antes := estadisticas.salud_maxima - float(nueva_arma.bonificaciones_atributos.get("vida", 0))
-	var vida_despues := estadisticas.salud_maxima
-	var ganancia := vida_despues - vida_antes
+	var ganancia := estadisticas.salud_maxima - vida_max_antes
 	if ganancia > 0.0:
 		curar(ganancia)
 	_cooldowns.fill(0.0)
