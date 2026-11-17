@@ -62,6 +62,15 @@ func _ejecutar() -> void:
 			sonidos_ok = false
 			printerr("  falta audio: ", Sfx.RUTAS[nombre])
 	_comprobar(sonidos_ok, "los efectos de audio CC0 existen")
+	# Todo efecto que el juego emite debe resolver a un stream real. Los casos
+	# `venta` y `escudo` cayeron en `_:` de Sfx._crear_por_nombre y sonaron en silencio.
+	var efectos_usados: Array[StringName] = [&"click", &"compra", &"critico", &"dano", &"enemigo", &"escudo", &"espiritu", &"golpe", &"magia", &"muerte", &"oleada", &"venta", &"victoria"]
+	var efectos_resueltos := true
+	for nombre in efectos_usados:
+		if Sfx._crear_por_nombre(nombre) == null:
+			efectos_resueltos = false
+			printerr("  efecto sin audio: ", nombre)
+	_comprobar(efectos_resueltos, "todo efecto emitido por el juego resuelve a un stream")
 	var escena = load("res://scenes/main.tscn").instantiate()
 	root.add_child(escena)
 	await process_frame
@@ -104,6 +113,13 @@ func _ejecutar() -> void:
 			if habilidad == null or habilidad.id == &"" or habilidad.mejoras_rango.is_empty():
 				kits_ok = false
 	_comprobar(kits_ok, "Hoplita y Saetera traen 4 habilidades con rangos y definitiva a rango 3")
+
+	# Identidad original: la skin de ascua de la Rebelión existe y es distinta.
+	var skins: Array = escena.get("SKINS")
+	var nombres_skin: Array = []
+	for s in skins:
+		nombres_skin.append(str(s["nombre"]))
+	_comprobar(nombres_skin.has("Ascua de la Rebelión"), "la skin Ascua de la Rebelión está disponible")
 
 	# --- Forja de campeones: la clase se elige en su pantalla --------------
 	var pedestales: Array = escena.get("_pedestales")
@@ -433,6 +449,30 @@ func _ejecutar() -> void:
 	var bajas_antes: int = oleadas.bajas
 	oleadas.al_morir_enemigo(0)
 	_comprobar(oleadas.bajas == bajas_antes + 1, "cada muerte suma una baja")
+
+	# --- Legado de Renegados: renombre determinista por oleada y bajas ------
+	var legado := Legado.new()
+	_comprobar(legado.renombre == 0 and legado.grado == &"aspirante", "el legado arranca en cero como aspirante")
+	legado.registrar_oleada(3)
+	legado.registrar_bajas(10)
+	_comprobar(legado.renombre == Legado.renombre_por(3, 10), "el legado acumula renombre de oleada y bajas")
+	var grado_antes := legado.grado
+	legado.registrar_oleada(8)
+	_comprobar(legado.grado != grado_antes, "el legado asciende de grado al superar un umbral")
+	var legado2 := Legado.new()
+	legado2.registrar_oleada(3)
+	legado2.registrar_bajas(10)
+	_comprobar(legado2.renombre == legado.renombre - Legado.renombre_por(8, 0), "el legado es determinista e incremental")
+	# Sincronización desde totales (como hace el cliente con el snapshot).
+	legado2.sincronizar(8, 10)
+	_comprobar(legado2.renombre == Legado.renombre_por(8, 10), "el legado se sincroniza desde totales del snapshot")
+	# El HUD refleja el rango del legado de la escena.
+	escena.legado.sincronizar(9, 40)
+	escena._publicar_legado()
+	_comprobar(
+		(hud.get("_legado_jugador") as Label).text == Legado.titulo_de(escena.legado.grado).to_upper(),
+		"la ficha del HUD muestra el rango del Legado"
+	)
 
 	if _completo():
 		# --- Tienda simple: una lista y dos modos -----------------------------

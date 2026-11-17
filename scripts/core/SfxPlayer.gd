@@ -132,6 +132,10 @@ static func _crear_por_nombre(nombre: StringName) -> AudioStream:
 			return _crear(0.22, Callable(Sfx, "_magia"))
 		&"compra":
 			return _crear(0.34, Callable(Sfx, "_compra"))
+		&"venta":
+			return _crear(0.26, Callable(Sfx, "_venta"))
+		&"escudo":
+			return _crear(0.30, Callable(Sfx, "_escudo"))
 		&"oleada":
 			return _crear(0.55, Callable(Sfx, "_oleada"))
 		&"dano":
@@ -195,6 +199,19 @@ static func _magia(t: float, duracion: float) -> float:
 static func _compra(t: float, duracion: float) -> float:
 	var frecuencia := 1046.0 if t > 0.16 else 784.0
 	return sin(TAU * frecuencia * t) * 0.3 * _envolvente(t, duracion)
+
+
+static func _venta(t: float, duracion: float) -> float:
+	# Dos campanadas descendentes: inversión melódica de `_compra` (compra sube, venta baja).
+	var frecuencia := 784.0 if t > 0.13 else 1046.0
+	return sin(TAU * frecuencia * t) * 0.28 * _envolvente(t, duracion)
+
+
+static func _escudo(t: float, duracion: float) -> float:
+	# Zumbido metálico amortiguado: onda baja con vibrato que se apaga rápido.
+	var frecuencia := 220.0 * (1.0 + 0.18 * sin(TAU * 14.0 * t))
+	var ruido := sin(t * 811.0) * 0.12
+	return (sin(TAU * frecuencia * t) * 0.3 + ruido) * _envolvente(t, duracion)
 
 
 static func _oleada(t: float, duracion: float) -> float:

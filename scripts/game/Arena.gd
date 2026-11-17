@@ -22,11 +22,13 @@ const SKIN_TIERRA_BALDIA := Color(0.72, 0.95, 0.55)
 const SKIN_CENIZA := Color(0.78, 0.80, 0.78)
 const SKIN_SANGRE := Color(1.00, 0.62, 0.55)
 const SKIN_HIELO := Color(0.62, 0.82, 1.00)
+const SKIN_ASCUA := Color(1.00, 0.52, 0.30)
 const SKINS := [
 	{"nombre": "Tierra Baldía", "tinte": SKIN_TIERRA_BALDIA},
 	{"nombre": "Ceniza", "tinte": SKIN_CENIZA},
 	{"nombre": "Sangre", "tinte": SKIN_SANGRE},
 	{"nombre": "Hielo", "tinte": SKIN_HIELO},
+	{"nombre": "Ascua de la Rebelión", "tinte": SKIN_ASCUA},
 ]
 
 var _terminado_local := false
@@ -43,6 +45,9 @@ var terminado:
 var game_state: GameState
 var enemy_tracker: EnemyTracker
 var gladiador_tracker: GladiadorTracker
+
+## Legado de Renegados: renombre local derivado de estado ya sincronizado.
+var legado := Legado.new()
 
 var _oro_local := 200
 var _puntos_local := 0
@@ -836,8 +841,6 @@ func _al_elegir_campeon(clase: StringName) -> void:
 	# Ya hay campeón: no tiene sentido esperar los 30 s de la sala de espera.
 	if _oleadas != null:
 		_oleadas.acortar_preparacion(2.0)
-	for pedestal in _pedestales:
-		pedestal.desactivar()
 	_avisar("Campeón: %s" % arma.nombre, 2.8)
 	Sfx.reproducir("compra", -3.0)
 
@@ -1004,11 +1007,6 @@ func _al_actualizar_lobby(ocupadas: Dictionary) -> void:
 			mi_clase = StringName(clase)
 	if mi_clase != &"":
 		_campeon_elegido = true
-	for pedestal in _pedestales:
-		if int(ocupadas.get(pedestal.arma.id_clase(), 0)) > 0:
-			pedestal.desactivar()
-		elif _campeon_elegido:
-			pedestal.desactivar()
 
 
 func _al_rechazar_clase(clase: StringName) -> void:
@@ -1049,6 +1047,9 @@ func _aplicar_snapshot(datos: Dictionary) -> void:
 		)
 	if _hud != null and _hud.has_method("establecer_bajas"):
 		_hud.establecer_bajas(int(datos.get("bajas", 0)))
+	# Legado: en cliente se deriva del snapshot (WaveManager no corre aquí).
+	legado.sincronizar(int(datos.get("oleada", 0)), int(datos.get("bajas", 0)))
+	_publicar_legado()
 	_lobby_red_activo = bool(datos.get("espera", _lobby_red_activo))
 	_lobby_red_restante = float(datos.get("prep", _lobby_red_restante))
 	_lobby_red_conectados = maxi(1, int(datos.get("conectados", _lobby_red_conectados)))
@@ -1260,12 +1261,14 @@ func _unhandled_input(evento: InputEvent) -> void:
 # --- Construcción del mundo ----------------------------------------------
 
 func _crear_entorno() -> void:
+	# Atmósfera de arena de brasas: fondo carbón y luz ambiental cálida, en la
+	# misma familia que ForjaTema (FONDO/PANEL/ASCUA), sin arte de terceros.
 	var entorno := Environment.new()
 	entorno.background_mode = Environment.BG_COLOR
-	entorno.background_color = Color(0.07, 0.06, 0.10)
+	entorno.background_color = Color(0.055, 0.042, 0.038)
 	entorno.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	entorno.ambient_light_color = Color(0.78, 0.72, 0.88)
-	entorno.ambient_light_energy = 0.65
+	entorno.ambient_light_color = Color(0.82, 0.66, 0.52)
+	entorno.ambient_light_energy = 0.62
 	entorno.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 
 	var mundo := WorldEnvironment.new()
@@ -1274,8 +1277,8 @@ func _crear_entorno() -> void:
 
 	var sol := DirectionalLight3D.new()
 	sol.rotation_degrees = Vector3(-55.0, 35.0, 0.0)
-	sol.light_energy = 1.15
-	sol.light_color = Color(1.0, 0.93, 0.82)
+	sol.light_energy = 1.08
+	sol.light_color = Color(1.0, 0.85, 0.70)
 	sol.shadow_enabled = false
 	add_child(sol)
 
@@ -1324,6 +1327,8 @@ func _crear_suelo() -> void:
 				if tile != null:
 					tile.position = Vector3(float(x) + 3.0, 0.0, float(z) + 3.0)
 					tile.scale = Vector3.ONE * 1.05
+					# Integramos el GLB en la paleta carbón/ascua sin tocar su textura.
+					MaterialTinte.aplicar(tile, "floor_dirt", Color(0.42, 0.33, 0.28))
 					# Va dentro del StaticBody del suelo: hereda su colisión.
 					suelo.add_child(tile)
 
@@ -1335,6 +1340,7 @@ func _crear_suelo() -> void:
 				if tile != null:
 					tile.position = Vector3(float(x) + 3.0, 0.015, float(z) + 3.0)
 					tile.scale = Vector3.ONE * 1.05
+					MaterialTinte.aplicar(tile, "floor_tile", Color(0.50, 0.42, 0.35))
 					add_child(tile)
 
 	add_child(suelo)
@@ -1345,10 +1351,10 @@ func _crear_suelo() -> void:
 	plano_exterior.size = Vector2(ANCHO * 2.4, LARGO * 2.4)
 	exterior.mesh = plano_exterior
 	exterior.position.y = -0.05
-	exterior.material_override = _material(Color(0.33, 0.27, 0.22))
+	exterior.material_override = _material(Color(0.11, 0.085, 0.07))
 	add_child(exterior)
 
-	# Anillo central bajo el estandarte.
+	# Anillo central bajo el estandarte: ascua apagada.
 	var anillo := MeshInstance3D.new()
 	var cilindro := CylinderMesh.new()
 	cilindro.top_radius = 5.0
@@ -1356,22 +1362,22 @@ func _crear_suelo() -> void:
 	cilindro.height = 0.04
 	anillo.mesh = cilindro
 	anillo.position = CENTRO_ARENA + Vector3(0, 0.02, 0)
-	anillo.material_override = _material(Color(0.45, 0.32, 0.20))
+	anillo.material_override = _material(Color(0.32, 0.16, 0.10))
 	add_child(anillo)
 
-	# Losa de la zona segura: más clara para separar base y arena.
+	# Losa de la zona segura: carbón calcáreo, separada de la arena por tono.
 	var base := MeshInstance3D.new()
 	var plano_base := PlaneMesh.new()
 	plano_base.size = Vector2(20.0, LARGO)
 	base.mesh = plano_base
 	base.position = Vector3(20.0, 0.015, 0)
-	base.material_override = _material(Color(0.43, 0.35, 0.27))
+	base.material_override = _material(Color(0.20, 0.165, 0.13))
 	add_child(base)
 
 	# Gradas de la arena: tres graderíos, la base queda abierta al este.
-	_crear_prop(Vector3(0, 1.5, -LARGO * 0.5 - 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.16, 0.14, 0.18))
-	_crear_prop(Vector3(0, 1.5, LARGO * 0.5 + 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.16, 0.14, 0.18))
-	_crear_prop(Vector3(-ANCHO * 0.5 - 4.0, 1.5, 0), Vector3(6.0, 3.0, LARGO), Color(0.13, 0.12, 0.16))
+	_crear_prop(Vector3(0, 1.5, -LARGO * 0.5 - 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.085, 0.07, 0.09))
+	_crear_prop(Vector3(0, 1.5, LARGO * 0.5 + 4.0), Vector3(ANCHO, 3.0, 6.0), Color(0.085, 0.07, 0.09))
+	_crear_prop(Vector3(-ANCHO * 0.5 - 4.0, 1.5, 0), Vector3(6.0, 3.0, LARGO), Color(0.07, 0.06, 0.075))
 
 	_puntos_spawn = [
 		Vector3(-ANCHO * 0.5 + 4.0, 0, -LARGO * 0.5 + 3.0),
@@ -1382,7 +1388,7 @@ func _crear_suelo() -> void:
 
 
 func _crear_muros() -> void:
-	var piedra := Color(0.24, 0.22, 0.21)
+	var piedra := Color(0.13, 0.115, 0.105)
 	_crear_caja_estatica(Vector3(0, ALTO_MURO * 0.5, -LARGO * 0.5), Vector3(ANCHO, ALTO_MURO, 1.0), piedra)
 	_crear_caja_estatica(Vector3(0, ALTO_MURO * 0.5, LARGO * 0.5), Vector3(ANCHO, ALTO_MURO, 1.0), piedra)
 	_crear_caja_estatica(Vector3(-ANCHO * 0.5, ALTO_MURO * 0.5, 0), Vector3(1.0, ALTO_MURO, LARGO), piedra)
@@ -1500,10 +1506,10 @@ func _crear_zona_segura() -> void:
 	disco.height = 0.08
 	agua.mesh = disco
 	agua.position = _fuente + Vector3(0, 0.53, 0)
-	var material_agua := _material(Color(0.18, 0.62, 0.68))
+	var material_agua := _material(Color(0.55, 0.22, 0.10))
 	material_agua.emission_enabled = true
-	material_agua.emission = Color(0.15, 0.75, 0.80)
-	material_agua.emission_energy_multiplier = 0.8
+	material_agua.emission = Color(0.90, 0.30, 0.10)
+	material_agua.emission_energy_multiplier = 0.7
 	agua.material_override = material_agua
 	add_child(agua)
 
@@ -1514,12 +1520,12 @@ func _crear_zona_segura() -> void:
 	pilar.position = _fuente + Vector3(0, 1.4, 0)
 	pilar.material_override = _material(Color(0.45, 0.38, 0.28))
 	add_child(pilar)
-	_etiqueta_mundo("FUENTE", _fuente + Vector3(0, 2.9, 0), Color(0.55, 0.95, 0.95))
+	_etiqueta_mundo("FUENTE", _fuente + Vector3(0, 2.9, 0), Color(1.0, 0.72, 0.40))
 	var luz_agua := OmniLight3D.new()
 	luz_agua.position = _fuente + Vector3(0, 2.0, 0)
 	luz_agua.omni_range = 7.0
-	luz_agua.light_energy = 0.8
-	luz_agua.light_color = Color(0.35, 0.85, 0.95)
+	luz_agua.light_energy = 0.9
+	luz_agua.light_color = Color(1.0, 0.52, 0.22)
 	add_child(luz_agua)
 
 	# Obelisco de talentos.
@@ -1874,6 +1880,7 @@ func _conectar() -> void:
 	_oleadas.entrada_iniciada.connect(_al_entrada_iniciada)
 	_oleadas.oleada_iniciada.connect(_al_iniciar_oleada)
 	_oleadas.oleada_terminada.connect(_al_terminar_oleada)
+	_oleadas.enemigo_abatido.connect(_al_abatir_para_legado)
 	_oleadas.oro_ganado.connect(_al_ganar_oro)
 	_oleadas.victoria.connect(_al_victoria)
 	_bandera.destruida.connect(_al_destruir_bandera)
@@ -1990,8 +1997,29 @@ func _al_terminar_oleada(numero: int) -> void:
 		jugador.estadisticas.otorgar_puntos(2)
 		jugador.otorgar_puntos_rojos(1)
 		jugador.curar(jugador.estadisticas.salud_maxima * 0.25)
+	# Legado: el renombre se deriva de estado ya sincronizado (oleada + bajas).
+	legado.sincronizar(_oleadas.oleada_actual, _oleadas.bajas)
+	_publicar_legado()
 	if _hud != null:
 		_hud.mostrar_mensaje("Oleada %d superada  ·  +2 puntos" % numero, 2.5)
+
+
+## Alimenta el Legado con el total de bajas acumulado (ya viene en la señal).
+func _al_abatir_para_legado(total: int) -> void:
+	legado.sincronizar(_oleadas.oleada_actual, total)
+	_publicar_legado()
+
+
+var _grado_legado_anunciado: StringName = &"aspirante"
+func _publicar_legado() -> void:
+	var titulo := str(legado.estado()["titulo"])
+	if _hud != null and _hud.has_method("establecer_legado"):
+		_hud.establecer_legado(titulo)
+	# Sólo se anuncian los ascensos de grado: un mensaje por baja saturaría el HUD.
+	if legado.grado == _grado_legado_anunciado:
+		return
+	_grado_legado_anunciado = legado.grado
+	Eventos.mensaje("Legado: %s" % titulo, 2.2)
 
 
 func _al_ganar_oro(cantidad: int) -> void:
@@ -2065,23 +2093,6 @@ func _avisar(texto: String, duracion := 2.0) -> void:
 func _interactuar_cercano() -> void:
 	if terminado:
 		return
-	var pedestal := _pedestal_cercano()
-	if pedestal != null:
-		if _campeon_elegido:
-			_avisar("Tu campeón ya está elegido. La clase es permanente.", 2.5)
-			return
-		if es_cliente:
-			red.enviar_clase(pedestal.arma.id_clase())
-			_avisar("Solicitando clase %s…" % pedestal.arma.nombre, 2.0)
-			return
-		if pedestal.comprar(_jugador):
-			_campeon_elegido = true
-			for otro in _pedestales:
-				if otro != pedestal:
-					otro.desactivar()
-			_avisar("Campeón: %s" % pedestal.arma.nombre, 2.8)
-			Sfx.reproducir("compra", -3.0)
-		return
 	if _tienda_cercana():
 		if _hud != null:
 			_hud.alternar_tienda()
@@ -2098,19 +2109,6 @@ func _tienda_cercana() -> bool:
 	if _tienda == null or _jugador == null:
 		return false
 	return _jugador.global_position.distance_to(_tienda.global_position) <= RADIO_INTERACCION
-
-
-func _pedestal_cercano() -> ArmoryPedestal:
-	var mejor: ArmoryPedestal = null
-	var mejor_distancia := RADIO_INTERACCION
-	for pedestal in _pedestales:
-		if pedestal.vendida:
-			continue
-		var distancia := _jugador.global_position.distance_to(pedestal.global_position)
-		if distancia < mejor_distancia:
-			mejor_distancia = distancia
-			mejor = pedestal
-	return mejor
 
 
 func puede_comprar_objeto(item: ItemData) -> bool:
@@ -2278,15 +2276,6 @@ func _actualizar_pista() -> void:
 		return
 	var frame := Engine.get_process_frames()
 	if _pista_frame_anterior < 0 or frame - _pista_frame_anterior >= 10:
-		var pedestal := _pedestal_cercano()
-		if pedestal != null:
-			if _campeon_elegido:
-				_texto_pista = "Campeón elegido  ·  la clase es permanente"
-			else:
-				_texto_pista = "F — Elegir campeón: %s (gratis)" % pedestal.arma.nombre
-			_hud.establecer_pista(_texto_pista)
-			_pista_frame_anterior = frame
-			return
 		if _tienda_cercana():
 			_texto_pista = "F — Mercader de la Rebelión: objetos y forja"
 		elif _jugador.global_position.distance_to(_obelisco) <= 4.5:
