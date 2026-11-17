@@ -15,7 +15,7 @@ Rama: `visual/identidad-arena` (misma rama de trabajo; push al final) · Estrate
 - **T1** — S1-S3 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e16abe75affeYFQ12s8zYKbH2j`) — estado: ✅ — mapa: `WaveManager.oleada_terminada`/`enemigo_abatido`, arena reparte oro en `_al_terminar_oleada`, snapshot trae `oleada`/`bajas`, Eventos es el puente seguro sin autoload. Decidido: "Legado de Renegados".
 - **T2** — S2-S3 — ruta: inline — estado: ✅ — `scripts/game/Legado.gd` (puro, SIN snapshots): renombre determinista por oleada+bajas, 5 grados (Aspirante→Inmortal), `sincronizar(oleada,bajas)` para cliente. Enganches en `Arena.gd`: `legado`, `enemigo_abatido`→`_al_abatir_para_legado`, `_al_terminar_oleada`, `_aplicar_snapshot` (cliente), `_publicar_legado()` (anuncia sólo ascensos). Indicador en `ArenaHUD._ficha_jugador` + `establecer_legado()`. Sin tocar BalanceOlas/red daño.
 - **T3** — S2-S3 — ruta: inline — estado: ✅ — RED→GREEN: 6 checks en `smoke_test.gd` (renombre, grados, determinismo, sincronía desde totales, HUD). Gate: import 0, smoke 15/15, regression 178/178, wave sim 3/3, boot limpio. Captura inspeccionada: "ASPIRANTE" visible en ascua junto a ABATIDOS.
-- **T4** — S1-S3 — ruta: inline — estado: pendiente — docs + commit + assess RDD.
+- **T4** — S1-S3 — ruta: inline — estado: ✅ — commit `b997277` (6 archivos, +152/−5), assess RDD `medium/under_budget` sin review obligatoria. Doc ODD actualizado.
 
 ## Log
 
@@ -32,6 +32,8 @@ Rama: `visual/identidad-arena` (misma rama de trabajo; push al final) · Estrate
 
 **L6** — 2026-11-17 — caption: el indicador de rango aparece en la barra superior junto a ABATIDOS, en color `ForjaTema.ASCUA`, con separador "·". Sin glyphs tofu (`AGENTS.md:145`).
 
+**L7** — 2026-11-17 — Frente de jugabilidad COMPLETO. Commit `b997277`, assess `medium/under_budget`. Estado global: frentes 1 (auditoría), 2 (visual) y 3 (jugabilidad) entregados. Queda frente 4 (optimización/deuda) y entonces push final (el usuario lo autorizó cuando todo esté listo).
+
 ---
 
-Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ⏳ docs/commit/assess
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · Estado frente jugabilidad: **COMPLETO**
