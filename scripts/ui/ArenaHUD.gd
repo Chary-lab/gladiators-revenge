@@ -969,7 +969,10 @@ func _actualizar_inventario() -> void:
 			boton.remove_theme_stylebox_override("focus")
 
 
-func _evento_raton_inventario(indice: int, boton: Button, evento: InputEvent) -> void:
+## `gui_input` emite InputEvent como PRIMER argumento; `.bind(i, boton)` agrega
+## los suyos al final. La firma debe ir evento, indice, boton (no al revés:
+## antes el int recibía el InputEvent y reventaba en Web al clic derecho).
+func _evento_raton_inventario(evento: InputEvent, indice: int, boton: Button) -> void:
 	if evento is InputEventMouseButton:
 		var clic := evento as InputEventMouseButton
 		if clic.button_index == MOUSE_BUTTON_RIGHT and clic.pressed:
