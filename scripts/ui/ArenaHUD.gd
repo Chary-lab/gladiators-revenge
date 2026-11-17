@@ -1240,12 +1240,6 @@ func _llamar_manager(metodo: StringName) -> void:
 		manager.call(metodo)
 
 
-func _emitir_evento(nombre: String) -> void:
-	var bus := _bus_eventos()
-	if bus != null:
-		bus.emit_signal(nombre)
-
-
 func _hay_panel_bloqueante() -> bool:
 	return (
 		(_tienda != null and _tienda.visible)

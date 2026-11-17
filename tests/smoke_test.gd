@@ -62,6 +62,15 @@ func _ejecutar() -> void:
 			sonidos_ok = false
 			printerr("  falta audio: ", Sfx.RUTAS[nombre])
 	_comprobar(sonidos_ok, "los efectos de audio CC0 existen")
+	# Todo efecto que el juego emite debe resolver a un stream real. Los casos
+	# `venta` y `escudo` cayeron en `_:` de Sfx._crear_por_nombre y sonaron en silencio.
+	var efectos_usados: Array[StringName] = [&"click", &"compra", &"critico", &"dano", &"enemigo", &"escudo", &"espiritu", &"golpe", &"magia", &"muerte", &"oleada", &"venta", &"victoria"]
+	var efectos_resueltos := true
+	for nombre in efectos_usados:
+		if Sfx._crear_por_nombre(nombre) == null:
+			efectos_resueltos = false
+			printerr("  efecto sin audio: ", nombre)
+	_comprobar(efectos_resueltos, "todo efecto emitido por el juego resuelve a un stream")
 	var escena = load("res://scenes/main.tscn").instantiate()
 	root.add_child(escena)
 	await process_frame

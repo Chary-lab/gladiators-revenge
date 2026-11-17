@@ -836,8 +836,6 @@ func _al_elegir_campeon(clase: StringName) -> void:
 	# Ya hay campeón: no tiene sentido esperar los 30 s de la sala de espera.
 	if _oleadas != null:
 		_oleadas.acortar_preparacion(2.0)
-	for pedestal in _pedestales:
-		pedestal.desactivar()
 	_avisar("Campeón: %s" % arma.nombre, 2.8)
 	Sfx.reproducir("compra", -3.0)
 
@@ -1004,11 +1002,6 @@ func _al_actualizar_lobby(ocupadas: Dictionary) -> void:
 			mi_clase = StringName(clase)
 	if mi_clase != &"":
 		_campeon_elegido = true
-	for pedestal in _pedestales:
-		if int(ocupadas.get(pedestal.arma.id_clase(), 0)) > 0:
-			pedestal.desactivar()
-		elif _campeon_elegido:
-			pedestal.desactivar()
 
 
 func _al_rechazar_clase(clase: StringName) -> void:
@@ -2065,23 +2058,6 @@ func _avisar(texto: String, duracion := 2.0) -> void:
 func _interactuar_cercano() -> void:
 	if terminado:
 		return
-	var pedestal := _pedestal_cercano()
-	if pedestal != null:
-		if _campeon_elegido:
-			_avisar("Tu campeón ya está elegido. La clase es permanente.", 2.5)
-			return
-		if es_cliente:
-			red.enviar_clase(pedestal.arma.id_clase())
-			_avisar("Solicitando clase %s…" % pedestal.arma.nombre, 2.0)
-			return
-		if pedestal.comprar(_jugador):
-			_campeon_elegido = true
-			for otro in _pedestales:
-				if otro != pedestal:
-					otro.desactivar()
-			_avisar("Campeón: %s" % pedestal.arma.nombre, 2.8)
-			Sfx.reproducir("compra", -3.0)
-		return
 	if _tienda_cercana():
 		if _hud != null:
 			_hud.alternar_tienda()
@@ -2098,19 +2074,6 @@ func _tienda_cercana() -> bool:
 	if _tienda == null or _jugador == null:
 		return false
 	return _jugador.global_position.distance_to(_tienda.global_position) <= RADIO_INTERACCION
-
-
-func _pedestal_cercano() -> ArmoryPedestal:
-	var mejor: ArmoryPedestal = null
-	var mejor_distancia := RADIO_INTERACCION
-	for pedestal in _pedestales:
-		if pedestal.vendida:
-			continue
-		var distancia := _jugador.global_position.distance_to(pedestal.global_position)
-		if distancia < mejor_distancia:
-			mejor_distancia = distancia
-			mejor = pedestal
-	return mejor
 
 
 func puede_comprar_objeto(item: ItemData) -> bool:
@@ -2278,15 +2241,6 @@ func _actualizar_pista() -> void:
 		return
 	var frame := Engine.get_process_frames()
 	if _pista_frame_anterior < 0 or frame - _pista_frame_anterior >= 10:
-		var pedestal := _pedestal_cercano()
-		if pedestal != null:
-			if _campeon_elegido:
-				_texto_pista = "Campeón elegido  ·  la clase es permanente"
-			else:
-				_texto_pista = "F — Elegir campeón: %s (gratis)" % pedestal.arma.nombre
-			_hud.establecer_pista(_texto_pista)
-			_pista_frame_anterior = frame
-			return
 		if _tienda_cercana():
 			_texto_pista = "F — Mercader de la Rebelión: objetos y forja"
 		elif _jugador.global_position.distance_to(_obelisco) <= 4.5:
