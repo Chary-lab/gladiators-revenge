@@ -32,8 +32,9 @@ para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 - **HUD de combate**: una sola barra superior con oleada, estandarte y la ficha
   del jugador (apodo, nivel, enemigos abatidos y oro, con contadores animados);
   marcos de inventario por rareza. La sala de espera es sólo texto, sin panel.
-- **Tienda**: una sola cuadrícula con lo que se vende y, en gris, lo que solo
-  se forja (con su coste y el ingrediente que falta), más el modo VENDER.
+- **Tienda**: pestañas por intención (TODOS / FORJAR / COMPONENTES), ficha con
+  barra de progreso de forja en vivo y botón FORJAR AHORA, árbol de construcción
+  navegable y modo VENDER.
 - **Coop**: la sala de espera del cliente la manda el servidor (cuenta atrás
   real), la capa táctil existe también dentro de una sala y elegir campeón
   acorta la espera. El maestro pre-arranca una sola sala.
@@ -256,8 +257,10 @@ pergaminos, componentes y recetas. La mochila tiene 6 ranuras activas.
   rebotes), Cuerno de la Rebelión (cura el estandarte y da gritos de guerra),
   Capa del Comandante y Guadaña del Verdugo Ancestral (auras de mando).
 
-La tienda muestra también, al final de la cuadrícula y en gris, los objetos que
-solo se forjan: su coste de forja y qué ingrediente falta. No se compran.
+La pestaña FORJAR de la tienda muestra los objetos que solo se forjan: su coste
+y una barra con los ingredientes reunidos (por ejemplo `1/2`). Al completar la
+receta y tener oro, la ficha habilita **FORJAR AHORA**; el panel delega en la
+arena, que aplica la forja autoritativa.
 
 La forja es automática: al comprar el ingrediente que completa una receta, se
 consumen los materiales, se cobra la forja y, si el resultado completa otra

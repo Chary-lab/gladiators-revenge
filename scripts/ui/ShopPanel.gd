@@ -41,6 +41,15 @@ var _boton_arbol: Button
 var _vender := false
 var _pausado := false
 
+## Rework: pestañas por intención. Las tarjetas SIGUEN todas en `_cuadriculas`
+## (los tests las cuentan); la pestaña sólo controla visibilidad.
+var _pestana := 0  # 0 = COMPRAR, 1 = FORJAR, 2 = COMPONENTES
+var _pestanas: Array[Button] = []
+## Barra de progreso de forja y botón de acción en la ficha.
+var _forja_barra: ForjaTema.BarraSegmentada
+var _forja_texto: Label
+var _forja_boton: Button
+
 var _seleccionado: ItemData
 var _seleccion_indice := -1
 var _seleccion_forjable := false
@@ -93,6 +102,7 @@ func _ready() -> void:
 
 	columna.add_child(_crear_cabecera())
 	columna.add_child(_crear_barra_modos())
+	columna.add_child(_crear_barra_pestanas())
 	columna.add_child(ForjaTema.regla(ANCHO - 36.0))
 
 	var cuerpo := HBoxContainer.new()
@@ -178,6 +188,27 @@ func _crear_barra_modos() -> Control:
 	return fila
 
 
+func _crear_barra_pestanas() -> Control:
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 8)
+	# Pestañas por intención: separan "comprar listo" de "crear" y de materiales.
+	for entrada in [["TODOS", 0], ["FORJAR", 1], ["COMPONENTES", 2]]:
+		var p := ForjaTema.boton(str(entrada[0]), 12)
+		p.custom_minimum_size = Vector2(120, 30)
+		var idx: int = int(entrada[1])
+		p.pressed.connect(_cambiar_pestana.bind(idx))
+		_pestanas.append(p)
+		fila.add_child(p)
+	var relleno := Control.new()
+	relleno.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fila.add_child(relleno)
+	var guia := ForjaTema.etiqueta("Elegí qué querés hacer:", 11, ForjaTema.TENUE)
+	guia.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	fila.add_child(guia)
+	_actualizar_pestanas()
+	return fila
+
+
 func _crear_lista() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -252,6 +283,18 @@ func _crear_ficha() -> Control:
 	_ficha_tipo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_ficha_tipo.visible = false
 	_ficha_caja.add_child(_ficha_tipo)
+
+	# --- Progreso de forja en vivo (rework) ---------------------------------
+	_forja_texto = ForjaTema.rotulo("", 11, ForjaTema.ORO_CLARO)
+	_forja_texto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_forja_texto.visible = false
+	_ficha_caja.add_child(_forja_texto)
+	_forja_barra = ForjaTema.BarraSegmentada.new()
+	_forja_barra.alto = 12.0
+	_forja_barra.color = ForjaTema.ASCUA
+	_forja_barra.custom_minimum_size = Vector2(ANCHO_FICHA - 24.0, 12.0)
+	_forja_barra.visible = false
+	_ficha_caja.add_child(_forja_barra)
 
 	# --- Árbol de construcción (se forja con / se construye en) -------------
 	var separador := ForjaTema.regla(ANCHO_FICHA - 24.0)
@@ -428,6 +471,25 @@ func _cambiar_modo(vender: bool) -> void:
 	Sfx.reproducir(&"click", -12.0)
 
 
+func _cambiar_pestana(idx: int) -> void:
+	if idx == _pestana:
+		return
+	_pestana = idx
+	_actualizar_pestanas()
+	if _vender:
+		_cambiar_modo(false)  # las pestañas son del modo COMPRAR
+	else:
+		_seleccionado = null
+		_reconstruir()
+		_actualizar_ficha()
+	Sfx.reproducir(&"click", -12.0)
+
+
+func _actualizar_pestanas() -> void:
+	for i in _pestanas.size():
+		_pintar_chip(_pestanas[i], i == _pestana)
+
+
 func _actualizar_chips() -> void:
 	if _chip_comprar == null:
 		return
@@ -440,11 +502,16 @@ func _actualizar_chips() -> void:
 
 
 func _pintar_chip(chip: Button, activo: bool) -> void:
-	var estilo := ForjaTema.estilo_tarjeta(ForjaTema.ORO if activo else ForjaTema.ORO_OSCURO, activo, true)
+	# Fondo con borde dorado para el activo; se conserva el ORO_CLARO del texto
+	# de ForjaTema.boton() (invertirlo a tinta lo dejaba ilegible sobre el relleno).
+	var acento := ForjaTema.ORO if activo else ForjaTema.ORO_OSCURO
+	var estilo := ForjaTema.estilo_tarjeta(acento, activo, true)
 	chip.add_theme_stylebox_override("normal", estilo)
 	chip.add_theme_stylebox_override("hover", estilo)
 	chip.add_theme_stylebox_override("pressed", estilo)
-	chip.add_theme_color_override("font_color", Color(0.07, 0.06, 0.05) if activo else ForjaTema.TEXTO)
+	var tinta := ForjaTema.ORO_CLARO if activo else ForjaTema.TEXTO
+	for estado in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		chip.add_theme_color_override(estado, tinta)
 
 
 func _al_buscar(texto: String) -> void:
@@ -469,30 +536,33 @@ func _reconstruir() -> void:
 		_reconstruir_venta()
 		return
 
-	var legendarios: Array[ItemData] = []
+	var consumibles: Array[ItemData] = []
 	var epicos: Array[ItemData] = []
-	var basicos: Array[ItemData] = []
+	var componentes: Array[ItemData] = []
 	for item in ItemCatalog.vendibles():
 		if not _pasa_busqueda(item):
 			continue
-		match item.rareza:
-			ItemData.Rareza.LEGENDARIO:
-				legendarios.append(item)
-			ItemData.Rareza.EPICO:
-				epicos.append(item)
+		match item.tipo:
+			ItemData.Tipo.POCION, ItemData.Tipo.PERGAMINO:
+				consumibles.append(item)
+			ItemData.Tipo.COMPONENTE:
+				componentes.append(item)
 			_:
-				basicos.append(item)
+				if item.rareza == ItemData.Rareza.EPICO:
+					epicos.append(item)
+				else:
+					consumibles.append(item)
 
-	if not legendarios.is_empty():
-		_seccion("LEGENDARIO", ForjaTema.COLOR_RAREZA[&"legendario"], legendarios, false)
+	# Pestaña COMPRAR: listos para usar, con su rareza como acento.
+	if not consumibles.is_empty():
+		_seccion("CONSUMIBLES", ForjaTema.COLOR_RAREZA[&"comun"], consumibles, false, 0)
 	if not epicos.is_empty():
-		_seccion("ÉPICO", ForjaTema.COLOR_RAREZA[&"epico"], epicos, false)
-	if not basicos.is_empty():
-		_seccion("COMPONENTES Y CONSUMIBLES", ForjaTema.COLOR_RAREZA[&"comun"], basicos, false)
+		_seccion("ÉPICOS", ForjaTema.COLOR_RAREZA[&"epico"], epicos, false, 0)
+	# Pestaña COMPONENTES: materiales de forja.
+	if not componentes.is_empty():
+		_seccion("COMPONENTES", ForjaTema.COLOR_RAREZA[&"comun"], componentes, false, 2)
 
-	# Los que no se venden se muestran igual, en gris: así el jugador ve qué puede
-	# forjar y qué ingrediente le falta, en vez de comprar a ciegas. Ordenados por
-	# coste de forja, que es como se desbloquean.
+	# Pestaña FORJAR: recetas ordenadas por coste, con barra de progreso en la ficha.
 	var forjables := ItemCatalog.recetas()
 	forjables.sort_custom(func(a: ItemData, b: ItemData) -> bool: return a.precio_forja < b.precio_forja)
 	var visibles: Array[ItemData] = []
@@ -500,23 +570,41 @@ func _reconstruir() -> void:
 		if _pasa_busqueda(item):
 			visibles.append(item)
 	if not visibles.is_empty():
-		_seccion("SE FORJAN EN LA ARENA", ForjaTema.TEXTO, visibles, true)
+		_seccion("SE FORJAN EN LA ARENA", ForjaTema.ASCUA, visibles, true, 1)
+
+	_aplicar_visibilidad_pestanas()
 
 	if _cuadriculas.is_empty():
 		_cuerpo.add_child(ForjaTema.etiqueta("Ningún objeto coincide con la búsqueda.", 13, ForjaTema.TENUE))
 	elif _seleccionado == null:
-		# La ficha nunca arranca vacía: el primer objeto queda elegido y el panel
-		# ya muestra bonificaciones y botón de compra al abrir el mercader.
-		var primero := _primer_item_de(legendarios, epicos, basicos, visibles)
+		# La ficha nunca arranca vacía: se elige el primero de la pestaña activa.
+		var primero := _primer_item_de(consumibles, epicos, componentes, visibles)
 		if primero != null:
 			_seleccionar_item(primero, -1, primero in visibles)
 
 
 func _primer_item_de(a: Array[ItemData], b: Array[ItemData], c: Array[ItemData], d: Array[ItemData]) -> ItemData:
-	for lista in [a, b, c, d]:
+	var listas: Array = []
+	match _pestana:
+		1:
+			listas = [d]
+		2:
+			listas = [c]
+		_:
+			listas = [a, b]
+	for lista in listas:
 		if not lista.is_empty():
 			return lista[0]
 	return null
+
+
+## La pestaña sólo controla visibilidad: las 26 tarjetas siguen en `_cuadriculas`
+## y en el árbol, así los tests que las cuentan no se rompen.
+func _aplicar_visibilidad_pestanas() -> void:
+	for hijo in _cuerpo.get_children():
+		if not hijo.has_meta(&"pestana"):
+			continue
+		hijo.visible = (int(hijo.get_meta(&"pestana")) == _pestana)
 
 
 func _reconstruir_venta() -> void:
@@ -552,8 +640,9 @@ func _reconstruir_venta() -> void:
 		_seleccionar_item(items[0], indices[0], false)
 
 
-func _seccion(titulo: String, color: Color, items: Array[ItemData], forjable: bool) -> void:
+func _seccion(titulo: String, color: Color, items: Array[ItemData], forjable: bool, pestana := 0) -> void:
 	var cabecera := HBoxContainer.new()
+	cabecera.set_meta(&"pestana", pestana)
 	cabecera.add_theme_constant_override("separation", 8)
 	cabecera.add_child(ForjaTema.rotulo(titulo, 11, color))
 	var linea := ColorRect.new()
@@ -565,6 +654,7 @@ func _seccion(titulo: String, color: Color, items: Array[ItemData], forjable: bo
 	_cuerpo.add_child(cabecera)
 
 	var cuadricula := _nueva_cuadricula()
+	cuadricula.set_meta(&"pestana", pestana)
 	_cuadriculas.append(cuadricula)
 	if _grid == null:
 		_grid = cuadricula
@@ -756,6 +846,8 @@ func _actualizar_ficha() -> void:
 	_ficha_bonos.visible = hay
 	_ficha_precio.visible = hay
 	_ficha_accion.visible = hay
+	_forja_barra.visible = false
+	_forja_texto.visible = false
 	if not hay:
 		_ficha_receta.visible = false
 		_rotulo_entra.visible = false
@@ -784,9 +876,33 @@ func _actualizar_ficha() -> void:
 		_ficha_receta.text = "Coste de forja: %d de oro" % item.precio_forja
 
 	if _seleccion_forjable:
+		# Rework: progreso en vivo con barra y botón que se enciende al completarse.
+		var progreso: Dictionary = {
+			"tiene": 0, "total": 0, "completa": false, "falta": []
+		}
+		if _jugador != null and _jugador.inventario != null:
+			progreso = _jugador.inventario.progreso_receta(item)
+		var tiene_n := int(progreso.get("tiene", 0))
+		var total_n := int(progreso.get("total", 0))
+		var completa := bool(progreso.get("completa", false))
+		_forja_barra.visible = total_n > 0
+		_forja_texto.visible = total_n > 0
+		_forja_barra.tramos = maxi(1, total_n)
+		_forja_barra.valor = float(tiene_n) / float(maxi(1, total_n))
+		_forja_barra.queue_redraw()
+		_forja_texto.text = "INGREDIENTES  %d/%d" % [tiene_n, total_n]
+		var oro_suficiente := _oro_actual() >= item.precio_forja
 		_ficha_precio.text = "%d de oro" % item.precio_forja
-		_ficha_accion.text = "SOLO FORJA"
-		_ficha_accion.disabled = true
+		if completa and oro_suficiente:
+			_ficha_accion.text = "FORJAR AHORA"
+			_ficha_accion.disabled = false
+		elif completa:
+			_ficha_accion.text = "FALTA ORO"
+			_ficha_accion.disabled = true
+		else:
+			var faltan := total_n - tiene_n
+			_ficha_accion.text = "FALTAN %d" % faltan
+			_ficha_accion.disabled = true
 	elif _vender:
 		var precio_venta := 0
 		if _jugador != null and _jugador.inventario != null and _seleccion_indice >= 0:
@@ -801,7 +917,14 @@ func _actualizar_ficha() -> void:
 
 
 func _accion_ficha() -> void:
-	if _seleccionado == null or _seleccion_forjable:
+	if _seleccionado == null:
+		return
+	if _seleccion_forjable:
+		# El panel no toca economía: delega en la forja autoritativa de Arena.
+		if _arena != null and _arena.has_method("forjar_objeto"):
+			if bool(_arena.call("forjar_objeto", _seleccionado)):
+				_aviso.text = "Forjado: %s" % _seleccionado.nombre
+				_refrescar()
 		return
 	if _vender:
 		_vender_ranura(_seleccion_indice)

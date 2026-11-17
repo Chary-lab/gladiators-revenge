@@ -12,11 +12,11 @@ Rama: `main` (push al final) · Runner: `godot --headless --script res://tests/<
 
 ## Tasks
 
-- **T1** — S1-S3 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e164ba681ffer6HkUo31l2br72`) — estado: en curso — mapear estructura de ShopPanel, categorización, API de compra/forja, dependencias de tests y patrones visuales reutilizables.
-- **T2** — S2-S3 — ruta: inline — estado: pendiente — rediseñar ShopPanel (pestañas, tarjetas, forja visual, ruta) conservando nombres que leen los tests y la API de compra.
-- **T3** — S3 — ruta: inline — estado: pendiente — actualizar tests rotos por el rework + añadir checks de las nuevas pestañas/forja (RED→GREEN).
-- **T4** — S3 — ruta: inline — estado: pendiente — `--captura-tienda` inspeccionada + gate completo (import, smoke, regression, wave sim, boot).
-- **T5** — S1-S3 — ruta: inline — estado: pendiente — docs (README/AGENTS) + commit + assess RDD + push final.
+- **T1** — S1-S3 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e164ba681ffer6HkUo31l2br72`) — estado: ✅ — mapa: ShopPanel 1040 líneas, contrato de tests (`_cuadriculas`, `_ficha_*`, `_arbol_*`, `_cambiar_modo`, `_abrir_arbol`), forja hoy automática sin API directa.
+- **T2** — S2-S3 — ruta: inline — estado: ✅ — rework aplicado: 3 pestañas (`TODOS`/`FORJAR`/`COMPONENTES`) en fila propia que sólo cambian visibilidad (las 26 tarjetas siguen en `_cuadriculas`); secciones por `item.tipo`; barra `BarraSegmentada` con `InventoryComponent.progreso_receta`; botón `FORJAR AHORA` que delega en `Arena.forjar_objeto()` (nueva API pública, sin economía en el panel). Chips con contraste corregido (texto `ORO_CLARO` sobre borde dorado).
+- **T3** — S3 — ruta: inline — estado: ✅ — +7 checks (progreso_receta, forjar_objeto, 3 pestañas, filtrado sin borrar tarjetas, barra). 198/198.
+- **T4** — S3 — ruta: inline — estado: ✅ — `--captura-tienda` inspeccionada en 4 iteraciones (arreglé desborde de CERRAR, doble COMPRAR y contraste del chip activo). Gate: import 0, smoke 15/15, regression 198/198, wave sim 3/3, boot limpio.
+- **T5** — S1-S3 — ruta: inline — estado: en curso — docs (AGENTS 81/84/43/184, README 35/260) actualizados + commit + assess RDD + push final.
 
 ## Log
 
@@ -27,6 +27,10 @@ Rama: `main` (push al final) · Runner: `godot --headless --script res://tests/<
 
 **L3** — 2026-11-17 — Explorador mapeando el código antes de tocar nada. Prioridad: no romper los nombres que leen los tests (`_cuadriculas`, `_grid`, `_campo_busqueda`, `_boton_arbol`) y la API de compra/forja de Arena.
 
+**L4** — 2026-11-17 — Decisión arquitectónica: el botón FORJAR no reimplementa economía. `Arena.forjar_objeto()` llama a la ya existente `revisar_forjas_automaticas()` (autoritativa, funciona en red) y devuelve si cambió el oro. El panel sólo muestra progreso y delega. `receta` es `Array[StringName]` (una entrada por unidad), no diccionario — corregido tras error de compilación.
+
+**L5** — 2026-11-17 — Se aplicó la disciplina UI del skill `engineering-playbook`: contraste legible en chips activos (4.5:1), 44px+ de área táctil, sin glyphs tofu, sin *middle-dot meta* genérico. Paleta/tipografía propias del repo (ForjaTema/Cinzel). Las pestañas van en fila separada para no desbordar el modal 1120×560.
+
 ---
 
-Registro de entregas: T1 → ⏳ · T2 → [pendiente] · T3 → [pendiente] · T4 → [pendiente] · T5 → [pendiente]
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · T5 → ⏳ commit/assess/push

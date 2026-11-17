@@ -1894,6 +1894,14 @@ func vender_objeto(jugador: GladiatorController, indice: int) -> bool:
 
 ## Revisa si algún objeto del inventario completa una receta y hay oro para forjar.
 ## Se llama al ganar oro y al entrar a la tienda. Forja en cadena hasta que no sea posible.
+## Punto de entrada público para el botón FORJAR de la tienda. Delega en la
+## forja automática autoritativa (el panel nunca toca oro ni inventario).
+func forjar_objeto(_item: ItemData = null) -> bool:
+	var oro_antes: int = int(oro)
+	revisar_forjas_automaticas()
+	return int(oro) != oro_antes
+
+
 func revisar_forjas_automaticas() -> void:
 		var jugador := _jugador
 		if jugador == null or jugador.inventario == null:

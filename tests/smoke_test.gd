@@ -523,6 +523,28 @@ func _ejecutar() -> void:
 			"la tienda lista lo vendible y los forjables con su receta en secciones"
 		)
 		_comprobar(panel_tienda.get("_chip_vender") != null, "la tienda tiene el modo VENDER")
+		# Rework: pestañas por intención que controlan visibilidad sin perder tarjetas.
+		_comprobar((panel_tienda.get("_pestanas") as Array).size() == 3, "la tienda tiene 3 pestañas por intención")
+		var total_cartas := 0
+		for g in panel_tienda.get("_cuadriculas"):
+			total_cartas += (g as GridContainer).get_child_count()
+		panel_tienda._cambiar_pestana(1)
+		await process_frame
+		var visibles_forjar := 0
+		var invisibles_forjar := 0
+		for g in panel_tienda.get("_cuadriculas"):
+			if (g as GridContainer).visible:
+				visibles_forjar += (g as GridContainer).get_child_count()
+			else:
+				invisibles_forjar += (g as GridContainer).get_child_count()
+		_comprobar(visibles_forjar > 0 and invisibles_forjar > 0, "la pestaña FORJAR filtra secciones sin borrar tarjetas")
+		var total_tras := 0
+		for g in panel_tienda.get("_cuadriculas"):
+			total_tras += (g as GridContainer).get_child_count()
+		_comprobar(total_tras == total_cartas, "cambiar de pestaña conserva las 26 tarjetas")
+		_comprobar(panel_tienda.get("_forja_barra") != null, "la ficha tiene barra de progreso de forja")
+		panel_tienda._cambiar_pestana(0)
+		await process_frame
 		# La ficha lateral se rellena al elegir y la búsqueda filtra la lista.
 		var ficha_accion: Button = panel_tienda.get("_ficha_accion")
 		var primer_vendible: ItemData = ItemCatalog.vendibles()[0]
@@ -558,6 +580,20 @@ func _ejecutar() -> void:
 		_comprobar(cartas_venta >= 1, "el modo VENDER lista las ranuras con objeto")
 		panel_tienda._cambiar_modo(false)
 		await process_frame
+
+		# Progreso de forja en vivo (para la barra del rework) y botón FORJAR.
+		var inv := jugador.inventario
+		var forjable: ItemData = ItemCatalog.recetas()[0]
+		var progreso: Dictionary = inv.progreso_receta(forjable)
+		_comprobar(
+			progreso.has("tiene") and progreso.has("total") and progreso.has("completa") and progreso.has("falta"),
+			"el inventario expone el progreso de la receta para la barra visual"
+		)
+		_comprobar(
+			int(progreso["tiene"]) <= int(progreso["total"]) and not bool(progreso["completa"]),
+			"un forjable sin ingredientes no está completo y no excede el total"
+		)
+		_comprobar(escena.has_method("forjar_objeto"), "la arena expone la acción FORJAR sin lógica en el panel")
 
 		# --- Árbol de construcción ampliado -------------------------------
 		panel_tienda._abrir_arbol()

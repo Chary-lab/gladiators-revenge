@@ -114,6 +114,24 @@ func tiene(id: StringName, cantidad := 1) -> bool:
 	return contar(id) >= cantidad
 
 
+## Progreso de la receta de `item` para la barra visual de la tienda.
+## Devuelve {"tiene": int, "total": int, "completa": bool, "falta": Array}.
+## `receta` es un Array de ids: cada entrada es una unidad del ingrediente.
+func progreso_receta(item: ItemData) -> Dictionary:
+	var tiene_n := 0
+	var falta: Array[StringName] = []
+	if item == null or item.receta.is_empty():
+		return {"tiene": 0, "total": 0, "completa": false, "falta": falta}
+	for ingrediente in item.receta:
+		var id := StringName(ingrediente)
+		if contar(id) > 0:
+			tiene_n += 1
+		else:
+			falta.append(id)
+	var total_n := item.receta.size()
+	return {"tiene": tiene_n, "total": total_n, "completa": falta.is_empty(), "falta": falta}
+
+
 func contar(id: StringName) -> int:
 	var total := 0
 	for ranura in ranuras:
