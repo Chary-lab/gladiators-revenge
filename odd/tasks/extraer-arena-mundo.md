@@ -20,7 +20,7 @@ Rama: `main` (desde `dd1b9a9`, tras el merge del PR #1) · Estrategia: `ask-on-r
 - **T2** — S3 — ruta: inline — estado: ✅ — 6 checks RED en `smoke_test.gd` (nodo Mundo, NavigationRegion3D, suelo colisión, 4 spawns, etiquetas FUENTE/TALENTOS, WorldEnvironment único). RED: 179 checks, 1 fallo (el nodo no existía).
 - **T3** — S1-S3 — ruta: inline — estado: ✅ — `ArenaMundo.gd` creado con todo el bloque (entorno/suelo/muros/decoración/zona segura + utilitarios `_material`/`_crear_prop`/`_crear_caja_estatica`/`_instanciar_prop`/`_etiqueta_mundo`). `Arena._ready` usa `ArenaMundo.construir(self, _fuente, _obelisco)` y copia `puntos_spawn`. Recortadas 351 líneas de Arena.gd (2777→2426), cero referencias muertas.
 - **T4** — S3 — ruta: inline — estado: ✅ — GREEN: 184/184 (178+6). Gate: import 0, smoke 15/15, regression 184/184, wave sim 3/3, boot limpio. Capturas `--captura-combate` y `--captura-arquetipos` inspeccionadas: **idénticas** a las del frente visual (sólo varía el azar del spawn de enemigos).
-- **T5** — S1-S3 — ruta: inline — estado: en curso — commit + assess RDD + docs.
+- **T5** — S1-S3 — ruta: inline — estado: ✅ — commit `00de5f9` (5 archivos, +452/−357; el amend añadió el `.uid`). Assess RDD con base `dd1b9a9`: `risk: medium`, `review_due: false`, reason `under_budget`, 810 líneas cambiadas. Sin verifier independiente: los 6 checks RED→GREEN cubren precisamente lo que el refactor podía romper (NavMesh/colisiones/spawns/etiquetas/luces), y las capturas son idénticas.
 
 ## Log
 
@@ -35,6 +35,8 @@ Rama: `main` (desde `dd1b9a9`, tras el merge del PR #1) · Estrategia: `ask-on-r
 
 **L5** — 2026-11-17 — Decisión: `_fuente`/`_obelisco` NO se movieron a ArenaMundo porque Arena los usa fuera del bloque (curación en 692/1223, interacción en 2100-2104/2281-2283, pistas). Se pasan por parámetro al construir. `_puntos_spawn` sí lo calcula ArenaMundo y Arena lo copia para `WaveManager.iniciar` (1625). Constantes ANCHO/LARGO/ALTO_MURO/BORDE_ARENA/CENTRO_ARENA se duplicaron en ArenaMundo (valores idénticos) para desacoplar — son datos dimensionales, no lógica.
 
+**L6** — 2026-11-17 — Deuda saldada: `Arena.gd` pasó de 2777 a 2426 líneas (351 menos) y el mundo está aislado en `ArenaMundo.gd`. La deuda queda cerrada; si en el futuro se extraen más bloques del god object, se aplica el mismo patrón (tests de jerarquía primero).
+
 ---
 
-Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · T5 → ⏳ commit/assess/docs
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · T5 → ✅ · Estado: **COMPLETO** · Commit: `00de5f9` · Pendiente: push/PR (decisión del usuario).
