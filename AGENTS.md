@@ -40,7 +40,7 @@ godot -- --captura-oleada                  # oleada 9 con 14 enemigos en círcul
 godot -- --captura-cerca --clase=lanza     # primer plano de cualquier clase (lanza, saeta…)
 ```
 
-- Expected baseline: smoke **15/15**, regression **160/160**, wave sim **3/3**, net smoke A **12/12**, net smoke B **12/12**, clean 600-frame run.
+- Expected baseline: smoke **15/15**, regression **190/190**, wave sim **3/3**, net smoke A **12/12**, net smoke B **12/12**, clean 600-frame run.
 - `tests/smoke_test.gd` corre en modo smoke (solo las comprobaciones críticas: arranque, identidad, Supabase/salas, tienda/forja, progresión, combate, cierre). `tests/regression_test.gd` hereda de ese script y fuerza el modo completo; no dupliques cuerpo de pruebas, añade el check con `_comprobar(..., true)` si es crítico o sin el tercer argumento si es regresión.
 - Los bloques caros de regresión (anti-camping, tema, UI de tienda/pausa/iconos, auras, táctil, ajustes) están dentro de `if _completo():`. Un check crítico no debe depender de estado que solo crea un bloque de regresión.
 - Net smoke B necesita a A **conectado a la vez**: arranca el servidor, lanza A con `--esperar=40` y 5 s después B. En solitario, B falla lobby, clases y revivir porque no hay compañero (no es una regresión).
@@ -116,7 +116,7 @@ godot -- --captura-cerca --clase=lanza     # primer plano de cualquier clase (la
 
 ## Clases jugables y enemigos
 
-- Clases: `BASTION` (Fuerza, tanque), `FILO` (Agilidad, verdugo), `CETRO` (Inteligencia, convocador), `LANZA` o Hoplita (Fuerza, tanque de zona) y `SAETA` o Saetera (Agilidad, tiradora). El catálogo vive en `WeaponItem.crear_catalogo_base()` y **cada clase necesita**: entrada en `WeaponItem.Clase`, rama en `id_clase()`, un `_crear_*` con `_kit_*` de 4 habilidades, entradas en `_configurar_rangos()` (Q/W/E a 4, R a 3) y glifos en `_aplicar_iconos()`, más `MULT_DANO_POR_CLASE` y `CRECIMIENTO_POR_CLASE` en `GladiatorStats` y los cuatro mapas de `ForjaTema` (`NOMBRE_EMBLEMA`, `LEMA_CLASE`, `ROL_CLASE`, `DESCRIPCION_CLASE`) con su dibujo en `Emblema._marca()`.
+- Clases: `BASTION` (Fuerza, tanque), `FILO` (Agilidad, verdugo), `CETRO` (Inteligencia, convocador), `LANZA` o Hoplita (Fuerza, tanque de zona) y `SAETA` o Saetera (Agilidad, tiradora). El catálogo vive en `WeaponItem.crear_catalogo_base()` y **cada clase necesita**: entrada en `WeaponItem.Clase`, rama en `id_clase()`, un `_crear_*` con `_kit_*` de 4 habilidades, entradas en `_configurar_rangos()` (Q/W/E a 4, R a 3) y glifos en `_aplicar_iconos()`, más `MULT_DANO_POR_CLASE`, `CRECIMIENTO_POR_CLASE` y `ATRIBUTOS_BASE_POR_CLASE` en `GladiatorStats` y los cuatro mapas de `ForjaTema` (`NOMBRE_EMBLEMA`, `LEMA_CLASE`, `ROL_CLASE`, `DESCRIPCION_CLASE`) con su dibujo en `Emblema._marca()`.
 - Armas visuales: el pack KayKit trae hacha, espada y bastón. La pica y el arco de las clases nuevas son **procedurales** (`WeaponItem._escena_pica()` / `_escena_arco()`). `PackedScene.pack()` solo serializa hijos con `owner` asignado: `_pieza()` lo fija, y sin eso el arma se empaqueta vacía y el gladiador va con las manos libres.
 - Arquetipos de enemigo: 9 en `ArenaEnemy.ARQUETIPOS` + `VISUALES` (esqueleto, espectro, arquero, hechicero, tanque, élite, sabueso, bruto, nigromante) con `BalanceOlas.TIPOS_VALIDOS`. Un arquetipo nuevo necesita entrada en **las tres** tablas (perfil de oleada, estadísticas, modelo visual) o el smoke falla.
 - Identidad de los nuevos: **sabueso** (vida 0.55, velocidad 1.45, muerde rápido), **bruto** (escala 1.42, `armadura` 0.22 que recorta daño físico, lento y fuerte) y **nigromante** (mago a distancia con `ritual`: cura un 12 % de la vida máxima a los enemigos en 6 m cada 6,5 s).
@@ -132,11 +132,11 @@ godot -- --captura-cerca --clase=lanza     # primer plano de cualquier clase (la
 
 ## Balance y contenido
 
-- Daño de ataque: `GladiatorStats.escalar_ataque_principal(arma, atributo)` = `(arma + atributo*0.45) * (1 + (nivel-1)*0.09) * MULT_DANO_POR_CLASE`; `rango_dano_ataque()` da mín/máx con `DANO_VARIANZA` (0.20) alrededor de esa media. `velocidad_ataque` = `clamp(0.15 + AGILIDAD*0.05 + (nivel-1)*0.025 + bono, 0.15, 2.20)`. No hardcodees medias: el smoke y `balance_report.gd` leen estas funciones.
+- Daño de ataque: `GladiatorStats.escalar_ataque_principal(arma, atributo)` = `(arma + atributo*0.45) * (1 + (nivel-1)*0.09) * MULT_DANO_POR_CLASE`; `rango_dano_ataque()` da mín/máx con `DANO_VARIANZA` (0.20) alrededor de esa media. `velocidad_ataque` = `clamp(0.15 + AGILIDAD*0.015 + (nivel-1)*0.025 + bono, 0.15, 2.20)` (el coeficiente de agilidad bajó de 0.05 a 0.015 para que la curva dure los 20 niveles y ninguna clase tope antes del final). Atributos iniciales por clase en `ATRIBUTOS_BASE_POR_CLASE` (total 30): Bastión 14/8/8, Filo 8/15/7, Cetro 7/8/15, Lanza 12/11/7, Saeta 7/16/7, Prisionero 10/10/10; `configurar_clase()` los aplica sólo si `nivel==1 and puntos_libres==0`. No hardcodees medias: el smoke y `balance_report.gd` leen estas funciones.
 - 20 oleadas: `BalanceOlas.PERFILES` fija arquetipos, cantidades y jefes (5/10/15/20); `ArenaEnemy.ARQUETIPOS` da estadísticas y `ArenaEnemy.VISUALES` el modelo. Un arquetipo nuevo necesita entrada en las tres tablas o el smoke falla en "cada arquetipo tiene estadísticas y modelo visual".
 - Catálogo de objetos: 6 componentes, 6 intermedios (forja 80), 3 épicos (180) y 6 legendarios (forja 350–500). Sin ids repetidos y todo equipo con bonificaciones.
 - Auras: `ItemData.aura` es un diccionario (`dano_aliados`, `robo_vida_aliados`, `regeneracion_aliados`, `velocidad_ataque_aliados`); `GladiatorController.auras_cercanas()` suma las de los aliados a `RADIO_AURA` (10 m) y `InventoryComponent.auras()` las acumula por clave. El portador recibe la suya y las claves no se mezclan.
-- Deuda conocida: `Arena.gd` (2.611 líneas), `ArenaHUD.gd` (1.685) y `GladiatorController.gd` (1.601) son god objects que mezclan mundo, economía, combate y UI. Antes de añadir lógica, mira si cabe en un nodo propio y no en `Arena`.
+- Deuda conocida: `Arena.gd` (~2.120 líneas), `ArenaHUD.gd` (~1.631) y `GladiatorController.gd` (~1.425) son god objects que mezclan economía, combate y UI. La construcción del mundo ya se extrajo a `ArenaMundo.gd` (con tests de jerarquía en el smoke); antes de añadir lógica, mira si cabe en un nodo propio y no en `Arena`.
 
 ## UI / rendering gotchas
 
@@ -181,7 +181,7 @@ Rutas que NO cambian: editar `.gd` sigue siendo con `patch` (el filtro no incluy
 
 1. `godot --headless --editor --quit`
 2. `godot --headless --script res://tests/smoke_test.gd` → 15/15
-3. `godot --headless --script res://tests/regression_test.gd` → 160/160
+3. `godot --headless --script res://tests/regression_test.gd` → 190/190
 4. `godot --headless --script res://tests/wave_sim.gd` → 3/3
 5. `godot --headless --quit-after 600` → no script/parse errors
 6. UI change → `godot -- --captura-combate` and inspect `captura_combate.png`

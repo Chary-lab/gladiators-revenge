@@ -193,8 +193,9 @@ Todo el balance vive en tres sitios y ninguna fórmula se replica fuera de ellos
 | Pieza | Dónde | Qué controla |
 | --- | --- | --- |
 | Daño mín-máx | `GladiatorStats.rango_dano_ataque()` | Banda del golpe básico (±20 %) |
-| Ritmo de ataque | `GladiatorStats.velocidad_ataque` | Base 0,15 + 0,05 por AGI + 0,025 por nivel (golpes/s) |
-| Clase | `MULT_DANO_POR_CLASE` | Prisionero 0,80 · Bastión 1,00 · Filo 1,12 · Cetro 0,92 |
+| Ritmo de ataque | `GladiatorStats.velocidad_ataque` | Base 0,15 + 0,015 por AGI + 0,025 por nivel, tope 2,20 (golpes/s) |
+| Clase | `MULT_DANO_POR_CLASE` | Prisionero 0,80 · Bastión 1,00 · Filo 1,12 · Cetro 0,92 · Lanza 1,05 · Saeta 1,10 |
+| Atributos base | `GladiatorStats.ATRIBUTOS_BASE_POR_CLASE` | Perfil inicial por clase (total 30): Bastión 14/8/8, Filo 8/15/7, Cetro 7/8/15, Lanza 12/11/7, Saeta 7/16/7, Prisionero 10/10/10 |
 | Enemigos | `ArenaEnemy.ARQUETIPOS` | Vida, daño, velocidad y cadencia por arquetipo |
 | Oleadas | `BalanceOlas.PERFILES` | Mezcla de arquetipos, vida/daño extra y jefe |
 
@@ -212,9 +213,11 @@ habilidades y mide por oleada duración, TTK, bajas/s y daño recibido.
 
 Los atributos alimentan las estadísticas base: Fuerza → vida y mitigación,
 Agilidad → armadura, velocidad de ataque y crítico, Inteligencia → maná y daño
-mágico. `tests/balance_report.gd` imprime la curva (HP, DPS, TTK y
-supervivencia) de las cuatro clases en los niveles 1, 5, 10, 15 y 20 para afinar
-constantes sin abrir el editor.
+mágico. Cada clase empieza con un perfil distinto (tabla de atributos base) para
+que la identidad aparezca desde el nivel 1; el crecimiento por nivel y el multiplicador
+de clase afinan después la curva. `tests/balance_report.gd` imprime la curva (HP,
+DPS, TTK y supervivencia) de las seis clases en los niveles 1, 5, 10, 15 y 20 para
+afinar constantes sin abrir el editor.
 
 ## Armas
 
