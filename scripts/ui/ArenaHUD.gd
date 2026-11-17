@@ -1504,13 +1504,9 @@ func _insignia(boton: Control, texto: String, pos: Vector2, ancho: float) -> voi
 func _atributo_principal() -> StringName:
 	if _jugador == null or _jugador.arma_actual == null:
 		return &"fuerza"
-	match _jugador.arma_actual.clase:
-		WeaponItem.Clase.FILO:
-			return &"agilidad"
-		WeaponItem.Clase.CETRO:
-			return &"inteligencia"
-		_:
-			return &"fuerza"
+	# Fuente de verdad: el arma ya declara su atributo principal. Un match con
+	# Clase duplicaba la tabla y olvidaba SAETA (marcaba Fuerza en la Saetera).
+	return _jugador.arma_actual.atributo_principal
 
 
 func _boton_icono(boton: Button, id: StringName, categoria: StringName) -> void:

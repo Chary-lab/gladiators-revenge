@@ -397,6 +397,21 @@ func _ejecutar() -> void:
 
 	# --- Consola inferior e iconos ----------------------------------------
 	var hud = escena.get("_hud")
+	# El HUD debe marcar como principal el atributo canónico del arma, para TODAS
+	# las clases (antes sólo conocía FILO y CETRO y la Saeta marcaba Fuerza).
+	var armas_todas := WeaponItem.crear_catalogo_base()
+	var arma_original := jugador.arma_actual
+	var principal_ok := true
+	for arma_clase in armas_todas:
+		if arma_clase == null:
+			continue
+		jugador.arma_actual = arma_clase
+		var esperado: StringName = arma_clase.atributo_principal
+		if hud._atributo_principal() != esperado:
+			principal_ok = false
+			printerr("  atributo principal mal marcado en ", arma_clase.id_clase(), ": ", hud._atributo_principal(), " != ", esperado)
+	jugador.arma_actual = arma_original
+	_comprobar(principal_ok, "el HUD marca el atributo principal correcto en las 5 clases")
 	_comprobar(hud.get("_retrato") != null, "la consola tiene retrato 3D")
 	_comprobar((hud.get("_comando_botones") as Array).size() == 8, "la parrilla tiene 8 comandos y 4 habilidades")
 	_comprobar((hud.get("_inventario_botones") as Array).size() == 6, "el inventario conserva 6 ranuras")
