@@ -13,7 +13,8 @@ Rama: `visual/identidad-arena` (push al final, cuando todo esté listo) · Estra
 - **T1** — S1-S2 — ruta: inline (mapeo delegado `gentle-ai-explore`, sesión `ses_e16a31da7ffeWm3Z7geoQRxY3i`) — estado: ✅ — mapa: código ya optimizado (dirty flags en HUD/enemigos, var_to_bytes reutilizado en NetCoop). Candidatos: extracción de ArenaMundo (1263-1561, alto riesgo), micro-opt táctil, assets sin ref en build.
 - **T2** — S1-S2 — ruta: inline — estado: ✅ — aplicadas 2 optimizaciones seguras: (a) dirty flags en `TouchControls._process` para vida/maná/nivel; (b) `exclude_filter` en `export_presets.cfg` excluye `assets/kenney/audio/*` (290 archivos) y `assets/kenney/particles/Rotated/*` (32), 1.8 MB, CERO referencias en código. NO se extrajo ArenaMundo (riesgo NavMesh/colisiones sin cobertura de tests antes del push).
 - **T3** — S1-S2 — ruta: inline — estado: ✅ — gate verde (import 0, smoke 15/15, regression 178/178, wave sim 3/3, boot limpio). Commit `69bcbca`, assess `medium/under_budget` sin review. Export Web: faltan export templates de Godot en esta máquina; descargándose en background para verificar el ahorro (no bloquea el frente).
-- **T4** — estado: pendiente — push final (sólo cuando el usuario confirme "todo listo").
+- **T3b** — S1-S2 — ruta: inline — estado: ✅ — Verificación Web (usuario: "verifica y termina"): se instalaron los export templates de Godot 4.7.2 (descarga de 1,222 MB; winget instaló el editor sin templates). Export `--export-release "Web"` sin errores. Build **54.0 → 52.0 MB** (ahorro ~2 MB). `index.pck` inspeccionado: `kenney/audio`, `particles/Rotated`, `bookClose.ogg` **ausentes**; `golpe.ogg`, `fire_01.png`, `floor_dirt` **presentes**. `index.html` referencia todos los archivos existentes. NO se pudo probar en navegador Edge: `playwright-cli` y el skill `web-test` no están instalados en esta máquina (verificación periférica omitida, reportada).
+- **T4** — estado: ✅ — push final autorizado por el usuario ("verifica y termina").
 
 ## Log
 
@@ -25,6 +26,8 @@ Rama: `visual/identidad-arena` (push al final, cuando todo esté listo) · Estra
 
 **L4** — 2026-11-17 — Deuda pendiente documentada: extraer `ArenaMundo` (`Arena.gd:1263-1561` + utilitarios `:2564-2601` + constantes), con `puntos_spawn()` público; requiere tests nuevos de jerarquía del mundo antes de hacerse. No es parte de este frente para no arriesgar el push final.
 
+**L5** — 2026-11-17 — Verificación Web completada: export templates instalados, export sin errores, build 54.0→52.0 MB, exclusión confirmada dentro de `index.pck`. Sin navegador automatizado disponible (playwright-cli/skill web-test ausentes). El usuario autorizó "verifica y termina" → push final de la rama.
+
 ---
 
-Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ⏳ (export pendiente de templates) · T4 → [pendiente]
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · Estado frente 4: **COMPLETO** · Estado global: **LOS 4 FRENTES COMPLETOS**
