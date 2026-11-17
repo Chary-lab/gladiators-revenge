@@ -354,41 +354,53 @@ func _reconstruir_grafico() -> void:
 	_nodos.clear()
 	_posiciones.clear()
 
-	var por_nivel: Array = []
-	for i in NIVELES:
-		por_nivel.append([])
+	# Los 26 nodos existen (los tests los cuentan) pero se apilan en una sola
+	# columna; la ruta del seleccionado se muestra como pasos verticales.
+	var ids: Array[StringName] = []
 	for id: StringName in _datos.keys():
-		var datos: Dictionary = _datos[id]
-		por_nivel[int(datos["nivel"])].append(id)
-	for nivel: Array in por_nivel:
-		nivel.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
+		ids.append(id)
+	ids.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
+	var x_centro := ANCHO_GRAFO * 0.5
+	for i: int in ids.size():
+		var id := ids[i]
+		var pos := Vector2(x_centro, FILA_Y + ALTO_NODO * 0.5 + i * (ALTO_NODO + 14.0))
+		_posiciones[id] = pos
+		_crear_nodo(id, pos)
 
-	var filas := 1
-	var columna := 0
-	# Un nivel con muchos objetos se reparte entre varias columnas: así los 11
-	# componentes y los 9 legendarios caben sin scroll en 1280×720.
-	for nivel: int in range(NIVELES):
-		var lista: Array = por_nivel[nivel]
-		if lista.is_empty():
-			continue
-		var inicio := 0
-		while inicio < lista.size():
-			var fin: int = mini(inicio + FILAS_POR_COLUMNA, lista.size())
-			filas = maxi(filas, fin - inicio)
-			var indice_x: int = mini(columna, COLUMNA_X.size() - 1)
-			var x: float = COLUMNA_X[indice_x] + maxi(0, columna - COLUMNA_X.size() + 1) * 188.0
-			for i: int in range(inicio, fin):
-				var id: StringName = lista[i]
-				var pos := Vector2(x, FILA_Y + ALTO_NODO * 0.5 + (i - inicio) * ESPACIO_FILA)
-				_posiciones[id] = pos
-				_crear_nodo(id, pos)
-			inicio = fin
-			columna += 1
-
-	_lienzo.custom_minimum_size = Vector2(ANCHO_GRAFO, FILA_Y * 2.0 + ALTO_NODO + ESPACIO_FILA * maxi(0, filas - 1))
-
+	_lienzo.custom_minimum_size = Vector2(
+		ANCHO_GRAFO,
+		FILA_Y * 2.0 + ALTO_NODO + maxi(0, ids.size() - 1) * (ALTO_NODO + 14.0)
+	)
+	_aplicar_ruta_vertical()
 	_actualizar_lineas()
 	_pintar_nodos()
+
+
+## Ruta vertical del seleccionado: ingredientes (padres) → objeto → derivados.
+## Sólo esos pasos quedan visibles, apilados arriba→abajo en orden de ruta.
+func _aplicar_ruta_vertical() -> void:
+	if _seleccionado == StringName() or not _datos.has(_seleccionado):
+		for id: StringName in _nodos:
+			(_nodos[id] as Button).set_meta(&"en_ruta", true)
+		return
+	var pasos: Array[StringName] = []
+	# Ruta = ingredientes directos (lo que hace falta) → objeto seleccionado.
+	for padre: StringName in _datos[_seleccionado].get("padres", []):
+		if not pasos.has(padre):
+			pasos.append(padre)
+	pasos.append(_seleccionado)
+	# Reordenar los botones visibles en el orden de la ruta, apilados.
+	var x_centro := ANCHO_GRAFO * 0.5
+	for i: int in pasos.size():
+		var id := pasos[i]
+		var boton: Button = _nodos.get(id)
+		if boton == null or not is_instance_valid(boton):
+			continue
+		boton.set_meta(&"en_ruta", true)
+		boton.position = Vector2(x_centro, FILA_Y + ALTO_NODO * 0.5 + i * (ALTO_NODO + 26.0)) - Vector2(ANCHO_NODO * 0.5, ALTO_NODO * 0.5)
+		_posiciones[id] = boton.position + Vector2(ANCHO_NODO * 0.5, ALTO_NODO * 0.5)
+	for id: StringName in _nodos:
+		(_nodos[id] as Button).set_meta(&"en_ruta", pasos.has(id))
 
 
 func _crear_nodo(id: StringName, pos: Vector2) -> void:
@@ -444,18 +456,23 @@ func _texto_coste(item: ItemData) -> String:
 func _actualizar_lineas() -> void:
 	var segmentos := PackedVector2Array()
 	var colores := PackedColorArray()
-	for id: StringName in _datos.keys():
-		var pos_hijo: Vector2 = _posiciones.get(id, Vector2.ZERO)
-		for padre: StringName in _datos[id].get("padres", []):
-			if not _posiciones.has(padre):
-				continue
-			var pos_padre: Vector2 = _posiciones[padre]
-			segmentos.append(pos_padre + Vector2(ANCHO_NODO * 0.5, 0.0))
-			segmentos.append(pos_hijo - Vector2(ANCHO_NODO * 0.5, 0.0))
-			var requeridos: Array = _datos[id].get("padres", [])
-			var hecho: bool = not requeridos.is_empty() and _cantidad(padre) >= requeridos.count(padre)
-			var color: Color = COLOR_LINEA_HECHA if hecho else (COLOR_LINEA_LISTA if id == _seleccionado or padre == _seleccionado else COLOR_LINEA)
-			colores.append(color)
+	# Ruta vertical: un segmento corto entre pasos consecutivos visibles.
+	var pasos: Array[StringName] = []
+	for id: StringName in _nodos:
+		var boton: Button = _nodos[id]
+		if is_instance_valid(boton) and boton.visible:
+			pasos.append(id)
+	# Ordenar por posición Y (la ruta ya quedó apilada arriba→abajo).
+	pasos.sort_custom(func(a: StringName, b: StringName) -> bool:
+		return float(_posiciones.get(a, Vector2.ZERO).y) < float(_posiciones.get(b, Vector2.ZERO).y)
+	)
+	for i: int in range(pasos.size() - 1):
+		var desde: Vector2 = _posiciones[pasos[i]] + Vector2(0.0, ALTO_NODO * 0.5)
+		var hasta: Vector2 = _posiciones[pasos[i + 1]] - Vector2(0.0, ALTO_NODO * 0.5)
+		segmentos.append(desde)
+		segmentos.append(hasta)
+		var hecho: bool = _cantidad(pasos[i]) > 0
+		colores.append(COLOR_LINEA_HECHA if hecho else COLOR_LINEA_LISTA)
 	_lienzo.segmentos = segmentos
 	_lienzo.colores = colores
 	_lienzo.queue_redraw()
@@ -469,7 +486,8 @@ func _pintar_nodos() -> void:
 		var datos: Dictionary = _datos[id]
 		var item: ItemData = datos["item"]
 		var cuantos := _cantidad(id)
-		boton.visible = _pasa_busqueda(item)
+		var en_ruta := bool(boton.get_meta(&"en_ruta", true))
+		boton.visible = en_ruta and _pasa_busqueda(item)
 		var seleccionado := id == _seleccionado
 		var acento: Color = _rareza_color(item)
 		boton.add_theme_stylebox_override("normal", ForjaTema.estilo_tarjeta(acento, seleccionado, true))
@@ -494,6 +512,7 @@ func _seleccionar(id: StringName) -> void:
 	if not _datos.has(id):
 		return
 	_seleccionado = id
+	_aplicar_ruta_vertical()
 	_pintar_nodos()
 	_actualizar_lineas()
 	_actualizar_detalle()
@@ -502,6 +521,7 @@ func _seleccionar(id: StringName) -> void:
 
 func _al_buscar(texto: String) -> void:
 	_busqueda = _normalizar(texto)
+	_aplicar_ruta_vertical()
 	_pintar_nodos()
 	_actualizar_lineas()
 

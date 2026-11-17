@@ -14,11 +14,11 @@ Rama: `main` (push al final) · Runner: `godot --headless --script res://tests/<
 
 ## Tasks
 
-- **T1** — S1-S2 — ruta: inline — estado: en curso — mapear BuildTreePanel, `_carta`/`_pintar_carta`, flujo de compra y cierre de tienda.
-- **T2** — S2 — ruta: inline — estado: pendiente — reordenar pestañas y aplicar colores por categoría en tarjetas y ficha.
-- **T3** — S2 — ruta: inline — estado: pendiente — reemplazar grafo por ruta vertical en BuildTreePanel.
-- **T4** — S2 — ruta: inline — estado: pendiente — undo de última compra con limpieza al cerrar (RED→GREEN).
-- **T5** — S1-S2 — ruta: inline — estado: pendiente — reducir espacio vacío de la tienda; capturas + gate + docs + commit + push.
+- **T1** — ✅ — mapeo completo (API de tests del árbol, flujo de compra y cierre).
+- **T2** — ✅ — 4 pestañas en orden CONSUMIBLES→COMPONENTES→FORJAR→TODOS (constantes `PESTANA_*`, TODOS `3` muestra todo); colores por categoría en `_rareza_color` (rojo/blanco/morado/dorado); tarjetas 112×126 para ocupar mejor el espacio.
+- **T3** — ✅ — BuildTreePanel: ruta vertical (ingredientes→objeto resaltado) con meta `&"en_ruta"` y flechas; se conservan 26 nodos y la API de tests.
+- **T4** — ✅ — undo de última compra: `Arena.deshacer_compra`, botón visible sólo con tienda abierta, historial limpio al abrir/cerrar. 6 checks RED→GREEN.
+- **T5** — ✅ — capturas inspeccionadas (tienda y árbol), gate 212/212, docs actualizados, commit + push.
 
 ## Log
 
@@ -26,6 +26,10 @@ Rama: `main` (push al final) · Runner: `godot --headless --script res://tests/<
 
 **L2** — 2026-11-17 — Inspeccioné `captura_tienda.png` y `captura_arbol.png`. Árbol: grafo de 5 columnas con líneas que se cruzan, ficha lateral repetida y espacio vacío abajo. Colores actuales desordenados: poción verde, pergamino morado, componente azul. Elegido: ruta vertical + colores por categoría + undo.
 
+**L3** — 2026-11-17 — BUG corregido en commit `bd0b360`: la compra cobraba la forja por adelantado (Placa 110 + Núcleo 80 = 190 > 168 de oro → bloqueada) mientras la ficha decía 110. Según decisión del usuario, la compra cuesta sólo `item.precio`; la forja queda pendiente y se completa al ganar oro (`revisar_forjas_automaticas(jugador)`). 6 checks nuevos. Assess medium/under_budget. Pusheado.
+
+**L4** — 2026-11-17 — Fase 2 completa. Undo se pierde al cerrar (pedido explícito). Ruta vertical reemplaza el grafo de líneas que se cruzaban. Colores de borde por categoría; el icono conserva su color semántico (maná azul) para distinguir pociones. Gate 212/212.
+
 ---
 
-Registro de entregas: T1 → ⏳ · T2 → [pendiente] · T3 → [pendiente] · T4 → [pendiente] · T5 → [pendiente]
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · T5 → ✅ · Estado: **COMPLETO**

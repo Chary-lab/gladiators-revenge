@@ -546,11 +546,16 @@ func _ejecutar() -> void:
 		)
 		_comprobar(panel_tienda.get("_chip_vender") != null, "la tienda tiene el modo VENDER")
 		# Rework: pestañas por intención que controlan visibilidad sin perder tarjetas.
-		_comprobar((panel_tienda.get("_pestanas") as Array).size() == 3, "la tienda tiene 3 pestañas por intención")
+		_comprobar((panel_tienda.get("_pestanas") as Array).size() == 4, "la tienda tiene 4 pestañas por intención")
+		_comprobar(
+			(panel_tienda.get("_pestanas")[0] as Button).text == "CONSUMIBLES"
+			and (panel_tienda.get("_pestanas")[3] as Button).text == "TODOS",
+			"el orden de pestañas es consumibles, componentes, forjar, todos"
+		)
 		var total_cartas := 0
 		for g in panel_tienda.get("_cuadriculas"):
 			total_cartas += (g as GridContainer).get_child_count()
-		panel_tienda._cambiar_pestana(1)
+		panel_tienda._cambiar_pestana(2)  # FORJAR
 		await process_frame
 		var visibles_forjar := 0
 		var invisibles_forjar := 0
@@ -565,8 +570,13 @@ func _ejecutar() -> void:
 			total_tras += (g as GridContainer).get_child_count()
 		_comprobar(total_tras == total_cartas, "cambiar de pestaña conserva las 26 tarjetas")
 		_comprobar(panel_tienda.get("_forja_barra") != null, "la ficha tiene barra de progreso de forja")
-		panel_tienda._cambiar_pestana(0)
+		panel_tienda._cambiar_pestana(3)  # TODOS
 		await process_frame
+		var todos_visibles := 0
+		for g in panel_tienda.get("_cuadriculas"):
+			if (g as GridContainer).visible:
+				todos_visibles += (g as GridContainer).get_child_count()
+		_comprobar(todos_visibles == total_cartas, "la pestaña TODOS muestra las 26 tarjetas")
 		# La ficha lateral se rellena al elegir y la búsqueda filtra la lista.
 		var ficha_accion: Button = panel_tienda.get("_ficha_accion")
 		var primer_vendible: ItemData = ItemCatalog.vendibles()[0]
@@ -592,6 +602,38 @@ func _ejecutar() -> void:
 		panel_tienda._al_buscar("zzz")
 		await process_frame
 		_comprobar((panel_tienda.get("_cuadriculas") as Array).is_empty(), "la búsqueda filtra la lista")
+		panel_tienda._al_buscar("")
+		await process_frame
+		# Undo: visible sólo con la tienda abierta tras comprar, se pierde al cerrar.
+		var undo_escena = load("res://scenes/main.tscn").instantiate()
+		root.add_child(undo_escena)
+		await process_frame
+		await process_frame
+		var undo_jugador = undo_escena.get("_jugador")
+		undo_escena.oro = 500
+		undo_jugador.global_position = Vector3(26.0, 0, 8.0)
+		var undo_hud = undo_escena.get("_hud")
+		var undo_panel = undo_hud.get("_tienda")
+		undo_panel.configurar(undo_jugador, undo_escena, undo_hud)
+		undo_panel.alternar()
+		await process_frame
+		var undo_item := ItemCatalog.obtener(&"brasa_forja")
+		undo_panel._comprar(undo_item)
+		await process_frame
+		_comprobar(not (undo_panel.get("_ultima_compra") as Dictionary).is_empty(), "comprar guarda la última compra para deshacer")
+		_comprobar((undo_panel.get("_boton_deshacer") as Button).visible, "el botón DESHACER aparece tras comprar")
+		var oro_tras_compra: int = int(undo_escena.oro)
+		undo_panel._deshacer_compra()
+		await process_frame
+		_comprobar(undo_escena.oro == oro_tras_compra + undo_item.precio, "deshacer devuelve el oro del objeto")
+		_comprobar(not undo_jugador.inventario.tiene(&"brasa_forja"), "deshacer retira el objeto comprado")
+		_comprobar((undo_panel.get("_ultima_compra") as Dictionary).is_empty(), "deshacer limpia el historial")
+		undo_panel._comprar(undo_item)
+		await process_frame
+		undo_panel.cerrar_panel()
+		await process_frame
+		_comprobar((undo_panel.get("_ultima_compra") as Dictionary).is_empty(), "cerrar la tienda borra el undo")
+		undo_escena.queue_free()
 		panel_tienda._al_buscar("")
 		await process_frame
 		panel_tienda._cambiar_modo(true)

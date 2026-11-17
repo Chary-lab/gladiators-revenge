@@ -13,8 +13,8 @@ extends PanelContainer
 const ANCHO := 1120.0
 const ALTO := 560.0
 const COLUMNAS := 6
-const LADO_TARJETA := 96.0
-const ALTO_TARJETA := 112.0
+const LADO_TARJETA := 112.0
+const ALTO_TARJETA := 126.0
 const ANCHO_FICHA := 330.0
 
 ## Avisa al HUD de que la tienda se cerró (incluso desde su propio botón).
@@ -43,12 +43,20 @@ var _pausado := false
 
 ## Rework: pestañas por intención. Las tarjetas SIGUEN todas en `_cuadriculas`
 ## (los tests las cuentan); la pestaña sólo controla visibilidad.
-var _pestana := 0  # 0 = COMPRAR, 1 = FORJAR, 2 = COMPONENTES
+## Orden pedido: CONSUMIBLES → COMPONENTES → FORJAR → TODOS.
+const PESTANA_CONSUMIBLES := 0
+const PESTANA_COMPONENTES := 1
+const PESTANA_FORJAR := 2
+const PESTANA_TODOS := 3
+var _pestana := PESTANA_TODOS
 var _pestanas: Array[Button] = []
 ## Barra de progreso de forja y botón de acción en la ficha.
 var _forja_barra: ForjaTema.BarraSegmentada
 var _forja_texto: Label
 var _forja_boton: Button
+## Undo de la última compra (sólo while la tienda está abierta).
+var _ultima_compra: Dictionary = {}
+var _boton_deshacer: Button
 
 var _seleccionado: ItemData
 var _seleccion_indice := -1
@@ -146,6 +154,12 @@ func _crear_cabecera() -> Control:
 	_oro.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cabecera.add_child(_oro)
 
+	_boton_deshacer = ForjaTema.boton("DESHACER", 12)
+	_boton_deshacer.custom_minimum_size = Vector2(104, 34)
+	_boton_deshacer.pressed.connect(_deshacer_compra)
+	_boton_deshacer.visible = false
+	cabecera.add_child(_boton_deshacer)
+
 	var cerrar := ForjaTema.boton("CERRAR", 12)
 	cerrar.custom_minimum_size = Vector2(104, 34)
 	cerrar.pressed.connect(cerrar_panel)
@@ -192,7 +206,7 @@ func _crear_barra_pestanas() -> Control:
 	var fila := HBoxContainer.new()
 	fila.add_theme_constant_override("separation", 8)
 	# Pestañas por intención: separan "comprar listo" de "crear" y de materiales.
-	for entrada in [["TODOS", 0], ["FORJAR", 1], ["COMPONENTES", 2]]:
+	for entrada in [["CONSUMIBLES", PESTANA_CONSUMIBLES], ["COMPONENTES", PESTANA_COMPONENTES], ["FORJAR", PESTANA_FORJAR], ["TODOS", PESTANA_TODOS]]:
 		var p := ForjaTema.boton(str(entrada[0]), 12)
 		p.custom_minimum_size = Vector2(120, 30)
 		var idx: int = int(entrada[1])
@@ -389,6 +403,8 @@ func alternar() -> void:
 		return
 	_cerrar_arbol()
 	visible = true
+	_ultima_compra.clear()  # nuevo acceso = historial de undo limpio
+	_actualizar_boton_deshacer()
 	Eventos.emitir(&"panel_solicitado", [&"tienda", true])
 	modo_abierto()
 	_reconstruir()
@@ -404,6 +420,8 @@ func cerrar_panel() -> void:
 		return
 	_cerrar_arbol()
 	visible = false
+	_ultima_compra.clear()  # al salir se pierde el undo
+	_actualizar_boton_deshacer()
 	Eventos.emitir(&"panel_solicitado", [&"tienda", false])
 	if _hud != null:
 		_hud.forzar_ocultar_tooltip()
@@ -553,14 +571,14 @@ func _reconstruir() -> void:
 				else:
 					consumibles.append(item)
 
-	# Pestaña COMPRAR: listos para usar, con su rareza como acento.
+	# Pestaña CONSUMIBLES: pociones y pergaminos listos para usar.
 	if not consumibles.is_empty():
-		_seccion("CONSUMIBLES", ForjaTema.COLOR_RAREZA[&"comun"], consumibles, false, 0)
+		_seccion("CONSUMIBLES", COLOR_CONSUMIBLE, consumibles, false, PESTANA_CONSUMIBLES)
 	if not epicos.is_empty():
-		_seccion("ÉPICOS", ForjaTema.COLOR_RAREZA[&"epico"], epicos, false, 0)
+		_seccion("ÉPICOS", COLOR_RECETA, epicos, false, PESTANA_CONSUMIBLES)
 	# Pestaña COMPONENTES: materiales de forja.
 	if not componentes.is_empty():
-		_seccion("COMPONENTES", ForjaTema.COLOR_RAREZA[&"comun"], componentes, false, 2)
+		_seccion("COMPONENTES", COLOR_COMPONENTE, componentes, false, PESTANA_COMPONENTES)
 
 	# Pestaña FORJAR: recetas ordenadas por coste, con barra de progreso en la ficha.
 	var forjables := ItemCatalog.recetas()
@@ -570,7 +588,7 @@ func _reconstruir() -> void:
 		if _pasa_busqueda(item):
 			visibles.append(item)
 	if not visibles.is_empty():
-		_seccion("SE FORJAN EN LA ARENA", ForjaTema.ASCUA, visibles, true, 1)
+		_seccion("SE FORJAN EN LA ARENA", COLOR_RECETA, visibles, true, PESTANA_FORJAR)
 
 	_aplicar_visibilidad_pestanas()
 
@@ -586,12 +604,14 @@ func _reconstruir() -> void:
 func _primer_item_de(a: Array[ItemData], b: Array[ItemData], c: Array[ItemData], d: Array[ItemData]) -> ItemData:
 	var listas: Array = []
 	match _pestana:
-		1:
-			listas = [d]
-		2:
-			listas = [c]
-		_:
+		PESTANA_CONSUMIBLES:
 			listas = [a, b]
+		PESTANA_COMPONENTES:
+			listas = [c]
+		PESTANA_FORJAR:
+			listas = [d]
+		_:
+			listas = [a, c, d, b]
 	for lista in listas:
 		if not lista.is_empty():
 			return lista[0]
@@ -599,12 +619,12 @@ func _primer_item_de(a: Array[ItemData], b: Array[ItemData], c: Array[ItemData],
 
 
 ## La pestaña sólo controla visibilidad: las 26 tarjetas siguen en `_cuadriculas`
-## y en el árbol, así los tests que las cuentan no se rompen.
+## y en el árbol, así los tests que las cuentan no se rompen. TODOS muestra todo.
 func _aplicar_visibilidad_pestanas() -> void:
 	for hijo in _cuerpo.get_children():
 		if not hijo.has_meta(&"pestana"):
 			continue
-		hijo.visible = (int(hijo.get_meta(&"pestana")) == _pestana)
+		hijo.visible = _pestana == PESTANA_TODOS or int(hijo.get_meta(&"pestana")) == _pestana
 
 
 func _reconstruir_venta() -> void:
@@ -697,7 +717,7 @@ func _carta(item: ItemData, cuantos: int, precio: int, vender: bool, indice: int
 	boton.add_child(columna)
 
 	var icono := TextureRect.new()
-	icono.custom_minimum_size = Vector2(LADO_TARJETA - 24, 54)
+	icono.custom_minimum_size = Vector2(LADO_TARJETA - 24, 68)
 	icono.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -1058,9 +1078,34 @@ static func _construir_padres() -> void:
 func _comprar(item: ItemData) -> void:
 	if _arena == null or not _arena.has_method("comprar_objeto"):
 		return
-	_arena.comprar_objeto(item)
+	var oro_antes := _oro_actual()
+	var comprado: bool = _arena.comprar_objeto(item)
+	if comprado:
+		# Guardar para DESHACER sólo el coste del objeto (no la forja que pudo dispararse).
+		_ultima_compra = {"item": item, "coste": oro_antes - _oro_actual()}
 	# Refresco en sitio: el inventario ya avisa por `cambiado`, pero comprar
 	# puede no mover la mochila (objetos que solo se forjan) y el oro sí cambia.
+	_actualizar_boton_deshacer()
+	_refrescar()
+
+
+func _actualizar_boton_deshacer() -> void:
+	if _boton_deshacer == null:
+		return
+	_boton_deshacer.visible = visible and not _ultima_compra.is_empty()
+
+
+func _deshacer_compra() -> void:
+	if _ultima_compra.is_empty() or _arena == null:
+		return
+	if not _arena.has_method("deshacer_compra"):
+		return
+	var item: ItemData = _ultima_compra.get("item")
+	var coste := int(_ultima_compra.get("coste", 0))
+	if not bool(_arena.call("deshacer_compra", item, coste)):
+		return
+	_ultima_compra.clear()
+	_actualizar_boton_deshacer()
 	_refrescar()
 
 

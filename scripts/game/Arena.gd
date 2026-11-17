@@ -1880,6 +1880,23 @@ func forjar_objeto(_item: ItemData = null) -> bool:
 	return int(oro) != oro_antes
 
 
+## Deshace la última compra: devuelve el oro y retira el objeto comprado.
+## La forja que pudo dispararse NO se revierte (se avisa por separado).
+func deshacer_compra(item: ItemData, coste: int) -> bool:
+	if item == null or game_state == null or jugadores.is_empty():
+		return false
+	var jugador := jugadores[0]
+	if jugador == null or jugador.inventario == null:
+		return false
+	if not jugador.inventario.consumir(item.id, 1):
+		_avisar("No se puede deshacer: el objeto ya no está.", 2.0)
+		return false
+	game_state.agregar_oro(coste)
+	revisar_forjas_automaticas(jugador)
+	_avisar("Compra deshecha: +%d de oro" % coste, 2.0)
+	return true
+
+
 func revisar_forjas_automaticas(jugador_obj: GladiatorController = null) -> void:
 		var jugador := jugador_obj if jugador_obj != null else _jugador
 		if jugador == null or jugador.inventario == null:

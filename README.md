@@ -32,9 +32,10 @@ para hasta 3 gladiadores con salas en la nube; sin guardado todavía.
 - **HUD de combate**: una sola barra superior con oleada, estandarte y la ficha
   del jugador (apodo, nivel, enemigos abatidos y oro, con contadores animados);
   marcos de inventario por rareza. La sala de espera es sólo texto, sin panel.
-- **Tienda**: pestañas por intención (TODOS / FORJAR / COMPONENTES), ficha con
-  barra de progreso de forja en vivo y botón FORJAR AHORA, árbol de construcción
-  navegable y modo VENDER.
+- **Tienda**: pestañas por intención (CONSUMIBLES / COMPONENTES / FORJAR / TODOS)
+  con colores por categoría (rojo, blanco, morado, dorado), ficha con barra de
+  progreso de forja y botón FORJAR AHORA, árbol de ruta vertical, botón DESHACER
+  la última compra (sólo con la tienda abierta) y modo VENDER.
 - **Coop**: la sala de espera del cliente la manda el servidor (cuenta atrás
   real), la capa táctil existe también dentro de una sala y elegir campeón
   acorta la espera. El maestro pre-arranca una sola sala.
