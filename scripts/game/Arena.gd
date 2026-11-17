@@ -1808,13 +1808,13 @@ func puede_comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 	if jugador.global_position.x <= BORDE_ARENA + 1.0:
 		return false
 	var inventario := jugador.inventario
-	var receta := inventario.receta_completada_por(item)
-	var coste := item.precio + (receta.precio_forja if receta != null else 0)
+	# El coste es sólo el precio del objeto. La forja se paga aparte, cuando
+	# `revisar_forjas_automaticas` puede completarla con el oro disponible.
+	var coste := item.precio
 	var bolsa: int = game_state.oro if game_state != null else oro
 	if bolsa < coste:
 		return false
-	if receta != null:
-		return true
+	# Como el objeto siempre entra a la mochila, hace falta espacio real.
 	return inventario.espacio_para(item)
 
 
@@ -1838,38 +1838,16 @@ func comprar_para(jugador: GladiatorController, item: ItemData) -> bool:
 			_avisar("La mochila está llena y no completa ninguna receta", 2.5)
 		return false
 	var inventario := jugador.inventario
-	var receta := inventario.receta_completada_por(item)
-	var forjados: PackedStringArray = []
-
-	if receta != null:
-		oro -= item.precio + receta.precio_forja
-		var creado := inventario.forjar_con(item, receta)
-		if creado == null:
-			oro += item.precio + receta.precio_forja
-			_avisar("No se pudo completar la forja", 2.0)
-			return false
-		forjados.append(creado.nombre)
-		var actual := creado
-		for i in 4:
-			var siguiente := inventario.receta_completada_por(actual)
-			if siguiente == null or game_state.oro < siguiente.precio_forja:
-				break
-			game_state.gastar_oro(siguiente.precio_forja)
-			var encadenado := inventario.forjar_con(actual, siguiente)
-			if encadenado == null:
-				game_state.agregar_oro(siguiente.precio_forja)
-				break
-			forjados.append(encadenado.nombre)
-			actual = encadenado
-		_avisar("Forjado: %s" % " > ".join(forjados), 3.0)
-		revisar_forjas_automaticas()
-	else:
-		if not inventario.agregar(item):
-			_avisar("La mochila está llena", 2.0)
-			return false
-		game_state.gastar_oro(item.precio)
-		_avisar("Comprado: %s" % item.nombre, 2.0)
-		revisar_forjas_automaticas()
+	# La compra cuesta siempre SÓLO el precio del objeto: no se cobra la forja
+	# por adelantado. El objeto entra a la mochila y `revisar_forjas_automaticas`
+	# intenta forjar con el oro que quede; si no alcanza, los ingredientes siguen
+	# guardados para la siguiente compra (o al ganar más oro).
+	if not inventario.agregar(item):
+		_avisar("La mochila está llena", 2.0)
+		return false
+	game_state.gastar_oro(item.precio)
+	_avisar("Comprado: %s" % item.nombre, 2.0)
+	revisar_forjas_automaticas(jugador)
 
 	if not es_servidor:
 		Sfx.reproducir("compra", -3.0)
@@ -1902,8 +1880,8 @@ func forjar_objeto(_item: ItemData = null) -> bool:
 	return int(oro) != oro_antes
 
 
-func revisar_forjas_automaticas() -> void:
-		var jugador := _jugador
+func revisar_forjas_automaticas(jugador_obj: GladiatorController = null) -> void:
+		var jugador := jugador_obj if jugador_obj != null else _jugador
 		if jugador == null or jugador.inventario == null:
 			return
 		var inventario := jugador.inventario

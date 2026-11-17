@@ -188,6 +188,28 @@ func _ejecutar() -> void:
 	_comprobar(inventario.tiene(&"nucleo_ferreo") and not inventario.tiene(&"brasa_forja"), "la forja automática crea el objeto intermedio")
 	_comprobar(escena.comprar_objeto(piel), "se compra la piel y se encadena la receta")
 	_comprobar(inventario.tiene(&"corazon_obsidiana"), "la cadena de forja llega al legendario", true)
+
+	# La compra no cobra la forja por adelantado (caso: 168 oro, 2 Brasa, Placa 110).
+	# Escena fresca para reproducir el estado exacto del reporte sin mochila previa.
+	var escena2 = load("res://scenes/main.tscn").instantiate()
+	root.add_child(escena2)
+	await process_frame
+	await process_frame
+	var jugador2 = escena2.get("_jugador")
+	var inv2 = jugador2.inventario
+	escena2.oro = 168
+	jugador2.global_position = Vector3(26.0, 0, 8.0)
+	inv2.agregar(brasa, 2)
+	_comprobar(escena2.puede_comprar_para(jugador2, placa), "comprar la placa con 168 de oro y 2 brasa está permitido")
+	_comprobar(escena2.comprar_objeto(placa), "se compra la placa sin cobrar la forja adelantada")
+	_comprobar(escena2.oro == 58, "sólo se descuenta el precio del objeto (168-110=58)")
+	_comprobar(inv2.tiene(&"placa_oxidada"), "la placa entra en la mochila aunque falte oro para forjar")
+	_comprobar(not inv2.tiene(&"nucleo_ferreo"), "la forja pendiente no se completa sin oro suficiente")
+	# Al ganar el oro que falta, la forja se completa sola.
+	escena2.oro = 100
+	escena2.revisar_forjas_automaticas()
+	_comprobar(inv2.tiene(&"nucleo_ferreo"), "la forja pendiente se completa al ganar oro")
+	escena2.queue_free()
 	var indice_corazon := -1
 	for i in inventario.ranuras.size():
 		var ranura: Dictionary = inventario.ranuras[i]

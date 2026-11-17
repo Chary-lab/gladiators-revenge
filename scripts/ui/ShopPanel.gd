@@ -1145,19 +1145,26 @@ func _nombre_tipo(item: ItemData) -> String:
 	return "Objeto"
 
 
+## Colores por categoría (según el pedido): rojo consumibles, blanco
+## componentes, morado recetas/épicos, dorado legendarios. La rareza manda
+## sobre el tipo para que un legendario siempre se vea dorado.
+const COLOR_CONSUMIBLE := Color(0.86, 0.28, 0.24)
+const COLOR_COMPONENTE := Color(0.90, 0.89, 0.84)
+const COLOR_RECETA := Color(0.70, 0.44, 1.00)
+const COLOR_LEGENDARIO := Color(1.00, 0.80, 0.26)
+
+
 func _rareza_color(item: ItemData) -> Color:
 	if item == null:
 		return ForjaTema.TEXTO
-	match item.rareza:
-		ItemData.Rareza.EPICO:
-			return Color(0.72, 0.52, 1.0)
-		ItemData.Rareza.LEGENDARIO:
-			return Color(1.0, 0.78, 0.30)
+	if item.rareza == ItemData.Rareza.LEGENDARIO or item.tipo == ItemData.Tipo.LEGENDARIO:
+		return COLOR_LEGENDARIO
+	if item.rareza == ItemData.Rareza.EPICO or item.precio_forja > 0:
+		return COLOR_RECETA
 	match item.tipo:
-		ItemData.Tipo.POCION:
-			return Color(0.45, 0.90, 0.55)
-		ItemData.Tipo.PERGAMINO:
-			return Color(0.72, 0.52, 1.0)
+		ItemData.Tipo.POCION, ItemData.Tipo.PERGAMINO:
+			return COLOR_CONSUMIBLE
 		ItemData.Tipo.COMPONENTE:
-			return Color(0.38, 0.72, 1.0)
-	return ForjaTema.TEXTO
+			return COLOR_COMPONENTE
+		_:
+			return ForjaTema.TEXTO
