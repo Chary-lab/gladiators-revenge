@@ -85,6 +85,21 @@ func _ejecutar() -> void:
 	_comprobar(escena.get("_hud") != null and escena.get("_camara") != null, "HUD y cámara presentes", true)
 	_comprobar(oleadas.total_oleadas == 20, "el bucle tiene 20 oleadas", true)
 
+	# --- Jerarquía del mundo (extraído a ArenaMundo) ------------------------
+	var mundo := escena.get_node_or_null("Mundo") as ArenaMundo
+	_comprobar(mundo != null, "el mundo está en un nodo ArenaMundo propio")
+	if mundo != null:
+		var regiones := mundo.find_children("*", "NavigationRegion3D", true, false)
+		_comprobar(regiones.size() >= 1, "el mundo conserva la NavigationRegion3D")
+		var suelos := mundo.find_children("*", "StaticBody3D", true, false)
+		_comprobar(suelos.size() >= 1, "el mundo conserva el suelo con colisión")
+		_comprobar(mundo.puntos_spawn.size() == 4, "el mundo expone 4 puntos de aparición")
+		var etiquetas: Array[String] = []
+		for n in mundo.find_children("*", "Label3D", true, false):
+			etiquetas.append((n as Label3D).text)
+		_comprobar(etiquetas.has("FUENTE") and etiquetas.has("TALENTOS"), "el mundo conserva las etiquetas FUENTE y TALENTOS")
+		_comprobar(mundo.find_children("*", "WorldEnvironment", true, false).size() == 1, "el mundo conserva un único WorldEnvironment")
+
 	# --- Armas -------------------------------------------------------------
 	var catalogo := WeaponItem.crear_catalogo_base()
 	_comprobar(catalogo.size() == 5, "catálogo base con 5 armas (Bastión, Filo, Cetro, Hoplita, Saetera)")
