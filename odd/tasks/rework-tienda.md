@@ -16,7 +16,7 @@ Rama: `main` (push al final) · Runner: `godot --headless --script res://tests/<
 - **T2** — S2-S3 — ruta: inline — estado: ✅ — rework aplicado: 3 pestañas (`TODOS`/`FORJAR`/`COMPONENTES`) en fila propia que sólo cambian visibilidad (las 26 tarjetas siguen en `_cuadriculas`); secciones por `item.tipo`; barra `BarraSegmentada` con `InventoryComponent.progreso_receta`; botón `FORJAR AHORA` que delega en `Arena.forjar_objeto()` (nueva API pública, sin economía en el panel). Chips con contraste corregido (texto `ORO_CLARO` sobre borde dorado).
 - **T3** — S3 — ruta: inline — estado: ✅ — +7 checks (progreso_receta, forjar_objeto, 3 pestañas, filtrado sin borrar tarjetas, barra). 198/198.
 - **T4** — S3 — ruta: inline — estado: ✅ — `--captura-tienda` inspeccionada en 4 iteraciones (arreglé desborde de CERRAR, doble COMPRAR y contraste del chip activo). Gate: import 0, smoke 15/15, regression 198/198, wave sim 3/3, boot limpio.
-- **T5** — S1-S3 — ruta: inline — estado: en curso — docs (AGENTS 81/84/43/184, README 35/260) actualizados + commit + assess RDD + push final.
+- **T5** — S1-S3 — ruta: inline — estado: ✅ — docs (AGENTS 81/84/43/184, README 35/260) actualizados. Commit `d76c55a` (7 archivos, +234/−42), assess `medium/under_budget` sin review. Push final.
 
 ## Log
 
@@ -31,6 +31,8 @@ Rama: `main` (push al final) · Runner: `godot --headless --script res://tests/<
 
 **L5** — 2026-11-17 — Se aplicó la disciplina UI del skill `engineering-playbook`: contraste legible en chips activos (4.5:1), 44px+ de área táctil, sin glyphs tofu, sin *middle-dot meta* genérico. Paleta/tipografía propias del repo (ForjaTema/Cinzel). Las pestañas van en fila separada para no desbordar el modal 1120×560.
 
+**L6** — 2026-11-17 — Rework COMPLETO y entregado. La tienda pasó de una lista plana a una experiencia con pestañas, progreso de forja visible y acción FORJAR, manteniendo el modal compacto y sin romper el contrato de tests (las 26 tarjetas siguen en `_cuadriculas`). Commit `d76c55a`, assess medium/under_budget.
+
 ---
 
-Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · T5 → ⏳ commit/assess/push
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · T5 → ✅ · Estado: **COMPLETO**
