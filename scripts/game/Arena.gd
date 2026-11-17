@@ -22,11 +22,13 @@ const SKIN_TIERRA_BALDIA := Color(0.72, 0.95, 0.55)
 const SKIN_CENIZA := Color(0.78, 0.80, 0.78)
 const SKIN_SANGRE := Color(1.00, 0.62, 0.55)
 const SKIN_HIELO := Color(0.62, 0.82, 1.00)
+const SKIN_ASCUA := Color(1.00, 0.52, 0.30)
 const SKINS := [
 	{"nombre": "Tierra Baldía", "tinte": SKIN_TIERRA_BALDIA},
 	{"nombre": "Ceniza", "tinte": SKIN_CENIZA},
 	{"nombre": "Sangre", "tinte": SKIN_SANGRE},
 	{"nombre": "Hielo", "tinte": SKIN_HIELO},
+	{"nombre": "Ascua de la Rebelión", "tinte": SKIN_ASCUA},
 ]
 
 var _terminado_local := false

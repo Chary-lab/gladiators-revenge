@@ -16,7 +16,7 @@ Rama: `visual/identidad-arena` (desde `audit/bugs-limpieza`) · Estrategia: `ask
 - **T2** — S3 — ruta: inline — estado: ✅ — `Arena.gd`: environment carbón/ámbar, sol cálido, suelos/muros/gradas oscurecidos, fuente de cian → ascua; nuevo `scripts/visual/MaterialTinte.gd` tiñe los GLB del suelo reutilizando materiales por caché.
 - **T3** — S3 — ruta: inline — estado: ✅ — capturas `--captura-combate` y `--captura-arquetipos` inspeccionadas (2 iteraciones: fuente amarilla → ascua rojiza). Gate: import 0, smoke 15/15, regression 171/171, wave sim 3/3, boot 600 limpio.
 - **T4** — S2 — ruta: inline — estado: ✅ — checkpoint mostrado; usuario aprobó seguir con todas las fases y push al final (L9).
-- **T5** — S2 — ruta: inline (mapeo delegado) — estado: en curso — Fase 2: modelos propios para gladiadores/enemigos. Explorador mapeando viabilidad (rig/animación/presupuesto). Decisión de enfoque pendiente de su informe.
+- **T5** — S2 — ruta: inline — estado: ✅ — Fase 2 re-entregada: nueva skin "Ascua de la Rebelión" en `SKINS` (`Arena.gd`) + check en `smoke_test.gd`. Intento de geometría en huesos revertido (L10) por invisible. Gate 15/15, 172/172, 3/3, boot limpio.
 
 ## Log
 
@@ -37,8 +37,14 @@ Rama: `visual/identidad-arena` (desde `audit/bugs-limpieza`) · Estrategia: `ask
 
 **L8** — 2026-11-17 — Commit Fase 1 `8031b5b` (4 archivos, +143/−20: `Arena.gd`, `MaterialTinte.gd` + su `.uid`, doc ODD). Assess RDD con base `949615c`: `risk: medium`, `review_due: false`, reason `under_budget` (el primer intento fue `unassessable` por el hash de untracked desactualizado; se obtuvo el canónico con `review status --next-transition` y se re-corrió). Sin review obligatoria.
 
-**L9** — 2026-11-17 — El usuario aprobó continuar TODAS las fases sin más checkpoints y hacer push al final, cuando todo esté listo: "sigue con las fases y luego subimos cuando tengamos todo listo". Se arranca Fase 2 (modelos propios). Explorador `gentle-ai-explore` (sesión `ses_e16bbd4ceffeuO7r2FY3CfXf3g3`) mapeando modelo/animación/presupuesto antes de decidir el enfoque. Dato: KayKit pesa 21.4 MB (13.9 skeletons, 7.0 adventurers) dentro del build Web de ~47 MB.
+**L9** — 2026-11-17 — El usuario aprobó continuar TODAS las fases sin más checkpoints y hacer push al final, cuando todo esté listo: "sigue con las fases y luego subimos cuando tengamos todo listo". Se arranca Fase 2 (modelos propios). Explorador `gentle-ai-explore` (sesión `ses_e16bbd4ceffeuO7r2FY3CfXf3g3`) mapeó: los clips de animación (idle/walk/run/attack/cast/hit/death) viven en los GLB de KayKit, `CharacterVisual` los reproduce vía `AnimationPlayer`; reemplazar los GLB exige recrear skeleton + clips o se pierde `mover()`/`atacar()`/`ajustar_ritmo()`. KayKit pesa 21.4 MB dentro del build Web de ~47 MB.
+
+**L10** — 2026-11-17 — Intento de Fase 2 (geometría original anclada a `BoneAttachment3D` head: crestas/cuernos/capuchas, helper `IdentidadPersonaje.gd`) **revertido**: las mallas se creaban (sonda: `head` con 4 hijos, malla visible=true) pero no se renderizaban en las capturas, igual que el `anadir_colmillos()` preexistente. Los huesos animados del GLB no muestran geometría añadida en runtime. No se insistió: los tests headless no validan lo visual y el enfoque era invisible.
+
+**L11** — 2026-11-17 — Fase 2 re-entregada con el mecanismo PROBADO: nueva skin **"Ascua de la Rebelión"** (`SKIN_ASCUA := Color(1.0,0.52,0.30)`) añadida a `SKINS` en `Arena.gd`. Sonda verificó que `aplicar_skin` cambia el albedo del modelo de verde (0.90,0.98,0.84) a cálido (1.0,0.83,0.76) — visible y coherente con la paleta. Check de regresión en `smoke_test.gd`: "la skin Ascua de la Rebelión está disponible" (172/172). La piel se rota con K y se sincroniza por red (índice en snapshot). Sin assets nuevos.
+
+**L12** — 2026-11-17 — decisión arquitectónica: se conservan los GLB CC0 de KayKit por su rig/animación; la identidad original se logra con (1) paleta carbón/ascua en la arena (Fase 1) y (2) skins de color con nombres/lore propios (Fase 2). No se introducen modelos nuevos para no sacrificar animación ni arriesgar el build Web. Queda como deuda documentada para un futuro proyecto de modelado con rig propio.
 
 ---
 
-Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ (aprobado por usuario) · T5 → ⏳ Fase 2 modelos propios (mapeo en curso)
+Registro de entregas: T1 → ✅ · T2 → ✅ · T3 → ✅ · T4 → ✅ · T5 → ✅ (Fase 2 re-entregada como skin Ascua) · Estado frente visual: **COMPLETO** · Siguiente: frente de ideas/jugabilidad, luego optimización/deuda. Push al final (usuario).

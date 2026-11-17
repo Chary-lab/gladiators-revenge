@@ -114,6 +114,13 @@ func _ejecutar() -> void:
 				kits_ok = false
 	_comprobar(kits_ok, "Hoplita y Saetera traen 4 habilidades con rangos y definitiva a rango 3")
 
+	# Identidad original: la skin de ascua de la Rebelión existe y es distinta.
+	var skins: Array = escena.get("SKINS")
+	var nombres_skin: Array = []
+	for s in skins:
+		nombres_skin.append(str(s["nombre"]))
+	_comprobar(nombres_skin.has("Ascua de la Rebelión"), "la skin Ascua de la Rebelión está disponible")
+
 	# --- Forja de campeones: la clase se elige en su pantalla --------------
 	var pedestales: Array = escena.get("_pedestales")
 	_comprobar(pedestales.is_empty(), "la armería no deja pedestales de campeón en el mapa")
